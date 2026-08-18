@@ -320,9 +320,12 @@ def price_cut_history(conn: sqlite3.Connection) -> dict[str, dict]:
     """
     out: dict[str, dict] = {}
     try:
+        # COUNT(*), not COUNT(DISTINCT price_zar): since the time-series
+        # migration each row is an observed change, so a price that returns
+        # to an earlier value ("R20m -> R18m -> R20m") counts every move.
         rows = conn.execute(
             """SELECT ph.listing_key,
-                      COUNT(DISTINCT ph.price_zar) AS n_prices,
+                      COUNT(*) AS n_prices,
                       (SELECT p2.price_zar FROM price_history p2
                        WHERE p2.listing_key = ph.listing_key
                        ORDER BY p2.observed_at ASC, p2.rowid ASC
