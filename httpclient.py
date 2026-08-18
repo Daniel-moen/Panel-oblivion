@@ -138,6 +138,12 @@ class Fetcher:
         self.stats = {"fetched": 0, "cached": 0, "failed": 0, "throttled": 0}
 
     # ------------------------------------------------------------ caching
+    #
+    # Reads honour CACHE_TTL_HOURS, so a file older than the TTL is dead
+    # weight nothing will ever read — but nothing deleted them, and on the
+    # hosted deploy months of expired pages filled the 4.6 GB volume solid
+    # ("database or disk is full", measured 2026-08-19: 4.3 GB of cache
+    # against a 39 MB database). prune_cache() below is the eviction.
     def _cache_path(self, url: str) -> str:
         digest = hashlib.sha256(url.encode()).hexdigest()[:32]
         return os.path.join(config.CACHE_DIR, self.source, digest + ".html")
@@ -317,3 +323,35 @@ class Fetcher:
             return json.loads(body)
         except ValueError:
             return None
+
+
+def prune_cache(max_age_hours: float | None = None, log=lambda m: None) -> dict:
+    """Delete cache files past the TTL — the eviction the cache never had.
+
+    Runs at the start of every pipeline crawl. A file older than
+    CACHE_TTL_HOURS can never be served again (reads check the TTL), so
+    deleting it changes nothing except the disk usage; without this the
+    hosted volume filled up and every write in the app — SQLite included —
+    started failing with "database or disk is full".
+    """
+    ttl = max_age_hours if max_age_hours is not None else config.CACHE_TTL_HOURS
+    cutoff = time.time() - ttl * 3600
+    removed = kept = 0
+    freed = 0
+    for dirpath, _dirs, files in os.walk(config.CACHE_DIR):
+        for name in files:
+            path = os.path.join(dirpath, name)
+            try:
+                st = os.stat(path)
+                if st.st_mtime < cutoff:
+                    os.unlink(path)
+                    removed += 1
+                    freed += st.st_size
+                else:
+                    kept += 1
+            except OSError:
+                continue
+    if removed:
+        log(f"cache: pruned {removed} expired pages "
+            f"({freed / 1e6:.0f} MB freed, {kept} live entries kept)")
+    return {"removed": removed, "kept": kept, "freed_bytes": freed}

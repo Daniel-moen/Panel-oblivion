@@ -199,6 +199,14 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
         log("nothing to do — pick at least one suburb and one source")
         return {"scraped": 0}
 
+    # Evict expired cache pages first — they can never be served again and,
+    # left alone, they filled the hosted volume until SQLite itself failed.
+    import httpclient
+    try:
+        httpclient.prune_cache(log=log)
+    except Exception as e:                              # noqa: BLE001
+        log(f"cache prune skipped ({type(e).__name__}: {e})")
+
     log(f"crawling {len(suburbs)} suburb(s) across {len(source_names)} portal(s): "
         f"{', '.join(config.SOURCES[s]['label'] for s in source_names)}")
 
