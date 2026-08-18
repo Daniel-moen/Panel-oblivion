@@ -113,6 +113,15 @@ class Property24(Source):
         rec["latitude"] = float(lat.group(1)) if lat else None
         rec["longitude"] = float(lon.group(1)) if lon else None
 
+        # Sale-status badges sit in the main gallery's badge strip as fixed
+        # classes (p24_underOfferBanner / p24_reducedBanner). Anchored to the
+        # p24_Gallerybadge <ul> so a promoted tile for some OTHER under-offer
+        # listing elsewhere on the page can never mark this one.
+        strip = re.search(r"p24_Gallerybadge(.{0,400}?)</ul>", html, re.S)
+        badges = strip.group(1) if strip else ""
+        rec["under_offer"] = int("p24_underOfferBanner" in badges)
+        rec["price_reduced"] = int("p24_reducedBanner" in badges)
+
         rec.update({
             "property_type": overview.get("Type of Property"),
             "bedrooms": num(overview.get("Bedrooms")),

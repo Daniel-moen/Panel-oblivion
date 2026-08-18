@@ -77,7 +77,22 @@ class PrivateProperty(Source):
         m = re.search(r"/(T\d+)(?:[/?#]|$)", url)
         if not m:
             return None
+
+        # Sale-status banners on the gallery. Only the details-page container
+        # is read (`--details`), because search cards elsewhere in the markup
+        # carry the same banner classes for other properties.
+        status = ""
+        banners = soup.select_one(".listing-banners--details")
+        if banners:
+            status = " ".join(
+                cls for tag in banners.find_all(True)
+                for cls in (tag.get("class") or []))
+        if "listing-banner--sold" in status:
+            return None      # sold stock stays in search results for a while
+
         rec = self.blank(url, slug, m.group(1))
+        rec["under_offer"] = int("listing-banner--offer-pending" in status)
+        rec["price_reduced"] = int("listing-banner--price-reduced" in status)
 
         title = soup.select_one(".listing-details__title") or soup.find("h1")
         rec["title"] = title.get_text(" ", strip=True) if title else ""
