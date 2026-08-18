@@ -8,25 +8,41 @@
 :root { color-scheme: dark;
   --bg:#0d0d0f; --panel:#141418; --line:#26262b; --line2:#32323a;
   --ink:#e8e8e8; --ink2:#8b8b93; --gold:#e8c47a;
-  --hot:#c0392b; --warm:#d68910; --cold:#6b6b73; }
+  --hot:#c0392b; --warm:#d68910; --cold:#6b6b73;
+  --open:#1e8449; --probably_open:#148f77; --unknown:#5d5d66;
+  --probably_sole:#a04000; --sole:#922b21;
+  --cut:#2e86c1; --amber:#d6a95a; }
 * { box-sizing:border-box; }
 body { margin:0; font-family:-apple-system,BlinkMacSystemFont,Helvetica,sans-serif;
        background:var(--bg); color:var(--ink); height:100vh; display:flex;
        flex-direction:column; overflow:hidden; }
 header { display:flex; align-items:center; gap:1rem; padding:0 1.1rem;
-         height:48px; border-bottom:1px solid var(--line); flex:none; }
+         height:48px; border-bottom:1px solid var(--line); flex:none;
+         position:relative; }
 header h1 { font-weight:300; letter-spacing:.25em; font-size:.95rem; margin:0; }
 header h1 b { font-weight:650; }
 header a.back { color:var(--ink2); text-decoration:none; font-size:.78rem; }
 header a.back:hover { color:var(--gold); }
 #count { margin-left:auto; color:var(--ink2); font-size:.72rem; }
+kbd { border:1px solid var(--line2); border-bottom-width:2px; border-radius:4px;
+      padding:0 4px; font-size:.62rem; color:var(--ink2); font-family:inherit; }
+
+/* thin gold sweep while /api/map is in flight — no spinner, no layout shift */
+#bar { position:absolute; left:0; bottom:-1px; height:2px; width:100%;
+       overflow:hidden; opacity:0; transition:opacity .2s; pointer-events:none; }
+body.loading #bar { opacity:1; }
+#bar::after { content:''; position:absolute; inset:0 auto 0 0; width:35%;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);
+  animation:sweep 1.1s linear infinite; }
+@keyframes sweep { from{transform:translateX(-100%)} to{transform:translateX(340%)} }
+
 #stage { position:relative; flex:1; min-height:0; }
 #map { position:absolute; inset:0; background:#0a0a0c; }
 
 /* ------------------------------------------------ overlay panel + cards */
 #panel { position:absolute; z-index:1000; top:.7rem; left:.7rem;
-  width:330px; max-height:calc(100% - 1.4rem); display:flex;
-  flex-direction:column; background:rgba(20,20,24,.92);
+  width:352px; max-height:calc(100% - 1.4rem); display:flex;
+  flex-direction:column; background:rgba(20,20,24,.93);
   backdrop-filter:blur(6px); border:1px solid var(--line2);
   border-radius:10px; overflow:hidden; }
 #paneltoggle { position:absolute; z-index:1001; top:.7rem; left:.7rem;
@@ -42,46 +58,87 @@ body.panel-off #paneltoggle { display:block; }
 #filters .row:last-child { margin-bottom:0; }
 .chip { border:1px solid var(--line2); background:transparent; color:var(--ink2);
   border-radius:20px; padding:2px 10px; font-size:.68rem; cursor:pointer;
-  letter-spacing:.05em; }
+  letter-spacing:.05em; white-space:nowrap; font-family:inherit; }
+.chip:hover { border-color:var(--ink2); color:var(--ink); }
+.chip .n { opacity:.75; font-size:.62rem; margin-left:.3rem;
+           font-variant-numeric:tabular-nums; }
 .chip.on[data-tier=hot]  { background:var(--hot);  border-color:var(--hot);  color:#fff; }
 .chip.on[data-tier=warm] { background:var(--warm); border-color:var(--warm); color:#fff; }
 .chip.on[data-tier=cold] { background:var(--cold); border-color:var(--cold); color:#fff; }
+.qchip.on { background:var(--gold); border-color:var(--gold); color:#17130a;
+            font-weight:600; }
 select, input[type=number], input[type=search] {
   background:#1b1b21; color:var(--ink); border:1px solid var(--line2);
-  border-radius:6px; padding:3px 6px; font-size:.72rem; }
+  border-radius:6px; padding:3px 6px; font-size:.72rem; font-family:inherit; }
+select:focus, input:focus { outline:1px solid var(--gold); outline-offset:0; }
 input[type=number] { width:4.6rem; }
 input[type=search] { flex:1; min-width:0; }
 label.cb { display:flex; gap:.35rem; align-items:center; color:var(--ink2);
            font-size:.7rem; cursor:pointer; }
 label.cb input { accent-color:var(--gold); }
-#panelhide { margin-left:auto; background:none; border:none; color:var(--ink2);
-             cursor:pointer; font-size:.8rem; }
+#panelhide, #reset { background:none; border:none; color:var(--ink2);
+             cursor:pointer; font-size:.78rem; font-family:inherit; padding:0 2px; }
+#panelhide { margin-left:auto; }
+#reset:hover, #panelhide:hover { color:var(--gold); }
+.sep { color:var(--line2); }
+
+/* ------------------------------------------------------- stats strip    */
+#stats { display:flex; gap:0; border-bottom:1px solid var(--line);
+  background:rgba(13,13,15,.5); flex:none; }
+#stats div { flex:1; padding:.4rem .3rem .45rem; text-align:center;
+  border-right:1px solid var(--line); }
+#stats div:last-child { border-right:none; }
+#stats b { display:block; color:var(--ink); font-size:.8rem; font-weight:600;
+           font-variant-numeric:tabular-nums; letter-spacing:.01em; }
+#stats span { color:var(--ink2); font-size:.56rem; letter-spacing:.09em;
+              text-transform:uppercase; }
+
 #cards { overflow-y:auto; padding:.45rem; flex:1; min-height:0; }
+#cards::-webkit-scrollbar { width:8px; }
+#cards::-webkit-scrollbar-thumb { background:var(--line2); border-radius:4px; }
 .card { display:flex; gap:.55rem; padding:.5rem; border:1px solid var(--line);
   border-radius:8px; margin-bottom:.45rem; cursor:pointer;
-  background:rgba(13,13,15,.55); }
+  background:rgba(13,13,15,.55); position:relative; }
 .card:hover, .card.active { border-color:var(--gold); }
-.card img { width:84px; height:64px; object-fit:cover; border-radius:5px;
+.card.active { background:rgba(232,196,122,.07); }
+.card img { width:84px; height:70px; object-fit:cover; border-radius:5px;
             background:#1a1a1f; flex:none; }
+.card .nophoto { width:84px; height:70px; border-radius:5px; flex:none;
+  background:repeating-linear-gradient(45deg,#141419,#141419 6px,#17171d 6px,#17171d 12px);
+  border:1px solid var(--line); }
 .card .body { min-width:0; flex:1; }
 .card .t { font-size:.76rem; line-height:1.25; color:var(--ink);
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-  overflow:hidden; }
-.card .price { color:var(--gold); font-weight:650; font-size:.78rem;
-               margin-top:.15rem; }
-.card .meta { color:var(--ink2); font-size:.66rem; margin-top:.15rem; }
+  overflow:hidden; padding-right:2.6rem; }
+.card .price { color:var(--gold); font-weight:650; font-size:.8rem;
+               margin-top:.15rem; display:flex; align-items:baseline; gap:.4rem;
+               flex-wrap:wrap; }
+.card .ppm { color:var(--ink2); font-weight:400; font-size:.62rem; }
+.card .meta { color:var(--ink2); font-size:.66rem; margin-top:.1rem; }
+.card .links { position:absolute; top:.4rem; right:.45rem; display:flex;
+               gap:.3rem; }
+.card .links a { color:var(--ink2); text-decoration:none; font-size:.62rem;
+  border:1px solid var(--line2); border-radius:4px; padding:0 4px;
+  line-height:1.5; background:rgba(13,13,15,.8); }
+.card .links a:hover { color:var(--gold); border-color:var(--gold); }
 .badges { display:flex; gap:.3rem; flex-wrap:wrap; margin-top:.3rem; }
 .b { font-size:.58rem; padding:1px 6px; border-radius:3px; color:#fff;
-     letter-spacing:.04em; }
+     letter-spacing:.04em; white-space:nowrap; }
 .b.tier-hot { background:var(--hot); } .b.tier-warm { background:var(--warm); }
 .b.tier-cold { background:var(--cold); }
-.b.v-open { background:#1e8449; } .b.v-probably_open { background:#148f77; }
-.b.v-unknown { background:#5d5d66; } .b.v-probably_sole { background:#a04000; }
-.b.v-sole { background:#922b21; }
-.b.multi { background:#1e8449; }
+.b.v-open { background:var(--open); } .b.v-probably_open { background:var(--probably_open); }
+.b.v-unknown { background:var(--unknown); } .b.v-probably_sole { background:var(--probably_sole); }
+.b.v-sole { background:var(--sole); }
+.b.multi { background:var(--open); }
 .b.uo { background:#7a2f2a; }
+.b.cut { background:var(--cut); }
+.b.relist { background:#6c3483; }
+.b.gv { background:transparent; color:var(--amber); border:1px solid #5b4a2a; }
+.b.stale { background:transparent; color:var(--amber); border:1px dashed #5b4a2a; }
 .b.approx { background:transparent; color:var(--ink2);
             border:1px dashed var(--line2); }
+.note { color:var(--ink2); font-size:.7rem; padding:.6rem .5rem 1rem;
+        line-height:1.5; }
 
 /* ------------------------------------------------------------- legend  */
 #legend { position:absolute; z-index:1000; right:.7rem; bottom:1.6rem;
@@ -94,12 +151,58 @@ label.cb input { accent-color:var(--gold); }
   border-radius:50%; border:1.5px dashed var(--ink2); margin-right:.4rem;
   vertical-align:-1px; }
 
-/* Leaflet dark chrome */
+/* --------------------------------------------- hover tooltip + labels  */
+.hovertip { background:rgba(18,18,22,.97); border:1px solid var(--line2);
+  border-radius:8px; box-shadow:0 4px 18px rgba(0,0,0,.65); color:var(--ink);
+  padding:.45rem .55rem; font-size:.7rem; line-height:1.35;
+  /* a fixed width, because Leaflet tooltips are nowrap by default and a
+     shrink-to-fit box collapses into a one-word column */
+  width:242px; white-space:normal; }
+.hovertip::before { border-top-color:var(--line2)!important; }
+.hovertip .hp { color:var(--gold); font-weight:650; font-size:.78rem; }
+.hovertip .ht { color:var(--ink); margin-top:.1rem;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden; }
+.hovertip .hm { color:var(--ink2); font-size:.64rem; margin-top:.1rem; }
+.hovertip .badges { margin-top:.28rem; }
+
+.pricelab { background:rgba(13,13,15,.82); border:none; box-shadow:none;
+  color:var(--gold); font-size:.62rem; font-weight:650; padding:0 4px;
+  border-radius:3px; white-space:nowrap; letter-spacing:.02em; }
+.pricelab::before { display:none; }
+.pricelab.warm { color:#f0b45c; }
+
+/* ---------------------------------------------------------- dossier    */
 .leaflet-popup-content-wrapper, .leaflet-popup-tip {
   background:var(--panel); color:var(--ink);
-  box-shadow:0 3px 14px rgba(0,0,0,.6); }
-.leaflet-popup-content { margin:10px 12px; font-size:.75rem; line-height:1.45; }
+  box-shadow:0 3px 18px rgba(0,0,0,.7); }
+.leaflet-popup-content-wrapper { border:1px solid var(--line2); border-radius:10px; }
+.leaflet-popup-content { margin:0; font-size:.75rem; line-height:1.45;
+                         width:290px!important; }
 .leaflet-popup-content a { color:var(--gold); text-decoration:none; }
+/* the close × sits on top of the hero photo, so it needs its own contrast */
+.leaflet-popup-close-button { color:#fff!important; text-shadow:0 1px 4px #000;
+  z-index:2; font-size:1.1rem!important; padding:4px 6px 0 0!important; }
+.leaflet-popup-close-button:hover { color:var(--gold)!important; }
+.dossier img.hero { width:100%; height:132px; object-fit:cover; display:block;
+  border-radius:9px 9px 0 0; background:#1a1a1f; }
+.dossier .in { padding:.55rem .7rem .7rem; }
+.dossier .p { color:var(--gold); font-weight:650; font-size:1rem; }
+.dossier .p small { color:var(--ink2); font-weight:400; font-size:.62rem;
+                    margin-left:.35rem; }
+.dossier .ti { margin-top:.1rem; }
+.dossier .mt { color:var(--ink2); font-size:.66rem; margin-top:.1rem; }
+.dossier .ln { margin-top:.4rem; font-size:.68rem; }
+.dossier .ln.deal { color:var(--cut); }
+.dossier .ln.gvl { color:var(--amber); }
+.dossier .ln.ag { color:var(--ink2); }
+.dossier .ln.fresh { color:#5aab7a; }
+.dossier .ln.stalep { color:var(--amber); }
+.dossier .pitch { color:var(--ink2); font-size:.67rem; margin-top:.45rem;
+  border-left:2px solid var(--line2); padding-left:.45rem; font-style:italic; }
+.dossier .foot { margin-top:.55rem; padding-top:.45rem;
+                 border-top:1px solid var(--line); font-size:.7rem; }
+
 .leaflet-container { font:inherit; }
 .leaflet-control-attribution { background:rgba(13,13,15,.7)!important;
   color:#666!important; }
@@ -107,13 +210,14 @@ label.cb input { accent-color:var(--gold); }
 .leaflet-control-zoom a { background:var(--panel)!important;
   color:var(--ink)!important; border-color:var(--line2)!important; }
 
-@media (max-width:700px){ #panel { width:calc(100% - 1.4rem); max-height:55%; } }
+@media (max-width:700px){ #panel { width:calc(100% - 1.4rem); max-height:58%; } }
 </style></head><body>
 
 <header>
   <a class="back" href="/">← dashboard</a>
   <h1><b>OBLIVION</b>&thinsp;&mdash;&thinsp;PROSPECT MAP</h1>
   <span id="count">loading…</span>
+  <div id="bar"></div>
 </header>
 
 <div id="stage">
@@ -123,9 +227,10 @@ label.cb input { accent-color:var(--gold); }
   <div id="panel">
     <div id="filters">
       <div class="row">
-        <button class="chip on" data-tier="hot">HOT</button>
-        <button class="chip on" data-tier="warm">WARM</button>
-        <button class="chip on" data-tier="cold">COLD</button>
+        <button class="chip on" data-tier="hot">HOT<span class="n" id="n-hot"></span></button>
+        <button class="chip on" data-tier="warm">WARM<span class="n" id="n-warm"></span></button>
+        <button class="chip on" data-tier="cold">COLD<span class="n" id="n-cold"></span></button>
+        <button id="reset" title="reset every filter">reset</button>
         <button id="panelhide" title="collapse panel">✕</button>
       </div>
       <div class="row">
@@ -140,18 +245,36 @@ label.cb input { accent-color:var(--gold); }
       </div>
       <div class="row">
         <input type="number" id="f-min" placeholder="min Rm" min="0" step="1">
-        <span style="color:var(--ink2);font-size:.7rem">–</span>
+        <span class="sep" style="font-size:.7rem">–</span>
         <input type="number" id="f-max" placeholder="max Rm" min="0" step="1">
-        <input type="search" id="f-q" placeholder="search title / suburb">
+        <input type="search" id="f-q" placeholder="search title / suburb  ( / )">
       </div>
       <div class="row">
-        <label class="cb"><input type="checkbox" id="f-multi">multi-agency proof only</label>
+        <button class="chip qchip" data-q="cut" title="asking price has been cut">▼ cut</button>
+        <button class="chip qchip" data-q="relisted" title="came back after being delisted — possible failed mandate">relisted</button>
+        <button class="chip qchip" data-q="multi" title="two or more agency brands marketing it">2+ agencies</button>
+        <button class="chip qchip" data-q="expiring" title="a mandate-expiry note is on file">sole expiring</button>
+      </div>
+      <div class="row">
         <label class="cb"><input type="checkbox" id="f-approx" checked>include ≈ area pins</label>
+        <label class="cb"><input type="checkbox" id="f-uo" checked>show under offer</label>
       </div>
       <div class="row">
-        <label class="cb"><input type="checkbox" id="f-uo" checked>show under offer</label>
         <label class="cb"><input type="checkbox" id="f-sole">include sole mandates</label>
+        <select id="f-sort" title="sort the card list">
+          <option value="score">sort: score</option>
+          <option value="price">price high → low</option>
+          <option value="cut">biggest cut</option>
+          <option value="dom">longest on market</option>
+          <option value="new">newest listings</option>
+        </select>
       </div>
+    </div>
+    <div id="stats">
+      <div><b id="s-count">–</b><span>pins</span></div>
+      <div><b id="s-median">–</b><span>median</span></div>
+      <div><b id="s-multi">–</b><span>multi-proof</span></div>
+      <div><b id="s-cuts">–</b><span>price cuts</span></div>
     </div>
     <div id="cards"></div>
   </div>
@@ -160,7 +283,9 @@ label.cb input { accent-color:var(--gold); }
     <span class="dot" style="background:var(--hot)"></span>hot
     <span class="dot" style="background:var(--warm);margin-left:.6rem"></span>warm
     <span class="dot" style="background:var(--cold);margin-left:.6rem"></span>cold<br>
-    <span class="ring"></span>≈ suburb-level (no published address)
+    <span class="ring"></span>≈ suburb-level (no published address)<br>
+    <span style="opacity:.75">hover a pin for detail · zoom in for prices ·
+      <kbd>/</kbd> search · <kbd>esc</kbd> close</span>
   </div>
 </div>
 
@@ -170,6 +295,17 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const TIER = {hot:'#c0392b', warm:'#d68910', cold:'#6b6b73'};
 const fmtR = p => p ? 'R ' + Number(p).toLocaleString('en-ZA').replace(/,/g,' ') : 'POA';
+// Compact money for pin labels and the stats strip: R12.5m / R950k.
+const fmtShort = p => !p ? '—'
+  : p >= 1e6 ? 'R' + (p / 1e6).toFixed(p >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'm'
+  : 'R' + Math.round(p / 1e3) + 'k';
+const PROOF_FRESH_HOURS = 72;          // config.PROOF_FRESH_HOURS
+const MAX_CARDS  = 400;   // the DOM can't take 9k cards; markers show them all
+const MAX_LABELS = 90;    // permanent price labels are real DOM — keep it small
+const LABEL_ZOOM = 14;
+const STORE = 'oblivion.map.state';
+const age = h => h == null ? '' : h < 48 ? Math.round(h) + 'h'
+                                        : Math.round(h / 24) + 'd';
 
 // preferCanvas: thousands of circle markers on one canvas instead of one
 // SVG node each — the difference between smooth and unusable at this size.
@@ -177,115 +313,250 @@ const map = L.map('map', {zoomControl:true, attributionControl:true,
                           preferCanvas:true})
   .setView([-33.75, 18.8], 9);   // Cape Town + Winelands, Langebaan to Hermanus
 const REGION = p => p.region || 'Other';
-const MAX_CARDS = 400;   // the DOM can't take 6k cards; markers show them all
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   maxZoom: 19, subdomains: 'abcd',
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
 }).addTo(map);
 
-let all = [], unmapped = 0, markers = new Map(), layer = L.layerGroup().addTo(map);
+let all = [], unmapped = 0, current = [], markers = new Map(), activeGid = null;
+// featureGroup, not layerGroup: it bubbles child events, so 9k markers share
+// ONE hover/click handler instead of carrying 9k closures each.
+const layer = L.featureGroup().addTo(map);
+const labels = L.layerGroup().addTo(map);
+const hoverTip = L.tooltip({direction:'top', offset:[0,-4],
+                            className:'hovertip', opacity:1});
+const dossier = L.popup({maxWidth:300, autoPanPadding:[60, 40],
+                         className:'dossier-pop'});
 
+/* ------------------------------------------------------- filter state  */
+// One object is the single source of truth; it round-trips through the URL
+// hash (so a filtered view is a shareable link) and localStorage (so the tab
+// you left open comes back the way you left it).
+const DEF = () => ({tiers:['hot','warm','cold'], verdict:'any', region:'any',
+  min:'', max:'', q:'', approx:true, uo:true, sole:false, sort:'score',
+  quick:[], panel:true});
+let S = DEF();
+
+function readUI() {
+  S.tiers = [...document.querySelectorAll('.chip[data-tier].on')].map(c => c.dataset.tier);
+  S.quick = [...document.querySelectorAll('.qchip.on')].map(c => c.dataset.q);
+  S.verdict = $('f-verdict').value; S.region = $('f-region').value;
+  S.min = $('f-min').value; S.max = $('f-max').value; S.q = $('f-q').value;
+  S.approx = $('f-approx').checked; S.uo = $('f-uo').checked;
+  S.sole = $('f-sole').checked; S.sort = $('f-sort').value;
+  S.panel = !document.body.classList.contains('panel-off');
+}
+function writeUI() {
+  for (const c of document.querySelectorAll('.chip[data-tier]'))
+    c.classList.toggle('on', S.tiers.includes(c.dataset.tier));
+  for (const c of document.querySelectorAll('.qchip'))
+    c.classList.toggle('on', S.quick.includes(c.dataset.q));
+  $('f-verdict').value = S.verdict;
+  if ([...$('f-region').options].some(o => o.value === S.region))
+    $('f-region').value = S.region;
+  $('f-min').value = S.min; $('f-max').value = S.max; $('f-q').value = S.q;
+  $('f-approx').checked = S.approx; $('f-uo').checked = S.uo;
+  $('f-sole').checked = S.sole; $('f-sort').value = S.sort;
+  document.body.classList.toggle('panel-off', !S.panel);
+}
+function saveState() {
+  const q = new URLSearchParams();
+  const d = DEF();
+  for (const [k, v] of Object.entries(S)) {
+    const val = Array.isArray(v) ? v.join(',') : String(v);
+    if (val !== (Array.isArray(d[k]) ? d[k].join(',') : String(d[k])))
+      q.set(k, val);
+  }
+  const s = q.toString();
+  history.replaceState(null, '', s ? '#' + s : location.pathname);
+  try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {}
+}
+function loadState() {
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) {}
+  if (raw) S = Object.assign(DEF(), raw);
+  const h = location.hash.slice(1);
+  if (h) {                          // a shared link always wins over the tab's
+    const q = new URLSearchParams(h), d = DEF();
+    for (const [k, v] of q) {
+      if (!(k in d)) continue;
+      S[k] = Array.isArray(d[k]) ? (v ? v.split(',') : [])
+           : typeof d[k] === 'boolean' ? v === 'true' : v;
+    }
+  }
+}
+
+/* ---------------------------------------------------------- data load  */
 async function load() {
-  const sole = $('f-sole').checked ? 1 : 0;
+  document.body.classList.add('loading');
   $('count').textContent = 'loading…';
-  const res = await fetch('/api/map?sole=' + sole);
-  const data = await res.json();
-  all = data.points; unmapped = data.unmapped;
+  try {
+    const res = await fetch('/api/map?sole=' + (S.sole ? 1 : 0));
+    const data = await res.json();
+    all = data.points; unmapped = data.unmapped;
+  } catch (e) {
+    $('count').textContent = 'could not load /api/map';
+    document.body.classList.remove('loading');
+    return;
+  }
   const regions = [...new Set(all.map(REGION))].sort();
-  const sel = $('f-region'), cur = sel.value;
+  const sel = $('f-region'), cur = S.region;
   sel.innerHTML = '<option value="any">all regions</option>' +
     regions.map(r => `<option${r === cur ? ' selected' : ''}>${esc(r)}</option>`).join('');
+  document.body.classList.remove('loading');
   render();
 }
 
-function filtered() {
-  const tiers = new Set([...document.querySelectorAll('.chip.on')].map(c => c.dataset.tier));
-  const v = $('f-verdict').value, region = $('f-region').value;
-  const min = parseFloat($('f-min').value) * 1e6 || 0;
-  const max = parseFloat($('f-max').value) * 1e6 || Infinity;
-  const q = $('f-q').value.trim().toLowerCase();
-  return all.filter(p => {
-    if (!tiers.has(p.tier)) return false;
-    if (v === 'open' && p.verdict !== 'open') return false;
-    if (v === 'openish' && !['open','probably_open'].includes(p.verdict)) return false;
-    if (v === 'unknown' && p.verdict !== 'unknown') return false;
-    if (v === 'soleish' && !['sole','probably_sole'].includes(p.verdict)) return false;
-    if (region !== 'any' && REGION(p) !== region) return false;
-    const price = p.price_zar || 0;
-    if (price && (price < min || price > max)) return false;
-    if (!price && min > 0) return false;
-    if (q && !(`${p.title} ${p.suburb}`.toLowerCase().includes(q))) return false;
-    if ($('f-multi').checked && !(p.brand_count > 1)) return false;
-    if (!$('f-approx').checked && p.loc === 'suburb') return false;
-    if (!$('f-uo').checked && p.under_offer) return false;
-    return true;
-  }).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+/* ---------------------------------------------------------- filtering  */
+const QUICK = {
+  cut:       p => (p.total_cut_pct || 0) > 0,
+  relisted:  p => !!p.relisted,
+  multi:     p => p.brand_count > 1,
+  expiring:  p => !!p.expiry_note,
+};
+// Everything except the tier chips — the chips' own badges count what each
+// tier WOULD contribute, which is only meaningful against this base.
+function passesRest(p) {
+  const v = S.verdict, min = parseFloat(S.min) * 1e6 || 0;
+  const max = parseFloat(S.max) * 1e6 || Infinity;
+  const q = S.q.trim().toLowerCase();
+  if (v === 'open' && p.verdict !== 'open') return false;
+  if (v === 'openish' && !['open', 'probably_open'].includes(p.verdict)) return false;
+  if (v === 'unknown' && p.verdict !== 'unknown') return false;
+  if (v === 'soleish' && !['sole', 'probably_sole'].includes(p.verdict)) return false;
+  if (S.region !== 'any' && REGION(p) !== S.region) return false;
+  const price = p.price_zar || 0;
+  if (price && (price < min || price > max)) return false;
+  if (!price && min > 0) return false;
+  if (q && !(`${p.title} ${p.suburb}`.toLowerCase().includes(q))) return false;
+  if (!S.approx && p.loc === 'suburb') return false;
+  if (!S.uo && p.under_offer) return false;
+  for (const k of S.quick) if (!QUICK[k](p)) return false;
+  return true;
 }
+const SORTS = {
+  score: (a, b) => (b.score ?? -1) - (a.score ?? -1),
+  price: (a, b) => (b.price_zar || 0) - (a.price_zar || 0),
+  cut:   (a, b) => (b.total_cut_pct || 0) - (a.total_cut_pct || 0)
+                || (b.score ?? -1) - (a.score ?? -1),
+  dom:   (a, b) => (b.days_on_market ?? -1) - (a.days_on_market ?? -1),
+  new:   (a, b) => (a.days_on_market ?? 1e9) - (b.days_on_market ?? 1e9),
+};
 
-function badges(p) {
+/* ------------------------------------------------------------ badges   */
+function badges(p, full) {
   let h = `<span class="b tier-${p.tier}">${p.tier.toUpperCase()}</span>` +
-          `<span class="b v-${esc(p.verdict)}">${esc(p.verdict.replace('_',' '))}</span>`;
+          `<span class="b v-${esc(p.verdict)}">${esc(p.verdict.replace('_', ' '))}</span>`;
   if (p.brand_count > 1) h += `<span class="b multi">${p.brand_count} agencies</span>`;
+  if (p.total_cut_pct) h += `<span class="b cut">▼ ${p.total_cut_pct}%</span>`;
+  if (p.relisted) h += `<span class="b relist">RELISTED</span>`;
   if (p.under_offer) h += `<span class="b uo">UNDER OFFER</span>`;
+  if (full && p.price_vs_gv && (p.price_vs_gv >= 1.6 || p.price_vs_gv <= 0.9))
+    h += `<span class="b gv">${p.price_vs_gv}× GV</span>`;
+  if (full && p.brand_count > 1 && p.proof_age_hours > PROOF_FRESH_HOURS)
+    h += `<span class="b stale">proof ${age(p.proof_age_hours)} old</span>`;
   if (p.loc === 'suburb') h += `<span class="b approx">≈ area</span>`;
   return h;
 }
+const metaLine = p => [p.suburb, p.property_type,
+    p.bedrooms ? p.bedrooms + ' bed' : null,
+    p.days_on_market ? p.days_on_market + 'd on market' : null]
+  .filter(Boolean).join(' · ');
 
-function popupHtml(p) {
-  const meta = [p.suburb, p.property_type, p.bedrooms ? p.bedrooms + ' bed' : null,
-                p.days_on_market ? p.days_on_market + 'd on market' : null]
-               .filter(Boolean).join(' · ');
-  return `<b>${fmtR(p.price_zar)}</b> — ${esc(p.title)}<br>
-    <span style="color:#8b8b93">${esc(meta)}</span><br>
-    <div class="badges">${badges(p)}</div>
-    ${p.agencies.length ? `<span style="color:#8b8b93">${esc(p.agencies.join(', '))}</span><br>` : ''}
-    ${p.expiry_note ? `<span style="color:#d6a95a">${esc(p.expiry_note)}</span><br>` : ''}
-    ${p.loc === 'suburb' ? '<span style="color:#8b8b93">location approximate — no published address; pin is the suburb area</span><br>' : ''}
-    <a href="${esc(p.url)}" target="_blank" rel="noopener">open listing ↗</a>
-    ${p.cma_url ? ` &nbsp;·&nbsp; <a href="${esc(p.cma_url)}" target="_blank">CMA</a>` : ''}`;
+/* ------------------------------------------------- hover tooltip (lazy) */
+function tipHtml(p) {
+  return `<div class="hp">${fmtR(p.price_zar)}${p.price_per_m2
+      ? ` <span style="color:#8b8b93;font-size:.62rem;font-weight:400">R${Number(p.price_per_m2).toLocaleString('en-ZA').replace(/,/g,' ')}/m²</span>` : ''}</div>
+    <div class="ht">${esc(p.title)}</div>
+    <div class="hm">${esc(metaLine(p))}</div>
+    <div class="badges">${badges(p, true)}</div>`;
 }
 
+/* ---------------------------------------------------- dossier (popup)  */
+function dossierHtml(p) {
+  const deal = [];
+  if (p.total_cut_pct)
+    deal.push(`price cut ${p.total_cut_pct}%` +
+              (p.price_changes > 1 ? ` over ${p.price_changes} moves` : ''));
+  else if (p.price_reduced) deal.push('price reduced');
+  if (p.relisted)
+    deal.push('relisted' + (p.days_off_market ? ` after ${p.days_off_market}d off market` : '') +
+              ' — possible failed mandate');
+  if (p.under_offer) deal.push('under offer');
+  if (p.days_on_market >= 180) deal.push(`${p.days_on_market}d on market`);
+
+  let proof = '';
+  if (p.brand_count > 1) {
+    const h = p.proof_age_hours;
+    proof = h == null
+      ? `<div class="ln ag">proof: ${p.brand_count} brands listed, freshness unknown</div>`
+      : h <= PROOF_FRESH_HOURS
+        ? `<div class="ln fresh">proof: every brand seen &lt; ${age(h)} ago</div>`
+        : `<div class="ln stalep">proof: stalest brand ${age(h)} old — re-verify before pitching</div>`;
+  }
+  return `<div class="dossier">
+    ${p.has_photo ? `<img class="hero" loading="lazy" alt=""
+        src="/api/photo/${encodeURIComponent(p.key)}?fetch=0"
+        onerror="this.remove()">` : ''}
+    <div class="in">
+      <div class="p">${fmtR(p.price_zar)}${p.price_per_m2
+        ? `<small>R${Number(p.price_per_m2).toLocaleString('en-ZA').replace(/,/g,' ')}/m²${
+             p.floor_size_m2 ? ' · ' + Math.round(p.floor_size_m2) + ' m²' : ''}</small>` : ''}</div>
+      <div class="ti">${esc(p.title)}</div>
+      <div class="mt">${esc(metaLine(p))}</div>
+      <div class="badges">${badges(p, true)}</div>
+      ${proof}
+      ${deal.length ? `<div class="ln deal">${esc(deal.join(' · '))}</div>` : ''}
+      ${p.gv_value ? `<div class="ln gvl">municipal GV ${fmtR(p.gv_value)}${
+        p.price_vs_gv ? ` · asking ${p.price_vs_gv}× the roll` : ''}</div>` : ''}
+      ${p.agencies.length ? `<div class="ln ag">${esc(p.agencies.join(', '))}</div>` : ''}
+      ${p.expiry_note ? `<div class="ln stalep">${esc(p.expiry_note)}</div>` : ''}
+      ${p.pitch ? `<div class="pitch">${esc(p.pitch)}</div>` : ''}
+      ${p.loc === 'suburb' ? '<div class="ln ag">location approximate — no published address; the pin is the suburb area</div>' : ''}
+      <div class="foot">
+        <a href="${esc(p.url)}" target="_blank" rel="noopener">open listing ↗</a>
+        ${p.cma ? ` &nbsp;·&nbsp; <a href="/cma/${p.gid}" target="_blank">CMA ↗</a>` : ''}
+      </div>
+    </div></div>`;
+}
+function openDossier(p) {
+  dossier.setLatLng([p.lat, p.lng]).setContent(dossierHtml(p)).openOn(map);
+}
+
+/* ------------------------------------------------------------- render  */
 function render() {
-  const pts = filtered();
+  readUI(); saveState();
+  const base = all.filter(passesRest);
+  const counts = {hot:0, warm:0, cold:0};
+  for (const p of base) counts[p.tier] = (counts[p.tier] || 0) + 1;
+  for (const t of ['hot', 'warm', 'cold']) $('n-' + t).textContent = counts[t] || 0;
+
+  const pts = base.filter(p => S.tiers.includes(p.tier))
+                  .sort(SORTS[S.sort] || SORTS.score);
+  current = pts;
+
+  // A hover tooltip whose marker is about to be filtered away would otherwise
+  // hang on the map forever — nothing is left to fire its mouseout.
+  map.closeTooltip(hoverTip);
   layer.clearLayers(); markers.clear();
-  for (const p of pts) {
-    const r = 5 + Math.min(5, (p.score ?? 0) / 20);
+  // Paint cold first so the 8k grey pins can never bury the 100 hot ones:
+  // on a single canvas, later layers win the pixel.
+  const ORDER = {cold:0, warm:1, hot:2};
+  for (const p of [...pts].sort((a, b) => (ORDER[a.tier] ?? 0) - (ORDER[b.tier] ?? 0))) {
+    const hot = p.tier !== 'cold';
+    const r = (hot ? 5 : 3.5) + Math.min(5, (p.score ?? 0) / 20);
     const m = L.circleMarker([p.lat, p.lng], p.loc === 'suburb'
       ? {radius:r + 1, color:TIER[p.tier], weight:1.5, dashArray:'2 3',
-         fillColor:TIER[p.tier], fillOpacity:.35}
-      : {radius:r, color:'#0d0d0f', weight:1,
-         fillColor:TIER[p.tier], fillOpacity:.88});
-    m.bindPopup(popupHtml(p), {maxWidth:280});
-    m.on('click', () => highlight(p.gid, false));
-    m.addTo(layer);
+         fillColor:TIER[p.tier], fillOpacity:hot ? .4 : .22}
+      : {radius:r, color:hot ? '#0d0d0f' : 'transparent', weight:1,
+         fillColor:TIER[p.tier], fillOpacity:hot ? .92 : .55});
+    m._p = p;
+    layer.addLayer(m);
     markers.set(p.gid, m);
   }
-  const shown = pts.slice(0, MAX_CARDS);
-  $('cards').innerHTML = shown.map(p => `
-    <div class="card" data-gid="${p.gid}">
-      <img loading="lazy" src="/api/photo/${encodeURIComponent(p.key)}?fetch=0"
-           onerror="this.style.display='none'" alt="">
-      <div class="body">
-        <div class="t">${esc(p.title)}</div>
-        <div class="price">${fmtR(p.price_zar)}</div>
-        <div class="meta">${esc([p.suburb, p.bedrooms ? p.bedrooms + ' bed' : null,
-                                p.days_on_market ? p.days_on_market + 'd' : null]
-                               .filter(Boolean).join(' · '))}</div>
-        <div class="badges">${badges(p)}</div>
-      </div>
-    </div>`).join('') +
-    (pts.length > MAX_CARDS
-      ? `<div style="color:#8b8b93;font-size:.7rem;padding:.6rem">top ${MAX_CARDS} of ${pts.length} shown as cards — every one is on the map; tighten the filters to browse the rest</div>`
-      : '') ||
-    '<div style="color:#8b8b93;font-size:.75rem;padding:.6rem">nothing matches the filters</div>';
-  for (const el of document.querySelectorAll('.card'))
-    el.onclick = () => {
-      const p = pts.find(x => String(x.gid) === el.dataset.gid);
-      if (!p) return;
-      map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 15), {duration:.6});
-      markers.get(p.gid)?.openPopup();
-      highlight(p.gid, true);
-    };
+  renderCards(pts);
+  renderStats(pts);
+  renderLabels();
   $('count').textContent =
     `${pts.length} pins · ${all.length - pts.length} filtered out · ${unmapped} unmappable`;
   // No auto-fit: a handful of mis-filed pins would zoom the whole map out
@@ -293,25 +564,165 @@ function render() {
   // (Cape Town, Winelands, Whale Coast, West Coast); pan/zoom from there.
 }
 
-function highlight(gid, scrollMap) {
+function renderStats(pts) {
+  const prices = pts.map(p => p.price_zar).filter(Boolean).sort((a, b) => a - b);
+  const med = prices.length ? prices[Math.floor(prices.length / 2)] : 0;
+  $('s-count').textContent = pts.length.toLocaleString('en-ZA');
+  $('s-median').textContent = fmtShort(med);
+  $('s-multi').textContent = pts.filter(p => p.brand_count > 1).length;
+  $('s-cuts').textContent = pts.filter(p => p.total_cut_pct).length;
+}
+
+function renderCards(pts) {
+  const shown = pts.slice(0, MAX_CARDS);
+  const html = shown.map(p => `
+    <div class="card${p.gid === activeGid ? ' active' : ''}" data-gid="${p.gid}">
+      ${p.has_photo
+        ? `<img loading="lazy" src="/api/photo/${encodeURIComponent(p.key)}?fetch=0"
+             onerror="this.className='nophoto';this.removeAttribute('src')" alt="">`
+        : '<div class="nophoto"></div>'}
+      <div class="body">
+        <div class="links">
+          <a href="${esc(p.url)}" target="_blank" rel="noopener" title="open listing">↗</a>
+          ${p.cma ? `<a href="/cma/${p.gid}" target="_blank" title="CMA">C</a>` : ''}
+        </div>
+        <div class="t">${esc(p.title)}</div>
+        <div class="price">${fmtR(p.price_zar)}${p.price_per_m2
+          ? `<span class="ppm">R${Number(p.price_per_m2).toLocaleString('en-ZA').replace(/,/g,' ')}/m²</span>` : ''}</div>
+        <div class="meta">${esc([p.suburb, p.bedrooms ? p.bedrooms + ' bed' : null,
+                                p.days_on_market ? p.days_on_market + 'd' : null]
+                               .filter(Boolean).join(' · '))}</div>
+        <div class="badges">${badges(p, true)}</div>
+      </div>
+    </div>`).join('') +
+    (pts.length > MAX_CARDS
+      ? `<div class="note">top ${MAX_CARDS} of ${pts.length.toLocaleString('en-ZA')} shown as cards — every one is on the map; tighten the filters to browse the rest</div>`
+      : '');
+  $('cards').innerHTML = html ||
+    '<div class="note">nothing matches the filters — <a href="#" id="rl" style="color:var(--gold)">reset them</a></div>';
+  $('rl')?.addEventListener('click', e => { e.preventDefault(); resetFilters(); });
+  $('cards').scrollTop = 0;
+}
+
+// One delegated click for up to 400 cards; the link icons opt out so a card
+// click always means "fly there", never "swallow my link".
+$('cards').addEventListener('click', ev => {
+  if (ev.target.closest('a')) return;
+  const el = ev.target.closest('.card');
+  if (!el) return;
+  const p = current.find(x => String(x.gid) === el.dataset.gid);
+  if (!p) return;
+  highlight(p.gid, true);
+  // Open the dossier AFTER the flight: a popup that auto-pans mid-animation
+  // loses the argument and ends up half off the top of the window.
+  const z = Math.max(map.getZoom(), 15);
+  if (map.getZoom() === z && map.getCenter().distanceTo([p.lat, p.lng]) < 20)
+    return openDossier(p);
+  map.once('moveend', () => openDossier(p));
+  map.flyTo([p.lat, p.lng], z, {duration:.6});
+});
+
+/* ------------------------------------------- zoom-dependent price tags  */
+// Permanent labels are real DOM nodes, so they are only ever drawn for the
+// deals worth reading at speed: hot/warm, in view, capped.
+function renderLabels() {
+  labels.clearLayers();
+  if (map.getZoom() < LABEL_ZOOM) return;
+  const b = map.getBounds();
+  const placed = [];               // screen points already carrying a label
+  let n = 0;
+  for (const p of current) {       // best-first in the current sort order
+    if (n >= MAX_LABELS) break;
+    if (p.tier === 'cold' || !p.price_zar) continue;
+    if (!b.contains([p.lat, p.lng])) continue;
+    // Declutter: a stack of villas one street apart would otherwise print a
+    // wall of overlapping prices. First (= best) label in a cell wins.
+    const pt = map.latLngToContainerPoint([p.lat, p.lng]);
+    if (placed.some(q => Math.abs(q.x - pt.x) < 58 && Math.abs(q.y - pt.y) < 18))
+      continue;
+    placed.push(pt);
+    L.tooltip({permanent:true, direction:'top', offset:[0, -9],
+               className:'pricelab' + (p.tier === 'warm' ? ' warm' : ''),
+               interactive:false})
+      .setLatLng([p.lat, p.lng]).setContent(fmtShort(p.price_zar))
+      .addTo(labels);
+    n++;
+  }
+}
+
+/* -------------------------------------------------------- interaction  */
+layer.on('mouseover', e => {
+  const p = e.layer._p;
+  if (!p) return;
+  hoverTip.setLatLng(e.layer.getLatLng()).setContent(tipHtml(p));
+  map.openTooltip(hoverTip);
+});
+layer.on('mouseout', () => map.closeTooltip(hoverTip));
+layer.on('click', e => {
+  const p = e.layer._p;
+  if (!p) return;
+  map.closeTooltip(hoverTip);
+  openDossier(p);
+  highlight(p.gid, false);
+});
+
+function highlight(gid, fromCard) {
+  activeGid = gid;
   for (const el of document.querySelectorAll('.card'))
     el.classList.toggle('active', el.dataset.gid === String(gid));
-  if (!scrollMap) {
+  if (!fromCard) {
     const el = document.querySelector(`.card[data-gid="${gid}"]`);
     el?.scrollIntoView({block:'nearest', behavior:'smooth'});
   }
 }
 
-for (const c of document.querySelectorAll('.chip'))
-  c.onclick = () => { c.classList.toggle('on'); render(); };
-for (const id of ['f-verdict','f-region','f-multi','f-approx','f-uo'])
-  $(id).onchange = render;
-for (const id of ['f-min','f-max','f-q'])
-  $(id).oninput = () => { clearTimeout(window._t); window._t = setTimeout(render, 250); };
-$('f-sole').onchange = load;
-$('panelhide').onclick = () => document.body.classList.add('panel-off');
-$('paneltoggle').onclick = () => document.body.classList.remove('panel-off');
+const debounce = (fn, ms) => {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+};
+const relabel = debounce(renderLabels, 180);
+map.on('zoomend', relabel);
+map.on('moveend', relabel);
+map.on('movestart', () => map.closeTooltip(hoverTip));
 
+function resetFilters() {
+  const panel = !document.body.classList.contains('panel-off');
+  S = DEF(); S.panel = panel;
+  writeUI(); render();
+}
+
+/* ------------------------------------------------------------- wiring  */
+for (const c of document.querySelectorAll('.chip[data-tier], .qchip'))
+  c.onclick = () => { c.classList.toggle('on'); render(); };
+for (const id of ['f-verdict', 'f-region', 'f-approx', 'f-uo', 'f-sort'])
+  $(id).onchange = render;
+const soft = debounce(render, 250);
+for (const id of ['f-min', 'f-max', 'f-q']) $(id).oninput = soft;
+$('f-sole').onchange = () => { readUI(); saveState(); load(); };
+$('reset').onclick = resetFilters;
+$('panelhide').onclick = () => {
+  document.body.classList.add('panel-off'); readUI(); saveState();
+};
+$('paneltoggle').onclick = () => {
+  document.body.classList.remove('panel-off'); readUI(); saveState();
+};
+
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') {
+    e.preventDefault();
+    document.body.classList.remove('panel-off');
+    $('f-q').focus(); $('f-q').select();
+  } else if (e.key === 'Escape') {
+    map.closePopup(); map.closeTooltip(hoverTip);
+    if (document.activeElement === $('f-q')) {
+      if ($('f-q').value) { $('f-q').value = ''; render(); }
+      $('f-q').blur();
+    }
+  }
+});
+
+loadState();
+writeUI();
 load();
 </script>
 </body></html>

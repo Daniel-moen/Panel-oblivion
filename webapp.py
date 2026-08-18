@@ -301,6 +301,31 @@ def api_prospects():
     return jsonify(_prospects_payload(request.args.get("sole") == "1"))
 
 
+# Price-cut history is a whole-DB aggregate (~0.5s); lifecycle is one scan.
+# Both only change when a crawl writes, so they are cached far longer than the
+# prospects payload itself — /api/prospects is polled every 2s and during a
+# crawl every one of those seconds is GIL time stolen from the scrapers.
+_DEAL_CTX_TTL = 120.0
+_deal_ctx_cache: tuple[float, dict, dict] | None = None
+_deal_ctx_lock = threading.Lock()
+
+
+def _deal_context() -> tuple[dict, dict]:
+    """(price cuts, lifecycle) by listing_key — bulk, cached, never per row."""
+    global _deal_ctx_cache
+    now = time.monotonic()
+    with _deal_ctx_lock:
+        hit = _deal_ctx_cache
+        if hit and now - hit[0] < _DEAL_CTX_TTL:
+            return hit[1], hit[2]
+    with db.connect() as conn:
+        cuts = scorer.price_cut_history(conn)      # {} if the table is absent
+        cycle = scorer.lifecycle_context(conn)     # {} if lifecycle never ran
+    with _deal_ctx_lock:
+        _deal_ctx_cache = (time.monotonic(), cuts, cycle)
+    return cuts, cycle
+
+
 def _build_prospects(show_sole: bool) -> list:
     from sources.base import canonical_agency
     with db.connect() as conn:
@@ -309,6 +334,7 @@ def _build_prospects(show_sole: bool) -> list:
         # dashboard hits this endpoint every 2s while a job runs, and
         # for_groups() walks two tables per call.
         gv_by_group = valuations.for_groups(conn)
+    cuts, cycle = _deal_context()
 
     grouped: dict = {}
     for r in rows:
@@ -384,10 +410,54 @@ def _build_prospects(show_sole: bool) -> list:
                 d["lat"], d["lng"] = pin["latitude"], pin["longitude"]
                 d["loc"] = "listing"
         d["region"] = config.SUBURBS.get(best["suburb_slug"], {}).get("region")
+        # ---- deal signals, all read from the two bulk dicts (no per-row SQL).
+        # Like the scorer, the group speaks with its loudest member's voice:
+        # one portal showing the cut is proof the price moved.
+        keys = [m["listing_key"] for m in members]
+        cut = max((cuts.get(k, {}).get("total_cut_pct") or 0.0 for k in keys),
+                  default=0.0)
+        moves = max((cuts.get(k, {}).get("price_changes") or 0 for k in keys),
+                    default=0)
+        d["total_cut_pct"] = round(cut, 1) if cut > 0 else None
+        d["price_changes"] = moves or None
+        lc = [cycle.get(k) for k in keys]
+        d["relisted"] = any(c and c["status"] == "relisted" for c in lc)
+        off = []
+        for c in lc:
+            if not c or c["status"] != "relisted":
+                continue
+            gone = scorer._parse_date(c["delisted_at"])
+            back = scorer._parse_date(c["relisted_at"])
+            if gone and back and back > gone:
+                off.append((back - gone).days)
+        d["days_off_market"] = max(off) if off else None
+        # Multi-brand proof is only as fresh as its stalest brand — a listing
+        # a portal dropped weeks ago no longer proves anything about today.
+        d["proof_age_hours"] = None
+        if len(brands) > 1:
+            age = scorer._proof_age_hours(members, sorted(brands))
+            d["proof_age_hours"] = round(age, 1) if age is not None else None
+        # Thumbnails: name the member that actually has a hero image, so the
+        # card requests a photo that exists instead of a guaranteed 404.
+        photo_key = next((m["listing_key"] for m in members
+                          if (m["photo_url"] or "").strip() not in ("", "-")),
+                         None)
+        d["has_photo"] = photo_key is not None
+        # Only when a SIBLING owns the image: /api/prospects is 30MB polled
+        # every 2s, and a key that repeats listing_key earns nothing.
+        if photo_key and photo_key != best["listing_key"]:
+            d["photo_key"] = photo_key
+        ppm2 = best["price_per_m2"]
+        if not ppm2 and best["price_zar"] and best["floor_size_m2"]:
+            ppm2 = best["price_zar"] / best["floor_size_m2"]
+        d["price_per_m2"] = round(ppm2) if ppm2 else None
         gid = best["group_id"]
         val = gv_by_group.get(str(gid)) if gid is not None else None
         d["gv_value"] = (val or {}).get("market_value")
         d["gv_roll"] = (val or {}).get("roll")
+        # Asking vs the municipal valuation — 1.0 is on the roll, 2.0 is double.
+        d["price_vs_gv"] = (round(best["price_zar"] / d["gv_value"], 2)
+                            if d["gv_value"] and best["price_zar"] else None)
         # Only real (integer) groups have a CMA page; solo listings carry the
         # synthetic 'solo-<key>' id and cma_web has nothing to render for them.
         d["cma_url"] = f"/cma/{gid}" if isinstance(gid, int) else None
@@ -436,6 +506,12 @@ def _suburb_centroids() -> dict[str, tuple[float, float]]:
 
 @app.get("/api/map")
 def api_map():
+    """Every prospect as one map point, enriched enough to read at a glance.
+
+    Deal signals (cut %, relisted, proof freshness, GV ratio, pitch) ride
+    along so the page can render tooltips, badges and the dossier popup
+    without a second round trip per pin.
+    """
     import hashlib
     show_sole = request.args.get("sole") == "1"
     centroids = _suburb_centroids()
@@ -455,27 +531,49 @@ def api_map():
             else:
                 unmapped += 1
                 continue
-        points.append({
-            "gid": d["group_id"], "key": d["listing_key"],
+        pt = {
+            "gid": d["group_id"], "key": d.get("photo_key") or d["listing_key"],
             "title": d.get("title"), "url": d.get("url"),
             "price_zar": d.get("price_zar"),
             "tier": d.get("tier") or "cold",
             "score": d.get("prospect_score"),
             "verdict": d.get("mandate_verdict") or "unknown",
-            "sellable": d.get("sellable"),
-            "suburb": d.get("suburb"), "suburb_slug": d.get("suburb_slug"),
+            "suburb": d.get("suburb"),
             "region": d.get("region"),
             "lat": round(lat, 6), "lng": round(lng, 6), "loc": loc,
             "brand_count": d.get("brand_count"),
             "agencies": d.get("agencies") or [],
-            "under_offer": bool(d.get("under_offer")),
-            "price_reduced": bool(d.get("price_reduced")),
-            "days_on_market": d.get("days_on_market"),
-            "bedrooms": d.get("bedrooms"),
-            "property_type": d.get("property_type"),
-            "expiry_note": d.get("mandate_expiry_note"),
-            "cma_url": d.get("cma_url"),
-        })
+        }
+        # Everything below is optional: at ~9k points a key that says "no"
+        # costs as much on the wire as one that says something, so absent
+        # means false/unknown and the page treats it that way.
+        pitch = (d.get("pitch_angle") or "").strip()
+        for k, v in (
+                ("sellable", d.get("sellable")),
+                ("under_offer", bool(d.get("under_offer"))),
+                ("price_reduced", bool(d.get("price_reduced"))),
+                ("relisted", bool(d.get("relisted"))),
+                ("has_photo", bool(d.get("has_photo"))),
+                ("days_on_market", d.get("days_on_market")),
+                ("days_off_market", d.get("days_off_market")),
+                ("bedrooms", d.get("bedrooms")),
+                ("property_type", d.get("property_type")),
+                ("expiry_note", d.get("mandate_expiry_note")),
+                ("total_cut_pct", d.get("total_cut_pct")),
+                ("price_changes", d.get("price_changes")),
+                ("proof_age_hours", d.get("proof_age_hours")),
+                ("gv_value", d.get("gv_value")),
+                ("price_vs_gv", d.get("price_vs_gv")),
+                ("floor_size_m2", d.get("floor_size_m2")),
+                ("price_per_m2", d.get("price_per_m2")),
+                ("luxury_fit", d.get("luxury_fit")),
+                ("open_conf", d.get("open_mandate_confidence")),
+                ("marketing_weakness", d.get("marketing_weakness")),
+                ("pitch", pitch[:200] + ("…" if len(pitch) > 200 else "")),
+                ("cma", 1 if d.get("cma_url") else 0)):
+            if v:
+                pt[k] = v
+        points.append(pt)
     return jsonify({"points": points, "unmapped": unmapped})
 
 
