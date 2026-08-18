@@ -113,6 +113,13 @@ pitch signal. days_on_market far beyond suburb_market.median_days_on_market \
 means the current marketing is demonstrably failing. If `under_offer` is \
 true a sale is likely imminent: tier cold, score low, and say so in red_flags.
 
+Evidence freshness matters. `multi_agency_proof_age_hours` is how long ago \
+the multi-agency evidence was last confirmed live on the portals; treat proof \
+older than ~72h as weaker — the seller may have consolidated onto one agency \
+since. `mandate_expiry_date` (where a portal publishes it) is the mandate's \
+own end date: a sole mandate within ~60 days of expiry is a prime renewal \
+pitch, not a closed door.
+
 Be sceptical and decisive. Most listings are cold."""
 
 # Revealed-preference context from Oblivion's own tracker; set by score_all(),
@@ -366,6 +373,49 @@ def _mandate_created(member: sqlite3.Row) -> datetime | None:
     return None
 
 
+def _mandate_expiry(member: sqlite3.Row) -> datetime | None:
+    """RE/MAX publishes its CRM record's end date in raw_overview.
+
+    On a "Sole" listing that is the mandate's likely expiry — the exact
+    pitch window the stale-sole heuristic otherwise has to guess at.
+    """
+    try:
+        raw = json.loads(member["raw_overview"] or "{}")
+    except (ValueError, TypeError):
+        return None
+    if isinstance(raw, dict):
+        return _parse_date(raw.get("expiryDate"))
+    return None
+
+
+def _utcnow() -> datetime:
+    """Naive UTC now, comparable to SQLite's datetime('now') text."""
+    from datetime import timezone
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _proof_age_hours(members: list[sqlite3.Row], brands: list[str]) -> float | None:
+    """Age of the multi-agency proof: the STALEST brand's freshest sighting.
+
+    Two brands prove an open mandate only while both listings are actually
+    live. Each brand's evidence is as fresh as its most recently seen
+    listing; the proof as a whole is as fresh as the weakest brand.
+    """
+    from sources.base import canonical_agency
+    freshest: dict[str, datetime] = {}
+    for m in members:
+        brand = canonical_agency(m["agency"])
+        if not brand:
+            continue
+        seen = _parse_date(m["last_seen"])
+        if seen and (brand not in freshest or seen > freshest[brand]):
+            freshest[brand] = seen
+    if not all(b in freshest for b in brands):
+        return None
+    now = _utcnow()
+    return max((now - freshest[b]).total_seconds() / 3600.0 for b in brands)
+
+
 def build_prospect_payload(members: list[sqlite3.Row], ctx: dict | None = None) -> dict:
     """Collapse a property group (1+ listings of the same home) into one payload.
 
@@ -404,6 +454,13 @@ def build_prospect_payload(members: list[sqlite3.Row], ctx: dict | None = None) 
             mandate_age = (datetime.now() - created).days
             break
 
+    mandate_expiry = None
+    for m in members:
+        expiry = _mandate_expiry(m)
+        if expiry:
+            mandate_expiry = expiry
+            break
+
     payload = {
         "title": primary["title"],
         "suburb": primary["suburb"],
@@ -430,6 +487,8 @@ def build_prospect_payload(members: list[sqlite3.Row], ctx: dict | None = None) 
         "explicit_mandate_flags": flags,
         "mandate_age_days": mandate_age,
         "description": description[:8000],
+        "_proof_age_hours": (_proof_age_hours(members, brands)
+                             if len(brands) > 1 else None),
         "_mandate_regex_hint": primary["mandate_text"],
         "_members": [m["listing_key"] for m in members],
         "primary_listing_key": primary["listing_key"],
@@ -437,6 +496,14 @@ def build_prospect_payload(members: list[sqlite3.Row], ctx: dict | None = None) 
 
     # Fields below are added only when the data exists — a payload full of
     # nulls just teaches the model to ignore the keys.
+
+    if payload["_proof_age_hours"] is not None:
+        payload["multi_agency_proof_age_hours"] = round(
+            payload["_proof_age_hours"], 1)
+    if mandate_expiry:
+        payload["mandate_expiry_date"] = mandate_expiry.strftime("%Y-%m-%d")
+        payload["mandate_days_to_expiry"] = (mandate_expiry
+                                             - datetime.now()).days
 
     # price_per_m2: portal-published where available, else derived.
     ppm2 = primary["price_per_m2"]
@@ -491,12 +558,29 @@ def _apply_hard_rules(payload: dict, result: dict) -> dict:
 
     if agency_count > 1:
         # Two different agencies on one home: the seller has not granted
-        # exclusivity to either. Nothing the model says outranks this.
-        result["mandate_verdict"] = "open"
-        result["open_mandate_confidence"] = max(
-            result.get("open_mandate_confidence", 0), 92)
-        note = (f"{agency_count} different agencies are marketing this "
-                f"property — the mandate cannot be exclusive.")
+        # exclusivity to either. Nothing the model says outranks this —
+        # but the proof is only as fresh as its stalest brand. If one of
+        # the proving listings hasn't been seen for days the seller may
+        # have since consolidated onto a sole mandate with the other
+        # agency, so stale proof degrades rather than asserting "open".
+        proof_age = payload.get("_proof_age_hours")
+        if proof_age is None or proof_age <= config.PROOF_FRESH_HOURS:
+            result["mandate_verdict"] = "open"
+            result["open_mandate_confidence"] = max(
+                result.get("open_mandate_confidence", 0), 92)
+            note = (f"{agency_count} different agencies are marketing this "
+                    f"property — the mandate cannot be exclusive.")
+            if proof_age is not None:
+                note += (f" Every brand confirmed live within the last "
+                         f"{max(1, int(proof_age))}h.")
+        else:
+            result["mandate_verdict"] = "probably_open"
+            result["open_mandate_confidence"] = max(
+                min(result.get("open_mandate_confidence", 0), 80), 70)
+            note = (f"{agency_count} agencies were marketing this property, "
+                    f"but the stalest brand was last confirmed "
+                    f"{proof_age / 24.0:.1f} days ago — re-verify the "
+                    f"listing is still live before pitching.")
     elif "sole" in flags:
         result["mandate_verdict"] = "sole"
         result["open_mandate_confidence"] = min(
@@ -511,9 +595,22 @@ def _apply_hard_rules(payload: dict, result: dict) -> dict:
 
     verdict = result.get("mandate_verdict") or "unknown"
 
-    # A sole mandate near the end of its term is the best pitch window there is.
+    # A sole mandate near the end of its term is the best pitch window there
+    # is. Prefer the portal's own end date (RE/MAX publishes one) over the
+    # signed-N-days-ago guess, which assumes a 180-day term.
     stale_sole = False
-    if verdict in ("sole", "probably_sole") and age and age >= SOLE_MANDATE_STALE_DAYS:
+    days_to_expiry = payload.get("mandate_days_to_expiry")
+    if verdict in ("sole", "probably_sole") and days_to_expiry is not None \
+            and days_to_expiry <= 60:
+        stale_sole = True
+        note = (f"Sole mandate runs to {payload.get('mandate_expiry_date')} "
+                f"(the portal's own end date"
+                + (", already past" if days_to_expiry < 0
+                   else f", {days_to_expiry} days out")
+                + "). Pitch now to be first in line for the renewal.")
+        result["open_mandate_confidence"] = max(
+            result.get("open_mandate_confidence", 0), 45)
+    elif verdict in ("sole", "probably_sole") and age and age >= SOLE_MANDATE_STALE_DAYS:
         stale_sole = True
         expiry = datetime.now() + timedelta(days=max(0, 180 - age))
         note = (f"Sole mandate signed {age} days ago — SA mandates run 3-6 "

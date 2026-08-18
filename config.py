@@ -396,6 +396,15 @@ MAX_PAGES_TOWN_SCOPE = 50
 
 DB_PATH = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "prospects.db"))
 
+# Multi-agency open-mandate proof is only as fresh as its STALEST brand: if
+# one of the two proving listings hasn't been seen for days, the seller may
+# have since consolidated onto a sole mandate with the other agency. Proof
+# where every brand was seen live within this window keeps the hard "open"
+# verdict at full confidence; staler proof degrades to probably_open with a
+# re-verify note. verify.py re-fetches exactly these stale members for
+# hot-tier prospects after each crawl.
+PROOF_FRESH_HOURS = 72
+
 # ---------------------------------------------------------------- dedupe
 #
 # Cross-portal matching thresholds. A pair of listings scoring at or above
