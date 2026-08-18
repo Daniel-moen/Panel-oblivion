@@ -284,18 +284,21 @@ ORDER BY (s.prospect_score IS NULL) DESC, s.prospect_score DESC, l.price_zar DES
 """
 
 
-@app.get("/api/prospects")
-def api_prospects():
-    show_sole = request.args.get("sole") == "1"
+def _prospects_payload(show_sole: bool) -> list:
     now = time.monotonic()
     with _prospects_lock:
         hit = _prospects_cache.get(show_sole)
         if hit and now - hit[0] < _PROSPECTS_TTL:
-            return jsonify(hit[1])
+            return hit[1]
     payload = _build_prospects(show_sole)
     with _prospects_lock:
         _prospects_cache[show_sole] = (time.monotonic(), payload)
-    return jsonify(payload)
+    return payload
+
+
+@app.get("/api/prospects")
+def api_prospects():
+    return jsonify(_prospects_payload(request.args.get("sole") == "1"))
 
 
 def _build_prospects(show_sole: bool) -> list:
@@ -361,6 +364,26 @@ def _build_prospects(show_sole: bool) -> list:
             if dt and (listed is None or dt < listed):
                 listed = dt
         d["days_on_market"] = (datetime.now() - listed).days if listed else None
+        # Map position, most trustworthy source first: the resolved parcel's
+        # centroid (cadastre fact), else any member's portal pin. `loc` says
+        # which one won so the map can mark anything weaker as approximate.
+        # Every candidate passes the South Africa sanity box — portals ship
+        # the occasional junk pin (0-ish, or lat/lng swapped in ways the
+        # parse-time fix can't catch) that would otherwise put a Camps Bay
+        # villa in the Gulf of Guinea; those fall through to the suburb
+        # centroid instead.
+        def _sa(lat, lng):
+            return (lat and lng and -35.5 < lat < -21.5 and 16.0 < lng < 33.5)
+        d["lat"], d["lng"], d["loc"] = None, None, None
+        if _sa(best["erf_lat"], best["erf_lng"]):
+            d["lat"], d["lng"], d["loc"] = best["erf_lat"], best["erf_lng"], "erf"
+        else:
+            pin = next((m for m in members
+                        if _sa(m["latitude"], m["longitude"])), None)
+            if pin:
+                d["lat"], d["lng"] = pin["latitude"], pin["longitude"]
+                d["loc"] = "listing"
+        d["region"] = config.SUBURBS.get(best["suburb_slug"], {}).get("region")
         gid = best["group_id"]
         val = gv_by_group.get(str(gid)) if gid is not None else None
         d["gv_value"] = (val or {}).get("market_value")
@@ -373,6 +396,96 @@ def _build_prospects(show_sole: bool) -> list:
     out.sort(key=lambda d: (-(d.get("prospect_score") or -1),
                             -(d.get("price_zar") or 0)))
     return out
+
+
+# -------------------------------------------------------------------- map
+#
+# /map plots the prospect list. Position quality varies wildly by portal —
+# a resolved erf gives a parcel centroid, some listings publish a pin, and
+# prime Atlantic Seaboard stock frequently publishes nothing at all. Rather
+# than dropping the addressless ones, they are GENERALISED: placed on their
+# suburb's centroid (median of every located listing in that suburb) with a
+# small deterministic jitter so a stack of them fans out, and flagged
+# `loc: "suburb"` so the page renders them as approximate.
+_SUBURB_CENTROID_TTL = 300.0
+_suburb_centroids_cache: tuple[float, dict] | None = None
+
+
+def _suburb_centroids() -> dict[str, tuple[float, float]]:
+    global _suburb_centroids_cache
+    now = time.monotonic()
+    if _suburb_centroids_cache and now - _suburb_centroids_cache[0] < _SUBURB_CENTROID_TTL:
+        return _suburb_centroids_cache[1]
+    import statistics
+    by_suburb: dict[str, tuple[list, list]] = {}
+    with db.connect() as conn:
+        for r in conn.execute(
+                """SELECT suburb_slug, latitude, longitude FROM listings
+                   WHERE latitude IS NOT NULL AND longitude IS NOT NULL"""):
+            # Sanity box for South Africa — a swapped or junk pin must not
+            # drag a suburb's centroid into the ocean.
+            if -35.5 < r["latitude"] < -21.5 and 16.0 < r["longitude"] < 33.5:
+                lats, lngs = by_suburb.setdefault(r["suburb_slug"], ([], []))
+                lats.append(r["latitude"])
+                lngs.append(r["longitude"])
+    cents = {slug: (statistics.median(lats), statistics.median(lngs))
+             for slug, (lats, lngs) in by_suburb.items() if lats}
+    _suburb_centroids_cache = (now, cents)
+    return cents
+
+
+@app.get("/api/map")
+def api_map():
+    import hashlib
+    show_sole = request.args.get("sole") == "1"
+    centroids = _suburb_centroids()
+    points, unmapped = [], 0
+    for d in _prospects_payload(show_sole):
+        lat, lng, loc = d.get("lat"), d.get("lng"), d.get("loc")
+        if lat is None:
+            c = centroids.get(d["suburb_slug"])
+            if c:
+                # ±~250m jitter, deterministic per group so pins don't hop
+                # around between refreshes.
+                h = int(hashlib.md5(
+                    str(d["group_id"]).encode()).hexdigest()[:8], 16)
+                lat = c[0] + ((h & 0xFFF) / 0xFFF - 0.5) * 0.005
+                lng = c[1] + (((h >> 12) & 0xFFF) / 0xFFF - 0.5) * 0.005
+                loc = "suburb"
+            else:
+                unmapped += 1
+                continue
+        points.append({
+            "gid": d["group_id"], "key": d["listing_key"],
+            "title": d.get("title"), "url": d.get("url"),
+            "price_zar": d.get("price_zar"),
+            "tier": d.get("tier") or "cold",
+            "score": d.get("prospect_score"),
+            "verdict": d.get("mandate_verdict") or "unknown",
+            "sellable": d.get("sellable"),
+            "suburb": d.get("suburb"), "suburb_slug": d.get("suburb_slug"),
+            "region": d.get("region"),
+            "lat": round(lat, 6), "lng": round(lng, 6), "loc": loc,
+            "brand_count": d.get("brand_count"),
+            "agencies": d.get("agencies") or [],
+            "under_offer": bool(d.get("under_offer")),
+            "price_reduced": bool(d.get("price_reduced")),
+            "days_on_market": d.get("days_on_market"),
+            "bedrooms": d.get("bedrooms"),
+            "property_type": d.get("property_type"),
+            "expiry_note": d.get("mandate_expiry_note"),
+            "cma_url": d.get("cma_url"),
+        })
+    return jsonify({"points": points, "unmapped": unmapped})
+
+
+_MAP_PATH = os.path.join(config.ROOT, "map.html")
+
+
+@app.get("/map")
+def map_page():
+    with open(_MAP_PATH, encoding="utf-8") as f:
+        return f.read()
 
 
 # ------------------------------------------------------- erf / cadastre jobs
@@ -561,9 +674,14 @@ def api_photo(listing_key):
     common case is a stored URL (crawl-time capture or a previous resolve) and
     costs one redirect. On a miss the listing page is fetched — cache first,
     then network, serialised per portal — which fills the column for good.
+
+    ?fetch=0 stays off the network entirely (stored URL or page cache only).
+    The map page uses it: hundreds of cards resolving thumbnails at once must
+    not fan out into hundreds of live portal fetches.
     """
+    allow_fetch = request.args.get("fetch") != "0"
     with db.connect() as conn:
-        url = photos.first_photo(conn, listing_key)
+        url = photos.first_photo(conn, listing_key, allow_fetch=allow_fetch)
     if url:
         return redirect(url, code=302)
     return ("", 404)

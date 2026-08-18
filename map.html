@@ -1,0 +1,317 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Oblivion — Prospect Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root { color-scheme: dark;
+  --bg:#0d0d0f; --panel:#141418; --line:#26262b; --line2:#32323a;
+  --ink:#e8e8e8; --ink2:#8b8b93; --gold:#e8c47a;
+  --hot:#c0392b; --warm:#d68910; --cold:#6b6b73; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,Helvetica,sans-serif;
+       background:var(--bg); color:var(--ink); height:100vh; display:flex;
+       flex-direction:column; overflow:hidden; }
+header { display:flex; align-items:center; gap:1rem; padding:0 1.1rem;
+         height:48px; border-bottom:1px solid var(--line); flex:none; }
+header h1 { font-weight:300; letter-spacing:.25em; font-size:.95rem; margin:0; }
+header h1 b { font-weight:650; }
+header a.back { color:var(--ink2); text-decoration:none; font-size:.78rem; }
+header a.back:hover { color:var(--gold); }
+#count { margin-left:auto; color:var(--ink2); font-size:.72rem; }
+#stage { position:relative; flex:1; min-height:0; }
+#map { position:absolute; inset:0; background:#0a0a0c; }
+
+/* ------------------------------------------------ overlay panel + cards */
+#panel { position:absolute; z-index:1000; top:.7rem; left:.7rem;
+  width:330px; max-height:calc(100% - 1.4rem); display:flex;
+  flex-direction:column; background:rgba(20,20,24,.92);
+  backdrop-filter:blur(6px); border:1px solid var(--line2);
+  border-radius:10px; overflow:hidden; }
+#paneltoggle { position:absolute; z-index:1001; top:.7rem; left:.7rem;
+  display:none; background:var(--panel); color:var(--ink);
+  border:1px solid var(--line2); border-radius:8px; padding:.4rem .7rem;
+  font-size:.8rem; cursor:pointer; }
+body.panel-off #panel { display:none; }
+body.panel-off #paneltoggle { display:block; }
+#filters { padding:.7rem .8rem .6rem; border-bottom:1px solid var(--line);
+           flex:none; }
+#filters .row { display:flex; gap:.4rem; align-items:center; flex-wrap:wrap;
+                margin-bottom:.45rem; }
+#filters .row:last-child { margin-bottom:0; }
+.chip { border:1px solid var(--line2); background:transparent; color:var(--ink2);
+  border-radius:20px; padding:2px 10px; font-size:.68rem; cursor:pointer;
+  letter-spacing:.05em; }
+.chip.on[data-tier=hot]  { background:var(--hot);  border-color:var(--hot);  color:#fff; }
+.chip.on[data-tier=warm] { background:var(--warm); border-color:var(--warm); color:#fff; }
+.chip.on[data-tier=cold] { background:var(--cold); border-color:var(--cold); color:#fff; }
+select, input[type=number], input[type=search] {
+  background:#1b1b21; color:var(--ink); border:1px solid var(--line2);
+  border-radius:6px; padding:3px 6px; font-size:.72rem; }
+input[type=number] { width:4.6rem; }
+input[type=search] { flex:1; min-width:0; }
+label.cb { display:flex; gap:.35rem; align-items:center; color:var(--ink2);
+           font-size:.7rem; cursor:pointer; }
+label.cb input { accent-color:var(--gold); }
+#panelhide { margin-left:auto; background:none; border:none; color:var(--ink2);
+             cursor:pointer; font-size:.8rem; }
+#cards { overflow-y:auto; padding:.45rem; flex:1; min-height:0; }
+.card { display:flex; gap:.55rem; padding:.5rem; border:1px solid var(--line);
+  border-radius:8px; margin-bottom:.45rem; cursor:pointer;
+  background:rgba(13,13,15,.55); }
+.card:hover, .card.active { border-color:var(--gold); }
+.card img { width:84px; height:64px; object-fit:cover; border-radius:5px;
+            background:#1a1a1f; flex:none; }
+.card .body { min-width:0; flex:1; }
+.card .t { font-size:.76rem; line-height:1.25; color:var(--ink);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden; }
+.card .price { color:var(--gold); font-weight:650; font-size:.78rem;
+               margin-top:.15rem; }
+.card .meta { color:var(--ink2); font-size:.66rem; margin-top:.15rem; }
+.badges { display:flex; gap:.3rem; flex-wrap:wrap; margin-top:.3rem; }
+.b { font-size:.58rem; padding:1px 6px; border-radius:3px; color:#fff;
+     letter-spacing:.04em; }
+.b.tier-hot { background:var(--hot); } .b.tier-warm { background:var(--warm); }
+.b.tier-cold { background:var(--cold); }
+.b.v-open { background:#1e8449; } .b.v-probably_open { background:#148f77; }
+.b.v-unknown { background:#5d5d66; } .b.v-probably_sole { background:#a04000; }
+.b.v-sole { background:#922b21; }
+.b.multi { background:#1e8449; }
+.b.uo { background:#7a2f2a; }
+.b.approx { background:transparent; color:var(--ink2);
+            border:1px dashed var(--line2); }
+
+/* ------------------------------------------------------------- legend  */
+#legend { position:absolute; z-index:1000; right:.7rem; bottom:1.6rem;
+  background:rgba(20,20,24,.92); border:1px solid var(--line2);
+  border-radius:8px; padding:.5rem .7rem; font-size:.66rem;
+  color:var(--ink2); line-height:1.9; }
+#legend .dot { display:inline-block; width:10px; height:10px;
+  border-radius:50%; margin-right:.4rem; vertical-align:-1px; }
+#legend .ring { display:inline-block; width:10px; height:10px;
+  border-radius:50%; border:1.5px dashed var(--ink2); margin-right:.4rem;
+  vertical-align:-1px; }
+
+/* Leaflet dark chrome */
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+  background:var(--panel); color:var(--ink);
+  box-shadow:0 3px 14px rgba(0,0,0,.6); }
+.leaflet-popup-content { margin:10px 12px; font-size:.75rem; line-height:1.45; }
+.leaflet-popup-content a { color:var(--gold); text-decoration:none; }
+.leaflet-container { font:inherit; }
+.leaflet-control-attribution { background:rgba(13,13,15,.7)!important;
+  color:#666!important; }
+.leaflet-control-attribution a { color:#888!important; }
+.leaflet-control-zoom a { background:var(--panel)!important;
+  color:var(--ink)!important; border-color:var(--line2)!important; }
+
+@media (max-width:700px){ #panel { width:calc(100% - 1.4rem); max-height:55%; } }
+</style></head><body>
+
+<header>
+  <a class="back" href="/">← dashboard</a>
+  <h1><b>OBLIVION</b>&thinsp;&mdash;&thinsp;PROSPECT MAP</h1>
+  <span id="count">loading…</span>
+</header>
+
+<div id="stage">
+  <div id="map"></div>
+  <button id="paneltoggle">☰ filters &amp; prospects</button>
+
+  <div id="panel">
+    <div id="filters">
+      <div class="row">
+        <button class="chip on" data-tier="hot">HOT</button>
+        <button class="chip on" data-tier="warm">WARM</button>
+        <button class="chip on" data-tier="cold">COLD</button>
+        <button id="panelhide" title="collapse panel">✕</button>
+      </div>
+      <div class="row">
+        <select id="f-verdict">
+          <option value="any">any mandate</option>
+          <option value="openish">open + probably open</option>
+          <option value="open">open only</option>
+          <option value="unknown">unknown</option>
+          <option value="soleish">sole-ish</option>
+        </select>
+        <select id="f-region"><option value="any">all regions</option></select>
+      </div>
+      <div class="row">
+        <input type="number" id="f-min" placeholder="min Rm" min="0" step="1">
+        <span style="color:var(--ink2);font-size:.7rem">–</span>
+        <input type="number" id="f-max" placeholder="max Rm" min="0" step="1">
+        <input type="search" id="f-q" placeholder="search title / suburb">
+      </div>
+      <div class="row">
+        <label class="cb"><input type="checkbox" id="f-multi">multi-agency proof only</label>
+        <label class="cb"><input type="checkbox" id="f-approx" checked>include ≈ area pins</label>
+      </div>
+      <div class="row">
+        <label class="cb"><input type="checkbox" id="f-uo" checked>show under offer</label>
+        <label class="cb"><input type="checkbox" id="f-sole">include sole mandates</label>
+      </div>
+    </div>
+    <div id="cards"></div>
+  </div>
+
+  <div id="legend">
+    <span class="dot" style="background:var(--hot)"></span>hot
+    <span class="dot" style="background:var(--warm);margin-left:.6rem"></span>warm
+    <span class="dot" style="background:var(--cold);margin-left:.6rem"></span>cold<br>
+    <span class="ring"></span>≈ suburb-level (no published address)
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const TIER = {hot:'#c0392b', warm:'#d68910', cold:'#6b6b73'};
+const fmtR = p => p ? 'R ' + Number(p).toLocaleString('en-ZA').replace(/,/g,' ') : 'POA';
+
+// preferCanvas: thousands of circle markers on one canvas instead of one
+// SVG node each — the difference between smooth and unusable at this size.
+const map = L.map('map', {zoomControl:true, attributionControl:true,
+                          preferCanvas:true})
+  .setView([-33.75, 18.8], 9);   // Cape Town + Winelands, Langebaan to Hermanus
+const REGION = p => p.region || 'Other';
+const MAX_CARDS = 400;   // the DOM can't take 6k cards; markers show them all
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  maxZoom: 19, subdomains: 'abcd',
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+}).addTo(map);
+
+let all = [], unmapped = 0, markers = new Map(), layer = L.layerGroup().addTo(map);
+
+async function load() {
+  const sole = $('f-sole').checked ? 1 : 0;
+  $('count').textContent = 'loading…';
+  const res = await fetch('/api/map?sole=' + sole);
+  const data = await res.json();
+  all = data.points; unmapped = data.unmapped;
+  const regions = [...new Set(all.map(REGION))].sort();
+  const sel = $('f-region'), cur = sel.value;
+  sel.innerHTML = '<option value="any">all regions</option>' +
+    regions.map(r => `<option${r === cur ? ' selected' : ''}>${esc(r)}</option>`).join('');
+  render();
+}
+
+function filtered() {
+  const tiers = new Set([...document.querySelectorAll('.chip.on')].map(c => c.dataset.tier));
+  const v = $('f-verdict').value, region = $('f-region').value;
+  const min = parseFloat($('f-min').value) * 1e6 || 0;
+  const max = parseFloat($('f-max').value) * 1e6 || Infinity;
+  const q = $('f-q').value.trim().toLowerCase();
+  return all.filter(p => {
+    if (!tiers.has(p.tier)) return false;
+    if (v === 'open' && p.verdict !== 'open') return false;
+    if (v === 'openish' && !['open','probably_open'].includes(p.verdict)) return false;
+    if (v === 'unknown' && p.verdict !== 'unknown') return false;
+    if (v === 'soleish' && !['sole','probably_sole'].includes(p.verdict)) return false;
+    if (region !== 'any' && REGION(p) !== region) return false;
+    const price = p.price_zar || 0;
+    if (price && (price < min || price > max)) return false;
+    if (!price && min > 0) return false;
+    if (q && !(`${p.title} ${p.suburb}`.toLowerCase().includes(q))) return false;
+    if ($('f-multi').checked && !(p.brand_count > 1)) return false;
+    if (!$('f-approx').checked && p.loc === 'suburb') return false;
+    if (!$('f-uo').checked && p.under_offer) return false;
+    return true;
+  }).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+}
+
+function badges(p) {
+  let h = `<span class="b tier-${p.tier}">${p.tier.toUpperCase()}</span>` +
+          `<span class="b v-${esc(p.verdict)}">${esc(p.verdict.replace('_',' '))}</span>`;
+  if (p.brand_count > 1) h += `<span class="b multi">${p.brand_count} agencies</span>`;
+  if (p.under_offer) h += `<span class="b uo">UNDER OFFER</span>`;
+  if (p.loc === 'suburb') h += `<span class="b approx">≈ area</span>`;
+  return h;
+}
+
+function popupHtml(p) {
+  const meta = [p.suburb, p.property_type, p.bedrooms ? p.bedrooms + ' bed' : null,
+                p.days_on_market ? p.days_on_market + 'd on market' : null]
+               .filter(Boolean).join(' · ');
+  return `<b>${fmtR(p.price_zar)}</b> — ${esc(p.title)}<br>
+    <span style="color:#8b8b93">${esc(meta)}</span><br>
+    <div class="badges">${badges(p)}</div>
+    ${p.agencies.length ? `<span style="color:#8b8b93">${esc(p.agencies.join(', '))}</span><br>` : ''}
+    ${p.expiry_note ? `<span style="color:#d6a95a">${esc(p.expiry_note)}</span><br>` : ''}
+    ${p.loc === 'suburb' ? '<span style="color:#8b8b93">location approximate — no published address; pin is the suburb area</span><br>' : ''}
+    <a href="${esc(p.url)}" target="_blank" rel="noopener">open listing ↗</a>
+    ${p.cma_url ? ` &nbsp;·&nbsp; <a href="${esc(p.cma_url)}" target="_blank">CMA</a>` : ''}`;
+}
+
+function render() {
+  const pts = filtered();
+  layer.clearLayers(); markers.clear();
+  for (const p of pts) {
+    const r = 5 + Math.min(5, (p.score ?? 0) / 20);
+    const m = L.circleMarker([p.lat, p.lng], p.loc === 'suburb'
+      ? {radius:r + 1, color:TIER[p.tier], weight:1.5, dashArray:'2 3',
+         fillColor:TIER[p.tier], fillOpacity:.35}
+      : {radius:r, color:'#0d0d0f', weight:1,
+         fillColor:TIER[p.tier], fillOpacity:.88});
+    m.bindPopup(popupHtml(p), {maxWidth:280});
+    m.on('click', () => highlight(p.gid, false));
+    m.addTo(layer);
+    markers.set(p.gid, m);
+  }
+  const shown = pts.slice(0, MAX_CARDS);
+  $('cards').innerHTML = shown.map(p => `
+    <div class="card" data-gid="${p.gid}">
+      <img loading="lazy" src="/api/photo/${encodeURIComponent(p.key)}?fetch=0"
+           onerror="this.style.display='none'" alt="">
+      <div class="body">
+        <div class="t">${esc(p.title)}</div>
+        <div class="price">${fmtR(p.price_zar)}</div>
+        <div class="meta">${esc([p.suburb, p.bedrooms ? p.bedrooms + ' bed' : null,
+                                p.days_on_market ? p.days_on_market + 'd' : null]
+                               .filter(Boolean).join(' · '))}</div>
+        <div class="badges">${badges(p)}</div>
+      </div>
+    </div>`).join('') +
+    (pts.length > MAX_CARDS
+      ? `<div style="color:#8b8b93;font-size:.7rem;padding:.6rem">top ${MAX_CARDS} of ${pts.length} shown as cards — every one is on the map; tighten the filters to browse the rest</div>`
+      : '') ||
+    '<div style="color:#8b8b93;font-size:.75rem;padding:.6rem">nothing matches the filters</div>';
+  for (const el of document.querySelectorAll('.card'))
+    el.onclick = () => {
+      const p = pts.find(x => String(x.gid) === el.dataset.gid);
+      if (!p) return;
+      map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 15), {duration:.6});
+      markers.get(p.gid)?.openPopup();
+      highlight(p.gid, true);
+    };
+  $('count').textContent =
+    `${pts.length} pins · ${all.length - pts.length} filtered out · ${unmapped} unmappable`;
+  // No auto-fit: a handful of mis-filed pins would zoom the whole map out
+  // to include them. The fixed home view covers the portfolio's core
+  // (Cape Town, Winelands, Whale Coast, West Coast); pan/zoom from there.
+}
+
+function highlight(gid, scrollMap) {
+  for (const el of document.querySelectorAll('.card'))
+    el.classList.toggle('active', el.dataset.gid === String(gid));
+  if (!scrollMap) {
+    const el = document.querySelector(`.card[data-gid="${gid}"]`);
+    el?.scrollIntoView({block:'nearest', behavior:'smooth'});
+  }
+}
+
+for (const c of document.querySelectorAll('.chip'))
+  c.onclick = () => { c.classList.toggle('on'); render(); };
+for (const id of ['f-verdict','f-region','f-multi','f-approx','f-uo'])
+  $(id).onchange = render;
+for (const id of ['f-min','f-max','f-q'])
+  $(id).oninput = () => { clearTimeout(window._t); window._t = setTimeout(render, 250); };
+$('f-sole').onchange = load;
+$('panelhide').onclick = () => document.body.classList.add('panel-off');
+$('paneltoggle').onclick = () => document.body.classList.remove('panel-off');
+
+load();
+</script>
+</body></html>
