@@ -26,11 +26,12 @@ Agency B lists on their own site.
 
 | Portal | Speed | What it uniquely contributes |
 |---|---|---|
-| **Property24** | slow (heavily throttled) | Broadest coverage — most agencies list here. Address/coordinates only when the agent publishes them (usually withheld on prime Atlantic Seaboard stock), so matching there leans on erf size + price + beds. |
-| **Private Property** | fast | Independent listing pool, street address + coordinates. Agency is rendered client-side, so not captured. |
+| **Property24** | slow (heavily throttled) | Broadest coverage — most agencies list here. Address/coordinates only when the agent publishes them (usually withheld on prime Atlantic Seaboard stock), so matching there leans on erf size + price + beds. Under-offer / price-reduced badges are read off the gallery. |
+| **Private Property** | fast | Independent listing pool, street address + coordinates. Agency is rendered client-side, so not captured. Under-offer / reduced / sold banners are read; sold stock is skipped. |
 | **Pam Golding** | fast | **`isExclusiveMandate` — published mandate ground truth**, plus `mandateCreated` (when the mandate was signed). |
 | **Seeff** | fast | Own listing pool with agent names. No coordinates. |
-| **RE/MAX** | fast | Richest structured data: price, beds, baths, land size, geo, agent, branch, listing date. |
+| **RE/MAX** | fast | Richest structured data: price, beds, baths, land size, geo, agent, branch, listing date — plus a CRM blob with **the mandate type itself** ("Open"/"Sole"/"Joint"/"Dual"), the sale state and the record's expiry date (the sole-mandate pitch window). |
+| **Rawson** | fast | Hero badges publish **"Sole Mandate" / "Joint Mandate"** plus under-offer / reduced status. |
 
 Each portal is crawled **concurrently** on its own rate limit, so a run takes
 about as long as the Property24 crawl alone rather than the sum of five.
@@ -43,8 +44,15 @@ In descending order of authority — the first two are facts and override the
 model:
 
 1. **Two or more distinct agency brands on one property** → open mandate.
-   Proven, not inferred.
-2. **A portal's own mandate flag** (Pam Golding's `isExclusiveMandate`) →
+   Proven, not inferred — *while both listings are live*. The proof is aged
+   by its stalest brand: if every brand was confirmed within
+   `PROOF_FRESH_HOURS` (72h) the verdict is `open` at full confidence;
+   older proof degrades to `probably_open` with a re-verify note, and
+   `verify.py` re-fetches exactly those stale members live for hot-tier
+   prospects after every scored crawl (budget: `VERIFY_MAX_FETCHES`). The
+   report shows when each proving brand was last seen.
+2. **A portal's own mandate flag** (Pam Golding's `isExclusiveMandate`,
+   RE/MAX's CRM `mandate` type, Rawson's Sole/Joint Mandate badge) →
    `sole` or `not_sole`.
 3. **An LLM reads the full description**, which is where SA agents actually
    state mandate status ("SOLE MANDATE", "joint mandate", "proudly presented
@@ -67,6 +75,16 @@ perfectly good prospect and is not flagged.
 **Stale sole mandates are surfaced deliberately.** SA mandates run 3–6 months,
 so one signed 150+ days ago is about to come up for renewal — the best possible
 moment to pitch. Those come back with a timing note instead of being hidden.
+Where RE/MAX publishes the record's actual expiry date, that date drives the
+window (within 60 days of expiry) instead of the signed-N-days-ago guess.
+
+**Deal signals feed scoring and the report.** Under-offer and price-reduced
+badges are parsed on every portal that shows them; `price_history` is a
+chronology of price *changes* (re-cuts to an earlier price count);
+relisted-after-delisting (often a failed mandate) and crawl-observed
+days-on-market go into the scoring payload; and the report renders a deal
+strip per property — UNDER OFFER, cut % over N moves, days on market,
+relist gap.
 
 ### Matching listings across portals
 
@@ -251,6 +269,24 @@ carry the hosted crawl. Options:
 Because Property24 has the broadest agency coverage, a hosted-only crawl finds
 fewer cross-agency matches than a local one. The mandate flags from Pam Golding
 and the other three portals still work unchanged.
+
+## Auto-crawl (the constant loop)
+
+Set `AUTO_CRAWL=1` and the dashboard process schedules itself:
+
+- **Nightly full pass** at `AUTO_CRAWL_HOUR` (default 01:00 local): every
+  suburb, every enabled portal — Property24 included, riding its overnight
+  pacing.
+- **Freshness sweep** every `AUTO_SWEEP_HOURS` (default 6, `0` disables):
+  page 1 of the fast portals only. Keeps `last_seen` current, which is what
+  the proof-freshness gate, the delisting sweep and price history feed on.
+
+Scheduled runs use the same single-job guard as the Scrape button, so the
+loop and a human can never collide; on a Mac that sleeps overnight the pass
+fires on wake. A **yield canary** protects the comps feed: a source whose
+crawled-suburb listings were confirmed at under `LIFECYCLE_MIN_COVERAGE`
+(50%) this run — a parser regression or a block — is excluded from that
+run's delisting sweep instead of reading as a mass delisting.
 
 ## Notes
 
