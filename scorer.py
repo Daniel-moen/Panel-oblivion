@@ -113,6 +113,11 @@ pitch signal. days_on_market far beyond suburb_market.median_days_on_market \
 means the current marketing is demonstrably failing. If `under_offer` is \
 true a sale is likely imminent: tier cold, score low, and say so in red_flags.
 
+`relisted` means the listing disappeared from its portal and later came back \
+— in SA that usually marks a failed or expired mandate: a seller who has \
+already fired one marketing effort. Treat it as a strong prospect signal and \
+name it in the pitch angle.
+
 Evidence freshness matters. `multi_agency_proof_age_hours` is how long ago \
 the multi-agency evidence was last confirmed live on the portals; treat proof \
 older than ~72h as weaker — the seller may have consolidated onto one agency \
@@ -357,9 +362,28 @@ def price_cut_history(conn: sqlite3.Connection) -> dict[str, dict]:
     return out
 
 
+def lifecycle_context(conn: sqlite3.Connection) -> dict[str, dict]:
+    """Per listing_key lifecycle facts (lifecycle.py's table), or {}.
+
+    Carries the two deal signals scoring never saw despite the engine
+    computing them after every crawl: relisted-after-delisting (often a
+    failed mandate — the sharpest prospecting signal the engine produces)
+    and the crawl-observed days-on-market, which covers the portals that
+    publish no listing date.
+    """
+    try:
+        return {r["listing_key"]: dict(r) for r in conn.execute(
+            """SELECT listing_key, status, delisted_at, relisted_at,
+                      days_on_market FROM listing_lifecycle""")}
+    except sqlite3.OperationalError:
+        return {}     # lifecycle.update() has never run on this DB
+
+
 def build_ctx(conn: sqlite3.Connection) -> dict:
     """Everything build_prospect_payload wants beyond the group's own rows."""
-    return {"market": market_context(conn), "price_hist": price_cut_history(conn)}
+    return {"market": market_context(conn),
+            "price_hist": price_cut_history(conn),
+            "lifecycle": lifecycle_context(conn)}
 
 
 def _mandate_created(member: sqlite3.Row) -> datetime | None:
@@ -539,6 +563,35 @@ def build_prospect_payload(members: list[sqlite3.Row], ctx: dict | None = None) 
                 "price_changes": max(c["price_changes"] for c in cuts),
                 "total_cut_pct": max(c["total_cut_pct"] for c in cuts),
             }
+
+        lc = ctx.get("lifecycle") or {}
+        rows = [lc[m["listing_key"]] for m in members if m["listing_key"] in lc]
+
+        # Relisted after a spell off the market: often a failed mandate —
+        # the seller's last agency couldn't sell it, and any exclusivity has
+        # plainly lapsed at least once.
+        relisted = next((r for r in rows if r["status"] == "relisted"), None)
+        if relisted:
+            gone = _parse_date(relisted.get("delisted_at"))
+            back = _parse_date(relisted.get("relisted_at"))
+            off_days = (back - gone).days if gone and back else None
+            payload["relisted"] = {
+                "relisted_at": (relisted.get("relisted_at") or "")[:10] or None,
+                "days_off_market": off_days,
+                "note": "disappeared from its portal and came back — "
+                        "often a failed/expired mandate",
+            }
+
+        # Crawl-observed DOM covers portals that publish no listing date;
+        # first_seen is a floor on the true figure, so it only ever
+        # understates how stale the listing is.
+        if payload["days_on_market"] is None and rows:
+            crawl_dom = max((r["days_on_market"] or 0) for r in rows)
+            if crawl_dom >= 1:
+                payload["days_on_market"] = int(crawl_dom)
+                payload["days_on_market_basis"] = (
+                    "crawl-observed since first sighting (portal publishes "
+                    "no listing date; true figure is at least this)")
 
     return payload
 

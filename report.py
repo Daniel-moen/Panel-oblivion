@@ -13,16 +13,21 @@ import json
 import sqlite3
 from datetime import datetime
 
+import lifecycle
+import scorer
 from sources.base import canonical_agency
 
 QUERY = """
 SELECT l.*, s.prospect_score, s.luxury_fit, s.open_mandate_confidence,
        s.marketing_weakness, s.tier, s.reasoning, s.pitch_angle, s.red_flags,
        s.scored_by, s.mandate_verdict, s.sellable, s.mandate_expiry_note,
-       g.group_id, g.agency_count, g.source_count, g.match_evidence
+       g.group_id, g.agency_count, g.source_count, g.match_evidence,
+       lc.status AS lifecycle_status, lc.delisted_at, lc.relisted_at,
+       lc.days_on_market AS crawl_dom
 FROM listings l
 JOIN scores s ON s.listing_key = l.listing_key
 JOIN property_groups g ON g.listing_key = l.listing_key
+LEFT JOIN listing_lifecycle lc ON lc.listing_key = l.listing_key
 -- already-prospected properties (per the team's tracker) are out, including
 -- sibling listings of the same physical property on other portals
 WHERE NOT EXISTS (
@@ -62,8 +67,23 @@ def _collect(conn: sqlite3.Connection, include_sole: bool):
                            if m["agency"] and m["agency"].strip()})
         # Distinct *brands* decide whether this counts as multi-agency proof.
         brands = {b for b in (canonical_agency(m["agency"]) for m in members) if b}
+        # Proof provenance: when the open-mandate claim rests on multiple
+        # brands, show how recently EACH brand's listing was confirmed live —
+        # the proof is only as fresh as its stalest brand.
+        proof = []
+        if len(brands) > 1:
+            freshest: dict[str, datetime] = {}
+            for m in members:
+                b = canonical_agency(m["agency"])
+                seen = scorer._parse_date(m["last_seen"])
+                if b and seen and (b not in freshest or seen > freshest[b]):
+                    freshest[b] = seen
+            now = scorer._utcnow()
+            proof = sorted(
+                ((b, (now - t).total_seconds() / 3600.0)
+                 for b, t in freshest.items()), key=lambda x: -x[1])
         out.append({"best": best, "members": members, "agencies": agencies,
-                    "brand_count": len(brands)})
+                    "brand_count": len(brands), "proof": proof})
     out.sort(key=lambda g: (-(g["best"]["prospect_score"] or 0),
                             -(g["best"]["price_zar"] or 0)))
     return out
@@ -92,8 +112,52 @@ def _erf_line(er) -> str:
     return (f'<div class="erfline none">{html.escape(er["note"] or st)}</div>')
 
 
+def _age_label(hours: float) -> str:
+    return f"{hours:.0f}h" if hours < 48 else f"{hours / 24.0:.0f}d"
+
+
+def _deal_strip(members, cuts: dict) -> str:
+    """The deal signals the DB already held but the report never showed."""
+    parts = []
+    if any(m["under_offer"] for m in members):
+        parts.append('<b class="uo">UNDER OFFER</b>')
+    pct = max((cuts.get(m["listing_key"], {}).get("total_cut_pct", 0.0)
+               for m in members), default=0.0)
+    moves = max((cuts.get(m["listing_key"], {}).get("price_changes", 0)
+                 for m in members), default=0)
+    if pct > 0:
+        parts.append(f"price cut {pct:.1f}%"
+                     + (f" over {moves} moves" if moves > 1 else ""))
+    elif any(m["price_reduced"] for m in members):
+        parts.append("price reduced")
+
+    listed = None
+    for m in members:
+        dt = scorer._parse_date(m["listing_date"])
+        if dt and (listed is None or dt < listed):
+            listed = dt
+    days, floor = ((datetime.now() - listed).days, "") if listed else (None, "")
+    if days is None:
+        crawl = max((m["crawl_dom"] or 0 for m in members), default=0)
+        if crawl >= 1:
+            days, floor = int(crawl), "+"    # first-sighting floor, not exact
+    if days and days >= 30:
+        parts.append(f"{days}{floor}d on market")
+
+    rel = next((m for m in members if m["lifecycle_status"] == "relisted"), None)
+    if rel:
+        gone = scorer._parse_date(rel["delisted_at"])
+        back = scorer._parse_date(rel["relisted_at"])
+        gap = (f" after {(back - gone).days}d off-market"
+               if gone and back else "")
+        parts.append(f"relisted{gap} — possible failed mandate")
+    return f'<div class="deal">{" · ".join(parts)}</div>' if parts else ""
+
+
 def generate(conn: sqlite3.Connection, out_path: str = "prospects.html",
              include_sole: bool = False) -> str:
+    lifecycle.ensure_table(conn)     # the LEFT JOIN needs the table to exist
+    cuts = scorer.price_cut_history(conn)
     entries = _collect(conn, include_sole)
     erf_rows = {r["listing_key"]: r
                 for r in conn.execute("SELECT * FROM erf_lookup")}
@@ -138,6 +202,15 @@ def generate(conn: sqlite3.Connection, out_path: str = "prospects.html",
         except (ValueError, TypeError):
             pass
 
+        deal_html = _deal_strip(members, cuts)
+        proof_html = ""
+        if e["proof"]:
+            worst = e["proof"][0][1]
+            cls = "proof stale" if worst > 72 else "proof"
+            seen = " · ".join(f"{html.escape(b)} {_age_label(h)} ago"
+                              for b, h in e["proof"])
+            proof_html = f'<div class="{cls}">proof last seen: {seen}</div>'
+
         beds = f'{int(r["bedrooms"])} bed' if r["bedrooms"] else ""
         addr = html.escape(r["street_address_raw"] or r["street_address"] or "")
         erf_html = _erf_line(erf_rows.get(r["listing_key"]))
@@ -164,10 +237,11 @@ def generate(conn: sqlite3.Connection, out_path: str = "prospects.html",
               {f'<div class="meta addr">{addr}</div>' if addr else ''}
               {erf_html}
               <div class="portals">{portals}</div>
-              {evidence}</div></div></td>
+              {evidence}{deal_html}</div></div></td>
           <td class="price">{_fmt_price(r["price_zar"])}</td>
           <td><span class="mv" style="background:{mcolour}">{verdict.replace("_", " ")}</span>
               {agency_html}
+              {proof_html}
               {f'<div class="note">{html.escape(note)}</div>' if note else ''}</td>
           <td class="nums">{r["luxury_fit"]} / {r["open_mandate_confidence"]} / {r["marketing_weakness"]}</td>
           <td class="small">{html.escape(r["pitch_angle"] or r["reasoning"] or "")}
@@ -220,6 +294,11 @@ def generate(conn: sqlite3.Connection, out_path: str = "prospects.html",
  .erfline.none {{ color:#666; background:transparent; border-style:dashed;
                  border-color:#26262b; }}
  .note {{ color:#d6a95a; font-size:.7rem; margin-top:.35rem; }}
+ .deal {{ color:#c98f4e; font-size:.7rem; margin-top:.35rem; }}
+ .deal .uo {{ background:#7a2f2a; color:#fff; padding:1px 5px; border-radius:3px;
+             font-size:.62rem; letter-spacing:.05em; }}
+ .proof {{ color:#5f7f6a; font-size:.66rem; margin-top:.3rem; }}
+ .proof.stale {{ color:#b08a45; }}
  .flag {{ color:#b4645a; font-size:.7rem; margin-top:.3rem; }}
  .devbadge {{ background:#4a3a6b; color:#fff; padding:1px 6px; border-radius:3px;
              font-size:.6rem; letter-spacing:.05em; margin-left:.3rem; }}
