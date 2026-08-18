@@ -1,0 +1,22 @@
+# Never upload these to Railway.
+#
+# .env holds live API keys — they belong in Railway's own variables, which are
+# encrypted and not baked into the image.
+.env
+
+# Local virtualenv (Railway installs from requirements.txt) and caches.
+.venv/
+__pycache__/
+*.pyc
+.httpcache/
+
+# The database lives on a mounted volume in production. Shipping the local
+# copy would overwrite the deployed one on every push.
+prospects.db
+prospects.db-shm
+prospects.db-wal
+prospects.db.bak*
+prospects.html
+
+.claude/
+.dashboard-password.txt

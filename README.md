@@ -1,0 +1,289 @@
+# Oblivion Estates — Prospecting Engine
+
+Finds luxury Cape Town / West Coast properties that Oblivion Estates can
+actually win business on: homes whose sellers have **not** signed a sole
+(exclusive) mandate, where the current agency is under-marketing the property
+and Oblivion's cinematic-film pitch has an opening.
+
+It crawls five property portals, works out which listings are the *same
+physical home*, and uses that to decide whether the mandate is open.
+
+```bash
+source .venv/bin/activate
+
+python webapp.py                 # dashboard at http://127.0.0.1:5051
+python main.py run               # full pipeline, then opens the HTML report
+```
+
+---
+
+## Why multiple portals
+
+A property marketed by **two different agencies** cannot be on a sole mandate.
+That is the single most reliable open-mandate signal available, and it is only
+visible if you look at more than one portal — Agency A lists on Property24,
+Agency B lists on their own site.
+
+| Portal | Speed | What it uniquely contributes |
+|---|---|---|
+| **Property24** | slow (heavily throttled) | Broadest coverage — most agencies list here. Address/coordinates only when the agent publishes them (usually withheld on prime Atlantic Seaboard stock), so matching there leans on erf size + price + beds. |
+| **Private Property** | fast | Independent listing pool, street address + coordinates. Agency is rendered client-side, so not captured. |
+| **Pam Golding** | fast | **`isExclusiveMandate` — published mandate ground truth**, plus `mandateCreated` (when the mandate was signed). |
+| **Seeff** | fast | Own listing pool with agent names. No coordinates. |
+| **RE/MAX** | fast | Richest structured data: price, beds, baths, land size, geo, agent, branch, listing date. |
+
+Each portal is crawled **concurrently** on its own rate limit, so a run takes
+about as long as the Property24 crawl alone rather than the sum of five.
+
+---
+
+## How sellability is decided
+
+In descending order of authority — the first two are facts and override the
+model:
+
+1. **Two or more distinct agency brands on one property** → open mandate.
+   Proven, not inferred.
+2. **A portal's own mandate flag** (Pam Golding's `isExclusiveMandate`) →
+   `sole` or `not_sole`.
+3. **An LLM reads the full description**, which is where SA agents actually
+   state mandate status ("SOLE MANDATE", "joint mandate", "proudly presented
+   exclusively by…"). The prompt defines the SA mandate glossary, because a
+   *joint* mandate means the seller accepts multiple agencies — a good signal,
+   not an exclusivity signal.
+4. **Heuristic fallback** when no API credits are available.
+
+Properties confirmed to be on a live sole mandate are marked `sellable = 0` and
+**hidden from the report by default** (`main.py report --all` to see them).
+
+**New/off-plan developments are excluded too.** A developer launch has no
+homeowner mandate to win and often no built home to film. Portals don't
+reliably flag these — Pam Golding listed an unbuilt Clifton development as
+`propertyType: House` with `developmentId: None` — so the copy is what gives it
+away ("new development", "yet to be built", "off-plan", "units available").
+Detection is deliberately narrow: *"a resale in a boutique development"* is a
+perfectly good prospect and is not flagged.
+
+**Stale sole mandates are surfaced deliberately.** SA mandates run 3–6 months,
+so one signed 150+ days ago is about to come up for renewal — the best possible
+moment to pitch. Those come back with a timing note instead of being hidden.
+
+### Matching listings across portals
+
+Portals publish different subsets of facts, so matching accumulates evidence
+rather than applying one rule:
+
+| Evidence | Weight |
+|---|---|
+| Same street address | 1.00 (decisive) |
+| Coordinates within 60 m | 0.80 |
+| Erf size within 3% | 0.45 |
+| Floor size within 3% | 0.45 |
+| Price within 7% | 0.35 |
+| Beds / baths / type agree | 0.12 / 0.08 / 0.05 |
+
+Pairs merge at a combined score of 1.0. Bedroom counts that disagree, or prices
+more than 30% apart, are hard disqualifiers.
+
+Precision is favoured over recall on purpose: a false merge would tell the team
+"this is an open mandate" when it isn't, wasting a pitch.
+
+Two safeguards matter more than they look:
+
+- **Placeholder addresses are discarded.** Private Property writes "Contact
+  agent for st address" into the address field; treating that as real collapsed
+  20 unrelated Camps Bay listings into one fake "property marketed by 4
+  agencies".
+- **Agency names are reduced to a brand.** Property24 says "Pam Golding
+  Properties - Atlantic Seaboard" and pamgolding.co.za says "Pam Golding
+  (Atlantic Seaboard)". Counting those as two agencies would manufacture the
+  exact proof the engine exists to find.
+
+---
+
+## Commands
+
+```bash
+python main.py run [suburbs...] [--sources a,b] [--pages N] [--no-ai] [--all]
+python main.py scrape [suburbs...]        # crawl only
+python main.py dedupe                     # re-match across portals
+python main.py score [--no-ai] [--limit N] [--new-only]
+python main.py report [--all]             # --all includes sole-mandate stock
+python main.py discover-locations         # refresh portal area ids
+python main.py import-tracker <xlsx>      # the team's prospecting sheet
+python main.py sources | suburbs
+```
+
+Examples:
+
+```bash
+# Fast portals only, prime suburbs
+python main.py run camps-bay clifton bantry-bay --sources privateproperty,pamgolding,seeff,remax
+
+# Everything, deeper crawl (slow — Property24 sets the pace)
+python main.py run --pages 4
+
+# Nightly: only score what's new or re-scraped since it was last judged
+python main.py run --new-only
+```
+
+`--new-only` matters with a reasoning model. A full re-score judges every
+property from scratch (~15–20 min on Kimi's 3-request concurrency cap);
+`--new-only` skips anything already scored and unchanged.
+
+---
+
+## Layout
+
+```
+config.py       areas, per-portal rate limits, thresholds, model choice
+httpclient.py   per-host rate limiting, backoff, disk cache
+locations.py    suburb -> per-portal search path (mined from sitemaps)
+sources/        one module per portal, all returning the same listing dict
+dedupe.py       cross-portal matching -> property groups
+scorer.py       payload building, hard mandate rules, AI + heuristic scoring
+pipeline.py     concurrent crawl orchestration
+db.py           SQLite schema + migration
+report.py       ranked HTML report
+webapp.py       dashboard
+tracker.py      import of the team's xlsx + revealed-preference profile
+```
+
+### Areas
+
+70 areas across 9 regions (`config.SUBURBS`, grouped by `region` and shown
+grouped in the dashboard sidebar):
+
+| Region | Areas |
+|---|---|
+| Atlantic Seaboard | Clifton, Camps Bay, Bantry Bay, Fresnaye, Bakoven, Llandudno, Sea Point, Three Anchor Bay, Green Point, Mouille Point, V&A Waterfront |
+| City Bowl | City Centre, De Waterkant, Gardens, Higgovale, Tamboerskloof, Oranjezicht, Vredehoek, Devil's Peak Estate |
+| Southern Suburbs | Constantia, Nova/High Constantia, Bishopscourt, Newlands, Claremont Upper, Kenilworth Upper, Rondebosch, Wynberg Upper, Tokai, Steenberg |
+| Hout Bay | Central, Beachfront, Heights, Scott Estate |
+| South Peninsula | St James, Kalk Bay, Chapman's Peak, Kommetjie |
+| Winelands | Stellenbosch Farms, Mostertsdrift, Dalsig, Paradyskloof, Die Boord, Brandwacht, Devonvallei, De Zalze, Franschhoek, Val de Vie, Pearl Valley, Boschenmeer |
+| Helderberg | Somerset West Central, Erinvale, Parel Vallei, Heldervue |
+| Whale Coast | Voëlklip, Eastcliff, Kwaaiwater, Hermanus Heights, Hemel-en-Aarde, Onrus, Pringle Bay, Betty's Bay |
+| West Coast | Langebaan, Saldanha, Jacobsbaai, Paternoster, Yzerfontein, St Helena Bay, Vredenburg, Velddrif |
+
+Region coverage follows the team's own tracker: the Atlantic Seaboard and City
+Bowl dominate, but **Stellenbosch is the third most-worked area**, and the team
+has pursued Somerset West and Pringle Bay — hence Winelands, Helderberg and
+Whale Coast.
+
+**Adding an area** needs only a name, town and province:
+
+```python
+"voelklip": {"name": "Voelklip", "town": "hermanus",
+             "province": "western-cape", "region": "Whale Coast"},
+```
+
+Then `python main.py discover-locations` resolves every portal's internal id
+for it. Property24 ids come from its own `sitemap/Suburbs` (20k+ areas) plus
+`sitemap/Cities` for whole towns, so nothing is hand-copied.
+
+`town` and `province` are not decoration — suburb names repeat across South
+Africa. There is a Noordhoek in Velddrif, a Newlands in Pretoria and a Dalsig
+in Malmesbury, and matching on name alone silently crawls the wrong one.
+
+### locations.json
+
+Private Property and Pam Golding key their search pages off internal numeric
+ids; the slug in the URL is decorative, and a wrong id **silently serves a
+different suburb's listings**. Those ids are mined from each site's sitemap.
+Seeff and RE/MAX use slug paths, which are probed against live pages.
+
+Refresh with `python main.py discover-locations` if a suburb stops returning
+results.
+
+Discovery verifies that returned detail URLs actually belong to the requested
+suburb — several portals answer an unknown suburb with generic city-wide stock
+instead of a 404 (Seeff serves Kenilworth and Claremont listings for a bad
+Clifton path).
+
+---
+
+## Deployment (Railway)
+
+Live: **https://prospect-engine-production-2170.up.railway.app**
+(project `oblivion-prospecting`, service `prospect-engine`, separate from the
+`Obvlnestates` project that serves oblivionestate.com).
+
+```bash
+railway up --service prospect-engine     # redeploy after code changes
+railway logs                             # runtime logs
+railway variables                        # env vars
+```
+
+Required variables: `MOONSHOT_API_KEY`, `OPENAI_API_KEY`, `DASHBOARD_PASSWORD`,
+`DATA_DIR=/data`.
+
+**Access.** The dashboard shows Oblivion's prospect list and can start crawls,
+so it sits behind HTTP basic auth (`DASHBOARD_USER` / `DASHBOARD_PASSWORD`).
+If `DASHBOARD_PASSWORD` is unset the app **refuses to serve** when hosted
+rather than publishing the data; locally it stays open for convenience.
+
+**Persistence.** SQLite lives on a 5 GB volume mounted at `/data`
+(`DATA_DIR`). Without the volume every redeploy would silently start from an
+empty database. `.railwayignore` keeps `.env` and the local `prospects.db` out
+of the upload, so a deploy never overwrites production data.
+
+**One worker, many threads.** Crawl jobs run in background threads and report
+progress through an in-memory dict. A second gunicorn worker would be a
+separate process with its own copy, so the dashboard would poll one process
+while the job ran in another. Scale threads, never workers.
+
+### Property24 does not work from Railway
+
+Measured on Railway EU West: 2 successful detail fetches, then sustained 503s
+that survived the full 60/180/360s backoff ladder. The same crawl from a
+residential IP manages ~15 requests before any throttling. It is an IP-level
+block, so slowing down does not help.
+
+Property24 is therefore **disabled by default on hosted deploys** and shown in
+the dashboard as "blocked here". The other four portals serve Railway fine and
+carry the hosted crawl. Options:
+
+- Run Property24 crawls locally (`python main.py run --sources property24`);
+  the volume keeps everything in one database if you sync it up.
+- Set `ENABLE_PROPERTY24=1` if you put a residential proxy in front.
+
+Because Property24 has the broadest agency coverage, a hosted-only crawl finds
+fewer cross-agency matches than a local one. The mandate flags from Pam Golding
+and the other three portals still work unchanged.
+
+## Notes
+
+- **Throttling.** Property24 blocks hard after ~15 quick requests and stays
+  blocked for 10–20 minutes; poking it during the block extends it. The crawler
+  uses 12–18s jittered spacing and 60/180/360s backoffs. The other four portals
+  run at ~2–3s.
+- **HTTP cache.** Responses are cached under `.httpcache/` for 20 hours, so
+  re-runs and interrupted crawls are cheap.
+- **Scoring backends** are a chain, tried in order (`config.AI_BACKEND_ORDER`):
+
+  | Order | Provider | Key | Model |
+  |---|---|---|---|
+  | 1 | Kimi (Moonshot) | `MOONSHOT_API_KEY` | `kimi-k3` → `kimi-k2.6` |
+  | 2 | OpenAI | `OPENAI_API_KEY` | `gpt-5-mini` → `gpt-4o-mini` |
+  | 3 | Claude | `ANTHROPIC_API_KEY` | `claude-opus-4-8` |
+  | 4 | heuristic | — | no credentials needed |
+
+  Kimi uses the **global** endpoint (`api.moonshot.ai`); `api.moonshot.cn`
+  rejects international keys. `kimi-k3` supports schema-enforced structured
+  output through the OpenAI SDK, so it drops straight into the same code path.
+
+  Failures are handled by kind, which matters for score consistency:
+  - **Fatal** (out of credits, bad key) retires that provider for the run and
+    hands over to the next one — logged once, not once per property.
+  - **Transient** (429, concurrency, timeout) retries the *same* model with
+    exponential backoff. Moonshot enforces an org-wide concurrency limit
+    (3 on this account), and treating that as model failure silently demoted
+    properties to a weaker model, so identical homes were judged by different
+    models. `config.MAX_CONCURRENCY` caps requests per provider to prevent it.
+- **The team's tracker** (`import-tracker`) does two jobs: already-prospected
+  properties are excluded from reports (including their sibling listings on
+  other portals), and the history becomes a revealed-preference profile injected
+  into the scoring prompt.
+- **Port 5051** — 5000 collides with macOS AirPlay.
+- `.env` holds the API key (chmod 600, gitignored).

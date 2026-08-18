@@ -1,0 +1,12 @@
+.env
+.venv/
+prospects.db
+prospects.html
+__pycache__/
+.httpcache/
+.dashboard-password.txt
+.ratestate.json
+.bak-perf/
+prospects.db-shm
+prospects.db-wal
+prospects.db.bak-*

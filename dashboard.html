@@ -1,0 +1,1030 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Oblivion Prospect Engine</title>
+<style>
+/* ------------------------------------------------------------- palette --- */
+:root {
+  color-scheme: dark;
+  --bg:        #0b0b0d;   /* page                         */
+  --bg-panel:  #101014;   /* sidebar / tiles / cards      */
+  --bg-raised: #16161b;   /* inputs, chips                */
+  --bg-inset:  #1c1c23;   /* hovers, thumbs               */
+  --line:      #232329;
+  --line-2:    #32323b;
+  --ink:       #ececee;   /* primary text                 */
+  --ink-2:     #a4a4af;   /* secondary                    */
+  --ink-3:     #6f6f7a;   /* muted                        */
+  --gold:      #e8c47a;   /* brand accent                 */
+  --gold-deep: #b8934a;
+  --gold-soft: rgba(232,196,122,.13);
+  --gold-line: rgba(232,196,122,.38);
+  --gold-track:#2a2418;   /* meter track: dim step of the gold ramp */
+  --hot:       #c0392b;
+  --warm:      #d68910;
+  --cold:      #4c4c58;
+  --good:      #2f9e63;
+  --bad:       #b4645a;
+  --blue:      #7ec8e8;
+  --mv-open:   #1e8449;
+  --mv-popen:  #148f77;
+  --mv-unk:    #4c4c58;
+  --mv-psole:  #a04000;
+  --mv-sole:   #922b21;
+  --r: 8px;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin:0; background:var(--bg); color:var(--ink);
+       font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, sans-serif;
+       display:flex; flex-direction:column; overflow:hidden; }
+a { color:var(--gold); text-decoration:none; }
+a:hover { text-decoration:underline; }
+button { font:inherit; }
+
+/* -------------------------------------------------------------- header --- */
+header { display:flex; align-items:center; gap:1rem; padding:0 1.1rem;
+         height:52px; flex:none; border-bottom:1px solid var(--line);
+         background:var(--bg-panel); }
+#navbtn { background:none; border:1px solid var(--line-2); color:var(--ink-2);
+          border-radius:6px; width:30px; height:30px; cursor:pointer;
+          font-size:.85rem; line-height:1; }
+#navbtn:hover { color:var(--ink); border-color:var(--ink-3); }
+h1 { font-size:.86rem; font-weight:300; letter-spacing:.32em; margin:0;
+     white-space:nowrap; }
+h1 b { font-weight:650; color:var(--gold); letter-spacing:.32em; }
+#portalsub { color:var(--ink-3); font-size:.68rem; letter-spacing:.1em;
+             flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+             white-space:nowrap; }
+.pill { font-size:.64rem; letter-spacing:.08em; padding:3px 10px;
+        border-radius:99px; border:1px solid var(--line-2); color:var(--ink-2);
+        white-space:nowrap; }
+.pill.ok   { color:#8fd4a8; border-color:#2f6a47; background:rgba(47,158,99,.1); }
+.pill.warn { color:var(--gold); border-color:var(--gold-line); background:var(--gold-soft); }
+
+/* -------------------------------------------------------------- layout --- */
+#shell { flex:1; display:grid; grid-template-columns:296px 1fr; min-height:0; }
+body.nav-off #shell { grid-template-columns:0 1fr; }
+body.nav-off aside.side { display:none; }
+aside.side { border-right:1px solid var(--line); background:var(--bg-panel);
+             overflow-y:auto; padding:.9rem .9rem 2rem; min-width:0; }
+section#content { overflow:auto; padding:1rem 1.2rem 3rem; min-width:0; }
+
+/* ------------------------------------------------------------- sidebar --- */
+fieldset { border:1px solid var(--line); border-radius:var(--r);
+           margin:0 0 .8rem; padding:.6rem .65rem .65rem; min-width:0; }
+legend { color:var(--ink-3); font-size:.6rem; text-transform:uppercase;
+         letter-spacing:.16em; padding:0 .35rem; }
+.mini { display:flex; gap:.3rem; margin-bottom:.5rem; }
+.mini button { flex:1; font-size:.62rem; letter-spacing:.06em; padding:.22rem 0;
+               cursor:pointer; background:var(--bg-raised); color:var(--ink-2);
+               border:1px solid var(--line-2); border-radius:5px; }
+.mini button:hover { color:var(--ink); border-color:var(--ink-3); }
+label.cb { display:flex; align-items:center; gap:.45rem; font-size:.8rem;
+           padding:.13rem 0; cursor:pointer; color:var(--ink); }
+label.cb.dis { color:var(--ink-3); cursor:default; }
+label.cb input { accent-color:var(--gold); }
+.blocked { color:var(--bad); font-size:.58rem; font-style:normal;
+           border:1px solid #5a2f2a; border-radius:3px; padding:0 4px; }
+.reggroup { border-top:1px solid var(--line); padding-top:.5rem; margin-top:.55rem; }
+.reggroup:first-child { border-top:none; margin-top:0; padding-top:0; }
+.reghead { display:flex; align-items:center; gap:.35rem; margin-bottom:.25rem; }
+.regname { flex:1; color:var(--gold); font-size:.6rem; text-transform:uppercase;
+           letter-spacing:.14em; }
+.regbtn { color:var(--ink-3); font-size:.58rem; cursor:pointer; background:none;
+          border:1px solid var(--line-2); border-radius:3px; padding:0 5px; }
+.regbtn:hover { color:var(--ink); border-color:var(--ink-3); }
+.townrow { display:flex; flex-wrap:wrap; gap:.3rem; margin:.15rem 0 .35rem; }
+.townpill { cursor:pointer; }
+.townpill input { position:absolute; opacity:0; pointer-events:none; }
+.townpill span { display:inline-block; font-size:.66rem; letter-spacing:.05em;
+                 padding:2px 9px; border-radius:99px; color:var(--ink-2);
+                 border:1px solid var(--line-2); background:var(--bg-raised); }
+.townpill span::before { content:'◦ '; color:var(--ink-3); }
+.townpill input:checked + span { color:var(--gold); border-color:var(--gold-line);
+                                 background:var(--gold-soft); }
+.townpill input:checked + span::before { content:'● '; color:var(--gold); }
+select, input[type=number], input[type=search] {
+  background:var(--bg-raised); color:var(--ink); border:1px solid var(--line-2);
+  border-radius:6px; padding:.34rem .55rem; font-size:.78rem; }
+button.primary { display:block; width:100%; background:var(--gold);
+                 color:#141009; border:none; border-radius:7px; font-weight:650;
+                 letter-spacing:.04em; padding:.62rem; cursor:pointer; }
+button.primary:hover { background:#f0d18d; }
+button.primary:disabled { opacity:.4; cursor:default; }
+button.ghost { display:block; width:100%; margin-top:.4rem; cursor:pointer;
+               background:var(--bg-raised); color:var(--ink-2);
+               border:1px solid var(--line-2); border-radius:7px; padding:.45rem; }
+button.ghost:hover { color:var(--ink); border-color:var(--ink-3); }
+button.ghost:disabled { opacity:.4; cursor:default; }
+#phase { font-size:.74rem; color:var(--gold); margin:.7rem 0 .3rem; min-height:1.1em; }
+#bar { height:4px; background:var(--bg-inset); border-radius:2px;
+       overflow:hidden; margin-bottom:.55rem; }
+#barfill { height:100%; width:0; background:var(--gold); transition:width .4s; }
+#srcprog { margin-bottom:.5rem; }
+.sp { margin-bottom:.35rem; }
+.sprow { display:flex; justify-content:space-between; font-size:.62rem;
+         color:var(--ink-2); margin-bottom:2px; }
+.sprow b { color:var(--ink); font-weight:500; }
+.spbar { height:3px; background:var(--bg-inset); border-radius:2px; overflow:hidden; }
+.spbar i { display:block; height:100%; background:var(--gold-deep);
+           transition:width .4s; }
+#logbox summary { cursor:pointer; color:var(--ink-3); font-size:.64rem;
+                  text-transform:uppercase; letter-spacing:.14em;
+                  padding:.25rem 0; user-select:none; }
+#log { background:#0d0d10; border:1px solid var(--line); border-radius:6px;
+       padding:.5rem; height:190px; overflow-y:auto; white-space:pre-wrap;
+       font:.62rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+       color:#9a9aa2; }
+
+/* --------------------------------------------------------------- stats --- */
+.banner { display:none; padding:.55rem .85rem; border-radius:var(--r);
+          font-size:.76rem; margin-bottom:.8rem; }
+.banner.warn { background:#2a1f0a; border:1px solid var(--gold-line);
+               color:var(--gold); }
+.stats { display:flex; gap:.5rem; flex-wrap:wrap; margin-bottom:.9rem; }
+.tile { background:var(--bg-panel); border:1px solid var(--line);
+        border-radius:var(--r); padding:.45rem .85rem .5rem; min-width:86px; }
+.tile b { display:block; font-size:1.3rem; font-weight:600; line-height:1.2; }
+.tile span { font-size:.58rem; color:var(--ink-3); text-transform:uppercase;
+             letter-spacing:.12em; }
+.tile.gold b { color:var(--gold); }
+.tile.dim { background:transparent; }
+.tile.dim b { font-size:1.05rem; color:var(--ink-2); }
+
+/* ------------------------------------------------------------- toolbar --- */
+.toolbar { display:flex; gap:.4rem; flex-wrap:wrap; align-items:center;
+           margin-bottom:.9rem; }
+.toolbar input, .toolbar select { padding:.34rem .5rem; }
+#fsearch { min-width:230px; }
+#fmin, #fmax { width:86px; }
+#fclear { cursor:pointer; background:none; border:none; color:var(--ink-3);
+          font-size:.72rem; }
+#fclear:hover { color:var(--ink); }
+.viewtoggle { display:flex; border:1px solid var(--line-2); border-radius:6px;
+              overflow:hidden; }
+.viewtoggle button { background:var(--bg-raised); color:var(--ink-3); border:none;
+                     font-size:.68rem; letter-spacing:.08em; text-transform:uppercase;
+                     padding:.36rem .7rem; cursor:pointer; }
+.viewtoggle button.on { background:var(--gold-soft); color:var(--gold); }
+#fcount { color:var(--ink-3); font-size:.72rem; margin-left:.2rem; }
+
+/* --------------------------------------------------------- chips/badges -- */
+.tier { color:#fff; font-size:.56rem; font-weight:600; padding:2px 7px;
+        border-radius:3px; letter-spacing:.09em; }
+.tier.hot{background:var(--hot)} .tier.warm{background:var(--warm)}
+.tier.cold{background:var(--cold)}
+.mv { padding:2px 7px; border-radius:3px; font-size:.6rem; color:#fff;
+      letter-spacing:.04em; white-space:nowrap; }
+.mv-open{background:var(--mv-open)} .mv-probably_open{background:var(--mv-popen)}
+.mv-unknown{background:var(--mv-unk)} .mv-probably_sole{background:var(--mv-psole)}
+.mv-sole{background:var(--mv-sole)}
+.badge { background:var(--mv-open); color:#fff; padding:2px 6px;
+         border-radius:3px; font-size:.58rem; letter-spacing:.04em;
+         white-space:nowrap; }
+.badge.dev { background:#4a3a6b; }
+.badge.trk { background:#5b4a8a; }
+.badge.uo  { background:#2e5c7a; }
+.badge.pr  { background:#7a5c2e; }
+.portalchips { display:flex; gap:.25rem; flex-wrap:wrap; margin-top:.3rem; }
+.portal { font-size:.58rem; background:var(--bg-raised);
+          border:1px solid var(--line-2); padding:1px 7px; border-radius:99px;
+          color:var(--ink-2); }
+.portal:hover { color:var(--gold); border-color:var(--gold-line);
+                text-decoration:none; }
+.meta { color:var(--ink-2); font-size:.7rem; margin-top:.15rem; }
+.dim2 { color:var(--ink-3); }
+.ev { color:#5f7f6a; font-size:.63rem; margin-top:.25rem; }
+.note { color:#d6a95a; font-size:.68rem; margin-top:.3rem; }
+.price { white-space:nowrap; font-weight:600; }
+.poa { color:var(--ink-3); font-weight:400; }
+
+/* --------------------------------------------------------------- table --- */
+table { border-collapse:collapse; width:100%; min-width:980px; }
+th, td { text-align:left; padding:.55rem .6rem; border-bottom:1px solid #1d1d22;
+         vertical-align:top; font-size:.82rem; }
+th { color:var(--ink-3); font-size:.6rem; text-transform:uppercase;
+     letter-spacing:.13em; position:sticky; top:0; background:var(--bg);
+     z-index:2; padding-top:.4rem; box-shadow:0 1px 0 var(--line); }
+tr.rowclick { cursor:pointer; }
+tbody tr.rowclick:hover td { background:rgba(255,255,255,.025); }
+tr.sel td { background:var(--gold-soft) !important; }
+tr.pending td { opacity:.65; }
+.score { font-size:1.25rem; font-weight:650; line-height:1.15; }
+.scorewait { color:var(--gold); font-size:1rem; }
+.propwrap { display:flex; gap:.65rem; }
+.propwrap > div { min-width:0; }
+.ph { flex:none; background:var(--bg-inset); border:1px solid var(--line-2);
+      border-radius:6px; overflow:hidden; position:relative; }
+.ph img { width:100%; height:100%; object-fit:cover; display:block; }
+.ph.noph::after { content:'NO PHOTO'; position:absolute; inset:0; display:flex;
+      align-items:center; justify-content:center; color:var(--ink-3);
+      font-size:.56rem; letter-spacing:.16em; }
+.ph.tphoto { width:104px; height:78px; }
+.pitchcell { color:var(--ink-2); font-size:.74rem;
+             display:-webkit-box; -webkit-line-clamp:3;
+             -webkit-box-orient:vertical; overflow:hidden; }
+.low { color:var(--ink-2); font-size:.74rem; white-space:nowrap; }
+.empty { color:var(--ink-3); padding:3.5rem 1rem; text-align:center;
+         border:1px dashed var(--line); border-radius:var(--r); }
+
+/* --------------------------------------------------------------- cards --- */
+.cardgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(268px,1fr));
+            gap:.8rem; }
+.card { background:var(--bg-panel); border:1px solid var(--line);
+        border-radius:10px; overflow:hidden; cursor:pointer;
+        display:flex; flex-direction:column; transition:border-color .15s; }
+.card:hover { border-color:var(--line-2); }
+.card.sel { border-color:var(--gold-line); }
+.cardph { aspect-ratio:16/10; position:relative; background:var(--bg-inset); }
+.cardph img { width:100%; height:100%; object-fit:cover; display:block; }
+.cardph.noph::after { content:'NO PHOTO'; position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      color:var(--ink-3); font-size:.6rem; letter-spacing:.18em; }
+.cardover { position:absolute; top:.5rem; left:.5rem; right:.5rem;
+            display:flex; justify-content:space-between; align-items:flex-start; }
+.cardscore { background:rgba(11,11,13,.82); border:1px solid var(--line-2);
+             border-radius:6px; padding:.1rem .5rem; font-weight:650;
+             font-size:1rem; }
+.cardbody { padding:.65rem .75rem .75rem; display:flex; flex-direction:column;
+            gap:.3rem; flex:1; }
+.cardprice { display:flex; justify-content:space-between; align-items:baseline; }
+.cardprice .price { font-size:1.02rem; }
+.cardprice .sub { color:var(--ink-3); font-size:.66rem; text-transform:uppercase;
+                  letter-spacing:.1em; }
+.cardtitle { font-size:.82rem; line-height:1.3; }
+.cardline { display:flex; gap:.35rem; align-items:center; flex-wrap:wrap; }
+.cardpitch { color:var(--ink-2); font-size:.72rem; display:-webkit-box;
+             -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+/* -------------------------------------------------------------- drawer --- */
+#scrim { position:fixed; inset:0; background:rgba(0,0,0,.55); opacity:0;
+         pointer-events:none; transition:opacity .2s; z-index:20; }
+body.drawer-open #scrim { opacity:1; pointer-events:auto; }
+#drawer { position:fixed; top:0; right:0; bottom:0; width:min(440px, 96vw);
+          background:var(--bg-panel); border-left:1px solid var(--line-2);
+          transform:translateX(102%); transition:transform .22s ease;
+          z-index:21; display:flex; flex-direction:column; }
+body.drawer-open #drawer { transform:translateX(0); }
+#dhead { display:flex; align-items:center; justify-content:space-between;
+         padding:.6rem .9rem; border-bottom:1px solid var(--line); flex:none; }
+#dhead span { font-size:.62rem; color:var(--ink-3); text-transform:uppercase;
+              letter-spacing:.16em; }
+#dclose { background:none; border:1px solid var(--line-2); color:var(--ink-2);
+          border-radius:6px; width:28px; height:28px; cursor:pointer; }
+#dclose:hover { color:var(--ink); border-color:var(--ink-3); }
+#dbody { overflow-y:auto; padding:0 0 2.5rem; flex:1; }
+.dhero { aspect-ratio:16/10; background:var(--bg-inset); position:relative; }
+.dhero img { width:100%; height:100%; object-fit:cover; display:block; }
+.dhero.noph::after { content:'NO PHOTO'; position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      color:var(--ink-3); font-size:.62rem; letter-spacing:.18em; }
+.dsec { padding:.8rem 1rem 0; }
+.dsec h3 { font-size:.6rem; color:var(--ink-3); text-transform:uppercase;
+           letter-spacing:.16em; font-weight:500; margin:0 0 .45rem;
+           border-bottom:1px solid var(--line); padding-bottom:.3rem; }
+.dtitle { font-size:1.02rem; font-weight:500; line-height:1.35; margin:0; }
+.dchips { display:flex; gap:.3rem; flex-wrap:wrap; margin-top:.5rem;
+          align-items:center; }
+.dfacts { display:grid; grid-template-columns:1fr 1fr; gap:.45rem .8rem; }
+.dfact span { display:block; font-size:.58rem; color:var(--ink-3);
+              text-transform:uppercase; letter-spacing:.12em; }
+.dfact b { font-weight:550; font-size:.84rem; }
+.sb { display:grid; grid-template-columns:82px 1fr 30px; gap:.5rem;
+      align-items:center; margin-bottom:.4rem; }
+.sbl { font-size:.62rem; color:var(--ink-2); text-transform:uppercase;
+       letter-spacing:.08em; }
+.sbt { height:8px; background:var(--gold-track); border-radius:0 4px 4px 0; }
+.sbt i { display:block; height:100%; background:var(--gold);
+         border-radius:0 4px 4px 0; }
+.sbv { font-size:.74rem; color:var(--ink); text-align:right;
+       font-variant-numeric:tabular-nums; }
+.dlist { display:grid; grid-template-columns:86px 1fr auto; gap:.5rem;
+         padding:.4rem .5rem; border:1px solid var(--line); border-radius:6px;
+         margin-bottom:.35rem; font-size:.76rem; color:var(--ink);
+         align-items:baseline; }
+.dlist:hover { border-color:var(--gold-line); text-decoration:none; }
+.dlist .dsrc { color:var(--gold); font-size:.66rem; text-transform:uppercase;
+               letter-spacing:.08em; }
+.dlist .dag { color:var(--ink-2); overflow:hidden; text-overflow:ellipsis;
+              white-space:nowrap; }
+.dtext { font-size:.78rem; color:var(--ink-2); line-height:1.55; }
+.dtext b { color:var(--ink); }
+.redflags { color:var(--bad); font-size:.75rem; line-height:1.5; }
+.cmalink { display:block; text-align:center; background:var(--gold-soft);
+           border:1px solid var(--gold-line); border-radius:7px;
+           padding:.55rem; font-weight:600; letter-spacing:.03em;
+           margin-top:.2rem; }
+.cmalink:hover { background:rgba(232,196,122,.22); text-decoration:none; }
+
+/* ------------------------------------------------------------ erf block -- */
+.erf { margin-top:.4rem; font-size:.72rem; color:#c8b07e; background:#16140e;
+       border:1px solid #3a3320; border-radius:6px; padding:.45rem .6rem;
+       line-height:1.5; }
+.erf b { color:var(--gold); letter-spacing:.03em; }
+.erfcheck { border-color:#7a5c2e; }
+.erfcand { color:var(--ink-2); background:#131318; border-color:var(--line-2); }
+.erfnone { color:var(--ink-3); background:transparent; border-style:dashed;
+           border-color:var(--line); }
+.erfa { color:var(--gold); font-size:.62rem; border:1px solid #4a3f22;
+        border-radius:3px; padding:0 5px; margin-left:.3rem; cursor:pointer;
+        white-space:nowrap; display:inline-block; }
+.erfa:hover { border-color:var(--gold); text-decoration:none; }
+.aibtn { color:var(--blue); border-color:#2e5c7a; }
+.aibtn:hover { border-color:var(--blue); }
+.aipick { margin-top:.3rem; color:#bfe0f2; }
+.aipick b { color:var(--blue); }
+/* erf shown inline on rows/cards, not hidden behind the drawer */
+.erfmini { margin-top:.25rem; font-size:.68rem; color:#c8b07e; }
+.erfmini b { color:var(--gold); letter-spacing:.03em; }
+.erfmini .chk { color:#d6a95a; font-size:.6rem; border:1px solid #7a5c2e;
+                border-radius:3px; padding:0 4px; margin-left:.25rem; }
+.rebtn { color:#9fd0a8; border-color:#2e5c3a; }
+.rebtn:hover { border-color:#7ec98e; }
+
+@media (max-width: 860px) {
+  #shell { grid-template-columns:1fr; }
+  body:not(.nav-off) section#content { display:none; }
+  table { min-width:720px; }
+}
+</style></head><body>
+
+<header>
+  <button id="navbtn" title="toggle sidebar">☰</button>
+  <h1><b>OBLIVION</b>&thinsp;&mdash;&thinsp;PROSPECT ENGINE</h1>
+  <span id="portalsub"></span>
+  <span class="pill" id="aipill">AI …</span>
+</header>
+
+<div id="shell">
+<aside class="side" id="sidebar">
+  <fieldset><legend>Portals</legend>
+    <div class="mini">
+      <button data-sp="all">all</button>
+      <button data-sp="none">none</button>
+      <button data-sp="fast" title="skip the slow, easily-blocked Property24 crawl">fast portals</button>
+    </div>
+    <div id="sources"></div>
+  </fieldset>
+
+  <fieldset><legend>Areas</legend>
+    <div class="mini">
+      <button data-ap="all">all</button>
+      <button data-ap="none">none</button>
+      <button data-ap="prime" title="Oblivion's core Atlantic Seaboard + Constantia patch">prime</button>
+    </div>
+    <div id="areas"></div>
+  </fieldset>
+
+  <fieldset><legend>Options</legend>
+    <label class="cb">Pages per area
+      <select id="pages"><option>1</option><option selected>2</option>
+        <option>3</option><option>4</option><option>5</option></select></label>
+    <label class="cb"><input type="checkbox" id="useai" checked> AI scoring</label>
+    <label class="cb"><input type="checkbox" id="showsole"> Show sole-mandate properties</label>
+  </fieldset>
+
+  <button class="primary" id="go">Scrape &amp; score</button>
+  <button class="ghost" id="rescore">Re-score existing data</button>
+  <button class="ghost" id="erfbtn" title="Match every property against the public cadastres (City of Cape Town in the metro, Western Cape provincial everywhere else) to get its erf number and official address — the CMA search key">Resolve erf numbers</button>
+  <button class="ghost" id="stop">Stop</button>
+
+  <div id="phase"></div>
+  <div id="bar"><div id="barfill"></div></div>
+  <div id="srcprog"></div>
+  <details id="logbox"><summary>Activity log</summary><div id="log"></div></details>
+</aside>
+
+<section id="content">
+  <div class="banner warn" id="aibanner"></div>
+  <div class="stats" id="stats"></div>
+  <div class="toolbar">
+    <input id="fsearch" type="search" placeholder="Search title, street, erf, agency…">
+    <select id="fsuburb"><option value="">all suburbs</option></select>
+    <select id="ftier"><option value="">any tier</option>
+      <option value="hot">hot</option><option value="warm">warm</option>
+      <option value="cold">cold</option></select>
+    <select id="fmandate"><option value="">any mandate</option>
+      <option value="open">open</option>
+      <option value="probably_open">probably open</option>
+      <option value="unknown">unknown</option></select>
+    <select id="ferf"><option value="">any erf status</option>
+      <option value="resolved">erf resolved</option>
+      <option value="candidates">has candidates</option>
+      <option value="unresolved">unresolved</option></select>
+    <input id="fmin" type="number" min="0" step="1" placeholder="min R m">
+    <input id="fmax" type="number" min="0" step="1" placeholder="max R m">
+    <button id="fclear" title="clear filters">✕ clear</button>
+    <select id="fsort">
+      <option value="score">Sort: score</option>
+      <option value="pricedesc">Sort: price high → low</option>
+      <option value="priceasc">Sort: price low → high</option>
+      <option value="newest">Sort: newest</option>
+      <option value="weakness">Sort: weakest marketing</option>
+    </select>
+    <div class="viewtoggle">
+      <button id="vtable">Table</button><button id="vcards">Cards</button>
+    </div>
+    <span id="fcount"></span>
+  </div>
+  <div id="results" class="empty">Loading…</div>
+</section>
+</div>
+
+<div id="scrim"></div>
+<aside id="drawer">
+  <div id="dhead"><span>Prospect detail</span>
+    <button id="dclose" title="close (Esc)">✕</button></div>
+  <div id="dbody"></div>
+</aside>
+
+<script>
+'use strict';
+const SUBURBS = __SUBURBS__;      /* {region: [[slug, name, scope], …]} */
+const SOURCES = __SOURCES__;      /* [[name, label, enabled, blocked_reason], …] */
+const PRIME = ['clifton','camps-bay','bantry-bay','fresnaye','bishopscourt','constantia','llandudno','bakoven'];
+/* "Fast" = every portal except Property24, which crawls at ~15s per request
+   and so sets the wall-clock for any run it is part of. Derived rather than
+   listed, so adding a source doesn't silently drop it from the preset. */
+const SLOW  = ['property24'];
+const FAST  = SOURCES.map(s => s[0]).filter(n => !SLOW.includes(n));
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtInt = n => Math.round(n).toLocaleString('en-ZA').replace(/,/g, ' ');
+const fmtR = p => p ? 'R ' + fmtInt(p) : 'POA';
+/* street_address is squashed for cross-portal matching ('18 casos rd');
+   street_address_raw is what the portal printed. Show the readable one. */
+const addrOf = r => r.street_address_raw || r.street_address;
+const fmtM = p => p ? 'R' + (p / 1e6).toFixed(p < 1e7 ? 2 : 1)
+                          .replace(/\.?0+$/, '') + 'm' : 'POA';
+
+/* ----------------------------------------------------------- build sidebar */
+$('portalsub').textContent = SOURCES.map(s => s[1]).join(' · ');
+
+$('sources').innerHTML = SOURCES.map(([name, label, ok, why]) => `
+  <label class="cb ${ok ? '' : 'dis'}" ${why ? `title="${esc(why)}"` : ''}>
+    <input type="checkbox" class="src" value="${esc(name)}"
+      ${ok ? 'checked' : 'disabled'}>
+    <span>${esc(label)}</span>
+    ${ok ? '' : '<em class="blocked">blocked here</em>'}</label>`).join('');
+
+$('areas').innerHTML = Object.entries(SUBURBS).map(([region, items]) => {
+  const norm  = items.map(t => [t[0], t[1], t[2] || 'suburb']);
+  const towns = norm.filter(t => t[2] === 'town');
+  const subs  = norm.filter(t => t[2] !== 'town');
+  return `<div class="reggroup">
+    <div class="reghead"><span class="regname">${esc(region)}</span>
+      <button type="button" class="regbtn" data-on="1">all</button>
+      <button type="button" class="regbtn" data-on="0">none</button></div>
+    ${towns.length ? `<div class="townrow">${towns.map(([slug, name]) => `
+      <label class="townpill" title="crawl the whole town">
+        <input type="checkbox" class="sub" value="${esc(slug)}"><span>${esc(name)}</span>
+      </label>`).join('')}</div>` : ''}
+    ${subs.map(([slug, name]) => `
+      <label class="cb"><input type="checkbox" class="sub" value="${esc(slug)}"
+        ${PRIME.includes(slug) ? 'checked' : ''}><span>${esc(name)}</span></label>`).join('')}
+  </div>`;
+}).join('');
+
+$('areas').addEventListener('click', e => {
+  const b = e.target.closest('.regbtn');
+  if (!b) return;
+  b.closest('.reggroup').querySelectorAll('input.sub')
+    .forEach(i => i.checked = b.dataset.on === '1');
+});
+document.querySelectorAll('[data-ap]').forEach(b => b.onclick = () => {
+  const p = b.dataset.ap;
+  document.querySelectorAll('input.sub').forEach(i =>
+    i.checked = p === 'all' ? true : p === 'none' ? false : PRIME.includes(i.value));
+});
+document.querySelectorAll('[data-sp]').forEach(b => b.onclick = () => {
+  const p = b.dataset.sp;
+  document.querySelectorAll('input.src').forEach(i => {
+    if (!i.disabled)
+      i.checked = p === 'all' ? true : p === 'none' ? false : FAST.includes(i.value);
+  });
+});
+const picked = cls =>
+  [...document.querySelectorAll('input.' + cls + ':checked')].map(i => i.value);
+
+/* ------------------------------------------------- collapsible sidebar/view */
+function applyNav() {
+  document.body.classList.toggle('nav-off', localStorage.getItem('obv.nav') === '0');
+}
+$('navbtn').onclick = () => {
+  localStorage.setItem('obv.nav',
+    document.body.classList.contains('nav-off') ? '1' : '0');
+  applyNav();
+};
+applyNav();
+
+/* Cards are the default view — the photo is the first thing that tells you
+   whether a home is worth a film crew. Table stays one click away, and a
+   stored choice always wins. */
+let VIEW = localStorage.getItem('obv.view') === 'table' ? 'table' : 'cards';
+function setView(v) {
+  VIEW = v;
+  localStorage.setItem('obv.view', v);
+  $('vtable').classList.toggle('on', v === 'table');
+  $('vcards').classList.toggle('on', v === 'cards');
+  render();
+}
+$('vtable').onclick = () => setView('table');
+$('vcards').onclick = () => setView('cards');
+$('vtable').classList.toggle('on', VIEW === 'table');
+$('vcards').classList.toggle('on', VIEW === 'cards');
+
+/* ------------------------------------------------------------ job control */
+let polling = null;
+async function post(url, body) {
+  const r = await fetch(url, {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body || {})});
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    alert(e.error || r.status);
+    return false;
+  }
+  return true;
+}
+
+$('go').onclick = async () => {
+  const suburbs = picked('sub'), sources = picked('src');
+  if (!suburbs.length) return alert('pick at least one area');
+  if (!sources.length) return alert('pick at least one portal');
+  if (await post('/api/scrape', {suburbs, sources,
+        pages: +$('pages').value, use_ai: $('useai').checked}))
+    startPolling();
+};
+$('rescore').onclick = async () => {
+  if (await post('/api/rescore', {use_ai: $('useai').checked})) startPolling();
+};
+$('stop').onclick = () => post('/api/stop');
+$('showsole').onchange = loadResults;
+$('erfbtn').onclick = async () => {
+  if (await post('/api/erf/resolve', {})) erfPoll();
+};
+
+function startPolling() {
+  $('go').disabled = $('rescore').disabled = true;
+  clearInterval(polling);
+  polling = setInterval(poll, 2000);
+  poll();
+}
+
+async function poll() {
+  const s = await (await fetch('/api/status')).json();
+  $('phase').textContent = s.phase === 'idle' ? ''
+    : s.phase + (s.total ? `  (${s.done}/${s.total})` : '');
+  $('barfill').style.width = s.total ? (100 * s.done / s.total) + '%' : '0';
+  $('srcprog').innerHTML = Object.entries(s.per_source || {}).map(([k, v]) => {
+    const pct = v.found ? Math.min(100, 100 * v.done / v.found) : 0;
+    return `<div class="sp"><div class="sprow"><b>${esc(k)}</b>
+        <span>${v.done}/${v.found} · ${v.stored} stored</span></div>
+      <div class="spbar"><i style="width:${pct}%"></i></div></div>`;
+  }).join('');
+  const lg = $('log');
+  lg.textContent = (s.log || []).join('\n');
+  lg.scrollTop = lg.scrollHeight;
+  const pill = $('aipill');
+  if (s.ai_ok) {
+    pill.className = 'pill ok'; pill.textContent = 'AI scoring ready';
+    pill.title = '';
+  } else {
+    pill.className = 'pill warn'; pill.textContent = 'AI scoring off';
+    pill.title = s.ai_reason || '';
+  }
+  const b = $('aibanner');
+  if (!s.ai_ok && s.ai_reason) {
+    b.style.display = 'block';
+    b.textContent = `AI scoring is off — ${s.ai_reason}. Scores come from the `
+      + `heuristic; mandate verdicts still use hard evidence (multi-agency `
+      + `listings, portal mandate flags).`;
+  } else b.style.display = 'none';
+  if (s.running) { loadResults(); loadStats(); }
+  else {
+    clearInterval(polling); polling = null;
+    $('go').disabled = $('rescore').disabled = false;
+    loadResults(); loadStats();
+  }
+}
+
+/* ---------------------------------------------------------------- stats */
+async function loadStats() {
+  const s = await (await fetch('/api/stats')).json();
+  const tile = (label, v, cls) =>
+    `<div class="tile ${cls || ''}"><b>${v ?? 0}</b><span>${esc(label)}</span></div>`;
+  $('stats').innerHTML =
+    tile('Sellable', s.sellable, 'gold') +
+    tile('Erf ready', s.erf_ready) +
+    tile('Properties', s.properties) +
+    tile('Listings', s.listings) +
+    tile('Multi-agency', s.multi_agency) +
+    tile('Sole hidden', s.sole) +
+    Object.entries(s.by_source || {})
+      .map(([k, v]) => tile(k, v, 'dim')).join('');
+}
+
+/* ------------------------------------------------------------- prospects */
+let ALLROWS = [];
+
+async function loadResults() {
+  const sole = $('showsole').checked ? '?sole=1' : '';
+  ALLROWS = await (await fetch('/api/prospects' + sole)).json();
+  const sel = $('fsuburb'), was = sel.value;
+  sel.innerHTML = '<option value="">all suburbs</option>' +
+    [...new Set(ALLROWS.map(r => r.suburb).filter(Boolean))].sort()
+      .map(s => `<option${s === was ? ' selected' : ''}>${esc(s)}</option>`).join('');
+  render();
+  renderDrawer();
+}
+
+function filtered() {
+  const q = $('fsearch').value.trim().toLowerCase();
+  const sub = $('fsuburb').value, tier = $('ftier').value;
+  const mand = $('fmandate').value, ferf = $('ferf').value;
+  const min = (parseFloat($('fmin').value) || 0) * 1e6;
+  const max = (parseFloat($('fmax').value) || Infinity) * 1e6;
+  return ALLROWS.filter(r => {
+    if (sub && r.suburb !== sub) return false;
+    if (tier && r.tier !== tier) return false;
+    if (mand && (r.mandate_verdict || 'unknown') !== mand) return false;
+    if (ferf) {
+      const st = r.erf_status || 'none';
+      if (ferf === 'resolved'   && !['ok','confirmed','check'].includes(st)) return false;
+      if (ferf === 'candidates' && st !== 'candidates') return false;
+      if (ferf === 'unresolved' && ['ok','confirmed','check','candidates'].includes(st)) return false;
+    }
+    const p = r.price_zar || 0;
+    if (p && (p < min || p > max)) return false;
+    if (!p && min > 0) return false;          /* POA hidden once a floor is set */
+    if (q) {
+      const hay = [r.title, r.suburb, r.property_type, r.street_address,
+                   r.street_address_raw,
+                   r.official_address, r.erf_number, r.pitch_angle, r.agent_name,
+                   (r.agencies || []).join(' ')].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function sortRows(rows) {
+  const cmp = {
+    score:     (a, b) => ((b.prospect_score ?? -1) - (a.prospect_score ?? -1))
+                          || ((b.price_zar || 0) - (a.price_zar || 0)),
+    pricedesc: (a, b) => (b.price_zar || 0) - (a.price_zar || 0),
+    priceasc:  (a, b) => (a.price_zar || Infinity) - (b.price_zar || Infinity),
+    newest:    (a, b) => (a.days_on_market ?? 1e9) - (b.days_on_market ?? 1e9),
+    weakness:  (a, b) => ((b.marketing_weakness ?? -1) - (a.marketing_weakness ?? -1))
+                          || ((b.prospect_score ?? -1) - (a.prospect_score ?? -1)),
+  }[$('fsort').value] || ((a, b) => 0);
+  return [...rows].sort(cmp);
+}
+
+function photoBox(r, cls) {
+  if (r.photo_url === '-') return `<div class="${cls} noph"></div>`;
+  const src = r.photo_url ? esc(r.photo_url)
+                          : `/api/photo/${encodeURIComponent(r.listing_key)}`;
+  return `<div class="${cls}"><img loading="lazy" src="${src}" alt=""
+    onerror="this.parentNode.classList.add('noph');this.remove()"></div>`;
+}
+
+const domTxt = r => r.days_on_market != null ? r.days_on_market + 'd' : '—';
+const gvHint = r => (r.gv_value && r.price_zar)
+  ? `<div class="meta dim2">${(r.price_zar / r.gv_value).toFixed(2)}× GV</div>` : '';
+const priceHtml = r => r.price_zar
+  ? `<span class="price">${fmtR(r.price_zar)}</span>`
+  : '<span class="price poa">POA</span>';
+
+/* Erf number shown right on the row/card once resolved. */
+function erfInline(r) {
+  if (!['ok', 'confirmed', 'check'].includes(r.erf_status)) return '';
+  const label = `${r.erf_number}${r.erf_portion ? '/' + r.erf_portion : ''}`;
+  return `<div class="erfmini"><b>ERF ${esc(label)}</b>${
+    r.official_address ? ' · ' + esc(r.official_address) : ''}${
+    r.official_suburb ? ', ' + esc(r.official_suburb) : ''}${
+    r.erf_status === 'check' ? '<span class="chk">verify</span>' : ''}</div>`;
+}
+
+/* Per-property "look again" button: live refetch + rescore + erf re-match. */
+function reBtn(r) {
+  if (r.reevaluating) return '<span class="erfa">re-evaluating… ◌</span>';
+  return `<span class="erfa rebtn" onclick="reEval('${esc(r.listing_key)}')"
+    title="Refetch this listing live from the portal(s), re-score it with the AI and re-run the erf/cadastre match">↻ re-eval</span>`;
+}
+async function reEval(key) {
+  if (await post('/api/listing/reevaluate', {listing_key: key})) erfPoll();
+}
+
+/* 22 ha reads as 22 ha, not 220000 m². */
+const fmtArea = v => v == null ? null
+  : v >= 10000 ? (v / 10000).toLocaleString('en-ZA', {maximumFractionDigits: 1}) + ' ha'
+  : fmtInt(v) + ' m²';
+
+function flagBadges(r) {
+  return (r.is_development ? ' <span class="badge dev">DEVELOPMENT</span>' : '')
+       + (r.tracker_status ? ' <span class="badge trk">IN TRACKER</span>' : '')
+       + (r.under_offer    ? ' <span class="badge uo">UNDER OFFER</span>' : '')
+       + (r.price_reduced  ? ' <span class="badge pr">REDUCED</span>' : '');
+}
+
+function scoreCell(r) {
+  if (r.prospect_score == null) return '<span class="scorewait">…</span>';
+  return `<span class="tier ${esc(r.tier)}">${esc(r.tier || '').toUpperCase()}</span>
+    <div class="score">${r.prospect_score}</div>
+    <div class="meta dim2">${esc((r.scored_by || '').split(':')[0])}</div>`;
+}
+
+function render() {
+  const el = $('results');
+  if (!ALLROWS.length) {
+    el.className = 'empty';
+    el.innerHTML = 'No prospects yet — pick portals and areas on the left, '
+      + 'then <b>Scrape &amp; score</b>.';
+    $('fcount').textContent = '';
+    return;
+  }
+  const rows = sortRows(filtered());
+  $('fcount').textContent = rows.length === ALLROWS.length
+    ? `${rows.length} properties` : `${rows.length} of ${ALLROWS.length}`;
+  if (!rows.length) {
+    el.className = 'empty';
+    el.textContent = 'Nothing matches these filters.';
+    return;
+  }
+  el.className = VIEW === 'cards' ? 'cardgrid' : '';
+  el.innerHTML = VIEW === 'cards' ? rows.map(card).join('') : tableHtml(rows);
+}
+
+function tableHtml(rows) {
+  return `<table><thead><tr><th>Score</th><th>Property</th><th>Price</th>
+    <th title="days on market">DOM</th><th>Mandate / agencies</th>
+    <th title="luxury fit / open-mandate confidence / marketing weakness">L · O · W</th>
+    <th>Pitch</th></tr></thead><tbody>` +
+    rows.map(r => `<tr class="rowclick ${r.prospect_score == null ? 'pending' : ''}
+        ${r.listing_key === DKEY ? 'sel' : ''}" data-key="${esc(r.listing_key)}">
+      <td>${scoreCell(r)}</td>
+      <td><div class="propwrap">${photoBox(r, 'ph tphoto')}<div>
+        <a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.source_id)}</a>${flagBadges(r)}
+        <div class="meta">${esc(r.suburb || '')} · ${esc(r.property_type || '')} ·
+          ${r.bedrooms ?? '?'} bed · ${r.photo_count || 0} photos${addrOf(r) ? ' · ' + esc(addrOf(r)) : ''}</div>
+        ${erfInline(r)}
+        <div class="portalchips">${(r.listings || []).map(l =>
+          `<a class="portal" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.source)}</a>`).join('')}${reBtn(r)}</div>
+        ${r.reeval_error ? `<div class="note">re-eval failed — ${esc(r.reeval_error)}</div>` : ''}
+        ${(r.evidence || []).length ? `<div class="ev">matched: ${esc(r.evidence.join('; '))}</div>` : ''}
+      </div></div></td>
+      <td>${priceHtml(r)}${gvHint(r)}</td>
+      <td class="low">${domTxt(r)}</td>
+      <td><span class="mv mv-${esc(r.mandate_verdict || 'unknown')}">${esc((r.mandate_verdict || 'unknown').replace('_', ' '))}</span>
+        ${r.brand_count > 1 ? `<div style="margin-top:.3rem"><span class="badge">${r.brand_count} agencies</span></div>` : ''}
+        <div class="meta">${esc((r.agencies || []).join(', ') || '—')}</div>
+        ${r.mandate_expiry_note ? `<div class="note">${esc(r.mandate_expiry_note)}</div>` : ''}</td>
+      <td class="low">${r.prospect_score == null ? '—'
+        : `${r.luxury_fit} · ${r.open_mandate_confidence} · ${r.marketing_weakness}`}</td>
+      <td><div class="pitchcell">${esc(r.pitch_angle || r.reasoning || '')}</div></td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+function card(r) {
+  return `<div class="card ${r.listing_key === DKEY ? 'sel' : ''}" data-key="${esc(r.listing_key)}">
+    <div style="position:relative">${photoBox(r, 'cardph')}
+      <div class="cardover">
+        <span>${r.tier ? `<span class="tier ${esc(r.tier)}">${esc(r.tier).toUpperCase()}</span>` : ''}</span>
+        <span class="cardscore">${r.prospect_score ?? '…'}</span>
+      </div>
+    </div>
+    <div class="cardbody">
+      <div class="cardprice">${priceHtml(r)}<span class="sub">${esc(r.suburb || '')}</span></div>
+      <div class="cardtitle">${esc(r.title || r.source_id)}</div>
+      <div class="cardline">
+        <span class="mv mv-${esc(r.mandate_verdict || 'unknown')}">${esc((r.mandate_verdict || 'unknown').replace('_', ' '))}</span>
+        ${r.brand_count > 1 ? `<span class="badge">${r.brand_count} agencies</span>` : ''}
+        ${flagBadges(r)}
+      </div>
+      <div class="meta" style="margin:0">${esc((r.agencies || []).join(', ') || '—')}</div>
+      <div class="meta dim2" style="margin:0">${domTxt(r)} on market · ${r.photo_count || 0} photos${r.gv_value && r.price_zar ? ` · ${(r.price_zar / r.gv_value).toFixed(2)}× GV` : ''}</div>
+      ${erfInline(r)}
+      <div>${reBtn(r)}</div>
+      ${r.pitch_angle ? `<div class="cardpitch">${esc(r.pitch_angle)}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+for (const id of ['fsearch','fsuburb','ftier','fmandate','ferf','fmin','fmax','fsort'])
+  $(id).addEventListener('input', render);
+$('fclear').onclick = () => {
+  for (const id of ['fsearch','fsuburb','ftier','fmandate','ferf','fmin','fmax'])
+    $(id).value = '';
+  render();
+};
+
+/* --------------------------------------------------------------- drawer */
+let DKEY = null;
+
+$('results').addEventListener('click', e => {
+  if (e.target.closest('a, button, .erfa, input, select, [data-copy]')) return;
+  const el = e.target.closest('[data-key]');
+  if (el) openDrawer(el.dataset.key);
+});
+function openDrawer(key) {
+  DKEY = key;
+  renderDrawer();
+  document.body.classList.add('drawer-open');
+  render();      /* refresh row/card selection highlight */
+}
+function closeDrawer() {
+  if (!DKEY) return;
+  DKEY = null;
+  document.body.classList.remove('drawer-open');
+  render();
+}
+$('dclose').onclick = closeDrawer;
+$('scrim').onclick = closeDrawer;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+function renderDrawer() {
+  if (!DKEY) return;
+  const r = ALLROWS.find(x => x.listing_key === DKEY);
+  if (!r) { closeDrawer(); return; }
+  $('dbody').innerHTML = drawerHtml(r);
+}
+
+function sbar(label, val) {
+  const w = Math.max(0, Math.min(100, val || 0));
+  return `<div class="sb"><span class="sbl">${label}</span>
+    <div class="sbt"><i style="width:${w}%"></i></div>
+    <span class="sbv">${val ?? '—'}</span></div>`;
+}
+
+function drawerHtml(r) {
+  const hero = photoBox(r, 'dhero');
+  const ppm2 = r.price_per_m2 ? 'R ' + fmtInt(r.price_per_m2)
+    : (r.price_zar && r.floor_size_m2
+        ? 'R ' + fmtInt(r.price_zar / r.floor_size_m2) : '—');
+  const facts = [
+    ['Asking', fmtR(r.price_zar)],
+    ['Municipal GV', r.gv_value ? `${fmtR(r.gv_value)} · ${esc(r.gv_roll || '')}` : '—'],
+    ['Asking vs GV', r.gv_value && r.price_zar
+        ? (r.price_zar / r.gv_value).toFixed(2) + '× GV' : '—'],
+    ['Days on market', r.days_on_market != null ? r.days_on_market + ' days' : '—'],
+    ['Price / m²', ppm2],
+    ['Floor / erf', `${fmtArea(r.floor_size_m2) || '—'} / ${fmtArea(r.erf_size_m2) || '—'}`],
+    ['Beds / baths', `${r.bedrooms ?? '?'} / ${r.bathrooms ?? '?'}`],
+    ['Listed', r.listing_date ? esc(String(r.listing_date).slice(0, 10)) : '—'],
+  ].map(([k, v]) => `<div class="dfact"><span>${k}</span><b>${v}</b></div>`).join('');
+
+  const scoreSec = r.prospect_score == null
+    ? `<div class="meta">Not scored yet <span class="scorewait">…</span></div>`
+    : sbar('prospect', r.prospect_score) + sbar('luxury', r.luxury_fit)
+      + sbar('open mandate', r.open_mandate_confidence)
+      + sbar('weakness', r.marketing_weakness);
+
+  const links = (r.listings || []).map(l =>
+    `<a class="dlist" href="${esc(l.url)}" target="_blank" rel="noopener">
+      <span class="dsrc">${esc(l.source)}</span>
+      <span class="dag">${esc(l.agency || '—')}</span>
+      <span class="price">${fmtM(l.price_zar)}</span></a>`).join('');
+
+  return `${hero}
+  <div class="dsec">
+    <p class="dtitle"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.source_id)}</a></p>
+    <div class="meta">${esc(r.suburb || '')} · ${esc(r.property_type || '')}${addrOf(r) ? ' · ' + esc(addrOf(r)) : ''}</div>
+    <div class="dchips">
+      ${r.tier ? `<span class="tier ${esc(r.tier)}">${esc(r.tier).toUpperCase()}</span>` : ''}
+      <span class="mv mv-${esc(r.mandate_verdict || 'unknown')}">${esc((r.mandate_verdict || 'unknown').replace('_', ' '))}</span>
+      ${r.brand_count > 1 ? `<span class="badge">${r.brand_count} agencies</span>` : ''}
+      ${flagBadges(r)}
+      ${reBtn(r)}
+      <span class="erfa" onclick="copyRow(this, '${esc(String(r.group_id ?? r.listing_key))}')"
+            title="Copy this property as a spreadsheet row, then paste into Excel or Google Sheets">copy row for sheet</span>
+    </div>
+    ${r.reeval_error ? `<div class="note">re-eval failed — ${esc(r.reeval_error)}</div>` : ''}
+  </div>
+  <div class="dsec"><h3>Score breakdown</h3>${scoreSec}</div>
+  <div class="dsec"><h3>Key numbers</h3><div class="dfacts">${facts}</div></div>
+  <div class="dsec"><h3>Listings</h3>${links || '<div class="meta">—</div>'}
+    <div class="meta">${esc((r.agencies || []).join(', ') || '')}</div>
+    ${(r.evidence || []).length ? `<div class="ev">matched: ${esc(r.evidence.join('; '))}</div>` : ''}
+    ${r.mandate_expiry_note ? `<div class="note">${esc(r.mandate_expiry_note)}</div>` : ''}
+  </div>
+  ${r.pitch_angle ? `<div class="dsec"><h3>Pitch angle</h3>
+    <div class="dtext"><b>${esc(r.pitch_angle)}</b></div></div>` : ''}
+  ${r.reasoning ? `<div class="dsec"><h3>Reasoning</h3>
+    <div class="dtext">${esc(r.reasoning)}</div></div>` : ''}
+  ${r.red_flags ? `<div class="dsec"><h3>Red flags</h3>
+    <div class="redflags">${esc(r.red_flags)}</div></div>` : ''}
+  <div class="dsec"><h3>Erf / cadastre</h3>
+    ${erfBlock(r)}</div>
+  <div class="dsec">
+    ${r.cma_url ? `<a class="cmalink" href="${esc(r.cma_url)}">Open CMA report →</a>` : ''}
+  </div>`;
+}
+
+/* ------------------------------------------------------- erf / cadastre */
+const satUrl = (lat, lng) =>
+  `https://www.google.com/maps/place/${lat},${lng}/@${lat},${lng},110m/data=!3m1!1e3`;
+
+function aiBits(r) {
+  /* AI photo-locator controls — offered on EVERY unresolved property, not
+     just those with cadastre candidates: the backend builds its own
+     candidate list from street clues in the copy when none are stored. */
+  const btn = r.erf_ai_running
+    ? `<span class="erfa">AI locating… ◌</span>`
+    : `<span class="erfa aibtn" onclick="aiLocate('${esc(r.listing_key)}')"
+        title="Download the listing photos and satellite crops of candidate parcels, then ask a vision model which stand this is">${r.erf_ai ? 're-run AI locate' : 'AI locate from photos'}</span>`;
+  let pick = '';
+  if (r.erf_ai && r.erf_ai.best) {
+    const b = r.erf_ai.best;
+    const cand = (r.erf_cands || []).find(c => String(c.erf) === String(b.erf));
+    const ver = (r.erf_ai.verify || {}).verdict;
+    const vtag = ver === 'confirm' ? ' <span style="color:#7ec98e">verified ✓</span>'
+               : ver === 'reject'  ? ' <span style="color:#d98b7e">verifier rejected ✗</span>'
+               : ver === 'uncertain' ? ' <span style="color:#d6a95a">verifier unsure</span>' : '';
+    pick = `<div class="aipick">AI pick: <b>erf ${esc(b.erf)}</b>${cand ? ` · ${esc(cand.address)}` : ''}
+        · ${b.confidence ?? '?'}% confident${vtag}
+      ${cand && cand.lat ? `<a class="erfa" href="${satUrl(cand.lat, cand.lng)}" target="_blank" rel="noopener">satellite</a>` : ''}
+      ${cand ? `<span class="erfa" onclick="erfConfirm('${esc(r.listing_key)}','${esc(b.erf)}')">accept ✓</span>` : ''}
+      <div class="meta">${esc(b.verdict || '')}</div>
+      ${r.erf_ai.street_clues ? `<div class="meta">text clues: ${esc(r.erf_ai.street_clues)}</div>` : ''}
+    </div>`;
+  }
+  const err = r.erf_ai_error ? `<div class="note">AI locate failed — ${esc(r.erf_ai_error)}</div>` : '';
+  return btn + pick + err;
+}
+
+function erfBlock(r) {
+  const st = r.erf_status;
+  if (st === 'ok' || st === 'confirmed' || st === 'check') {
+    const erfLabel = `${r.erf_number}${r.erf_portion ? '/' + r.erf_portion : ''}`;
+    const cma = `${r.official_address}, ${r.official_suburb} — Erf ${erfLabel}`;
+    return `<div class="erf ${st === 'check' ? 'erfcheck' : ''}">
+      <b>ERF ${esc(erfLabel)}</b> · ${esc(r.official_address)} · ${esc(r.official_suburb)}
+      ${r.parcel_area_m2 ? ` · ${fmtArea(r.parcel_area_m2)}` : ''}
+      ${r.erf_lat ? `<a class="erfa" href="${satUrl(r.erf_lat, r.erf_lng)}" target="_blank" rel="noopener">satellite</a>` : ''}
+      <span class="erfa" data-copy="${esc(cma)}" onclick="copyTxt(this)">copy for CMA</span>
+      ${st === 'check' ? `<div class="note">verify: ${esc(r.erf_note || 'size mismatch')}</div>` : ''}
+    </div>`;
+  }
+  if (st === 'candidates') {
+    return `<div class="erf erfcand">${r.erf_cand_count} candidate erven
+      <span class="meta">(${esc(r.erf_note || 'same suburb, matching erf size')})</span>
+      ${aiBits(r)}</div>`;
+  }
+  if (!st) {
+    return `<div class="erf erfnone">not resolved yet — run “Resolve erf
+      numbers”, or ${aiBits(r)}</div>`;
+  }
+  return `<div class="erf erfnone">${esc(r.erf_note || st)} ${aiBits(r)}</div>`;
+}
+
+async function copyRow(el, ident) {
+  const was = el.textContent;
+  el.textContent = 'copying…';
+  try {
+    const res = await fetch('/api/row/' + encodeURIComponent(ident));
+    if (!res.ok) throw new Error('no row');
+    const d = await res.json();
+    /* Tabs are what make Sheets/Excel spread this across columns. */
+    await navigator.clipboard.writeText(d.row);
+    el.textContent = 'copied ✓ paste into sheet';
+  } catch (e) {
+    el.textContent = 'copy failed';
+  }
+  setTimeout(() => el.textContent = was, 2200);
+}
+function copyTxt(el) {
+  navigator.clipboard.writeText(el.dataset.copy);
+  const was = el.textContent;
+  el.textContent = 'copied ✓';
+  setTimeout(() => el.textContent = was, 1400);
+}
+async function aiLocate(key) {
+  if (await post('/api/erf/locate', {listing_key: key})) erfPoll();
+}
+async function erfConfirm(key, erfno) {
+  if (await post('/api/erf/confirm', {listing_key: key, erf: erfno})) {
+    loadResults(); loadStats();
+  }
+}
+let erfPolling = null;
+function erfPoll() {
+  if (erfPolling) return;
+  loadResults();
+  erfPolling = setInterval(async () => {
+    const b = await (await fetch('/api/erf/busy')).json();
+    const s = await (await fetch('/api/status')).json();
+    const lg = $('log');
+    lg.textContent = (s.log || []).join('\n');
+    lg.scrollTop = lg.scrollHeight;
+    loadResults();
+    if (!b.resolving && !b.locating.length && !(b.reevaluating || []).length) {
+      clearInterval(erfPolling); erfPolling = null;
+      loadStats();
+    }
+  }, 2500);
+}
+
+loadResults(); loadStats(); poll();
+</script></body></html>
