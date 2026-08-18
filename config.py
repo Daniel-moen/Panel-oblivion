@@ -405,6 +405,13 @@ DB_PATH = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "prospects.db"))
 # hot-tier prospects after each crawl.
 PROOF_FRESH_HOURS = 72
 
+# verify.py: after each scored crawl, hot multi-agency prospects whose
+# members haven't been sighted within VERIFY_STALE_HOURS are re-fetched live
+# (cache dropped) before the report goes out, budgeted per run so the extra
+# load stays a rounding error against every portal's rate limit.
+VERIFY_STALE_HOURS = 24
+VERIFY_MAX_FETCHES = 40
+
 # ---------------------------------------------------------------- dedupe
 #
 # Cross-portal matching thresholds. A pair of listings scoring at or above

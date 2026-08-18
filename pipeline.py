@@ -242,6 +242,22 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
                                       only_stale=only_stale)
             conn.commit()
 
+        # Pre-pitch guarantee: re-fetch the stale halves of hot multi-agency
+        # proof LIVE before anyone reads the report. Small fixed budget; a
+        # portal outage must not kill the run.
+        if do_score and not stop.is_set():
+            import verify
+            try:
+                vs = verify.run(conn, log=log, stop=stop, use_ai=use_ai)
+                if vs["checked"]:
+                    log(f"verify: {vs['refetched']} listings re-fetched live "
+                        f"across {vs['groups']} hot multi-agency properties "
+                        f"— {vs['gone']} no longer served, "
+                        f"{vs['rescored']} re-scored")
+            except Exception as e:                      # noqa: BLE001
+                log(f"verify skipped ({type(e).__name__}: {e})")
+            conn.commit()
+
         # Erf + GV always follow a crawl — the erf is the key to the GV
         # value, CMA comps and the deeds tool, so every property that can
         # resolve should, whether the run was started from the CLI or the
