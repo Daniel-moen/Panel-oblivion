@@ -114,6 +114,23 @@ def _run(suburbs, source_names, pages, use_ai):
                        per_source=snap["per_source"], running=False)
 
 
+def _start_job(suburbs, srcs, pages, use_ai=True) -> bool:
+    """Claim the single job slot and launch a crawl; False if already busy.
+
+    Check-and-set under job_lock so the dashboard button and the auto-crawl
+    scheduler can never both claim the slot.
+    """
+    with job_lock:
+        if job["running"]:
+            return False
+        job.update(running=True, phase="starting", log=[], done=0, total=0,
+                   per_source={}, started=datetime.now().isoformat())
+    _stop.clear()
+    threading.Thread(target=_run, args=(suburbs, srcs, pages, use_ai),
+                     daemon=True).start()
+    return True
+
+
 @app.post("/api/scrape")
 def api_scrape():
     if job["running"]:
@@ -128,12 +145,64 @@ def api_scrape():
     pages = max(1, min(int(body.get("pages", 2)), 5))
     use_ai = bool(body.get("use_ai", True))
 
-    _stop.clear()
-    job.update(running=True, phase="starting", log=[], done=0, total=0,
-               per_source={}, started=datetime.now().isoformat())
-    threading.Thread(target=_run, args=(suburbs, srcs, pages, use_ai),
-                     daemon=True).start()
+    if not _start_job(suburbs, srcs, pages, use_ai):
+        return jsonify({"error": "a job is already running"}), 409
     return jsonify({"ok": True})
+
+
+# ------------------------------------------------------------- auto-crawl
+#
+# The constant loop (config.AUTO_CRAWL): a nightly full pass over everything,
+# plus a cheap page-1 freshness sweep of the fast portals every
+# AUTO_SWEEP_HOURS. Runs inside this process as one more daemon thread —
+# job state is an in-memory dict and the Procfile pins one worker, so an
+# external cron could not see or respect a running dashboard job; this
+# scheduler shares the same _start_job guard and shows up in the same
+# progress display. On a Mac that sleeps overnight the pass simply fires on
+# wake (the loop checks the calendar, not an interval).
+_auto = {"last_full": None, "last_sweep": None}
+
+
+def _auto_sources(include_p24: bool) -> list[str]:
+    return [n for n in source_registry.REGISTRY
+            if config.SOURCES.get(n, {}).get("enabled")
+            and (include_p24 or n != "property24")]
+
+
+def _auto_crawl_loop():
+    while True:
+        time.sleep(60)
+        try:
+            if not config.AUTO_CRAWL or job["running"]:
+                continue
+            now = datetime.now()
+            suburbs = list(config.SUBURBS)
+            if now.hour == config.AUTO_CRAWL_HOUR and \
+                    _auto["last_full"] != now.date():
+                # Nightly full pass — Property24 included: overnight is the
+                # right time for its 12-18s pacing.
+                if _start_job(suburbs, _auto_sources(include_p24=True),
+                              pages=config.MAX_PAGES_PER_SUBURB):
+                    _auto["last_full"] = now.date()
+                    log("auto-crawl: nightly full pass started")
+            elif config.AUTO_SWEEP_HOURS > 0 and (
+                    _auto["last_sweep"] is None
+                    or (now - _auto["last_sweep"]).total_seconds()
+                    >= config.AUTO_SWEEP_HOURS * 3600):
+                # Freshness sweep: page 1 of the fast portals only. Keeps
+                # last_seen current, which is what the proof-freshness gate,
+                # the delisting sweep and price history all feed on.
+                if _start_job(suburbs, _auto_sources(include_p24=False),
+                              pages=1):
+                    _auto["last_sweep"] = now
+                    log("auto-crawl: freshness sweep started (fast portals, "
+                        "page 1)")
+        except Exception as e:                          # noqa: BLE001
+            print(f"auto-crawl scheduler error: {type(e).__name__}: {e}",
+                  flush=True)
+
+
+threading.Thread(target=_auto_crawl_loop, daemon=True).start()
 
 
 @app.post("/api/stop")
@@ -180,6 +249,12 @@ def api_status():
     ok, reason = scorer.ai_status()
     out["ai_ok"] = ok
     out["ai_reason"] = reason
+    out["auto_crawl"] = config.AUTO_CRAWL
+    if config.AUTO_CRAWL:
+        out["auto_last_full"] = (str(_auto["last_full"])
+                                 if _auto["last_full"] else None)
+        out["auto_last_sweep"] = (_auto["last_sweep"].isoformat()
+                                  if _auto["last_sweep"] else None)
     return jsonify(out)
 
 

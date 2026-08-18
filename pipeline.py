@@ -226,9 +226,32 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
             f"(open-mandate proof), {stats['multi_source_groups']} seen on "
             f"multiple portals")
 
+        # Yield canary: a source whose crawled-suburb stock was mostly NOT
+        # confirmed this run (parser regression, portal redesign, block) must
+        # not feed the delisting sweep — the missing listings would read as a
+        # mass delisting and poison the comps feed with phantom off-market
+        # events. Excluded sources are swept again once they recover.
+        suspect: set[str] = set()
+        marks = ",".join("?" * len(suburbs))
+        for res in results:
+            name = res.get("source")
+            if not name or name not in config.SOURCES:
+                continue
+            total, fresh = conn.execute(
+                f"""SELECT COUNT(*),
+                           COALESCE(SUM(last_seen > datetime('now', '-24 hours')), 0)
+                    FROM listings WHERE source = ?
+                    AND suburb_slug IN ({marks})""",
+                (name, *suburbs)).fetchone()
+            if total >= 10 and fresh < total * config.LIFECYCLE_MIN_COVERAGE:
+                suspect.add(name)
+                log(f"[{name}] canary: only {fresh}/{total} listings "
+                    f"confirmed in this run's suburbs — excluded from the "
+                    f"delisting sweep (parser regression or block?)")
+
         # delisting / sold-proxy sweep — feeds cma.py's "recent off-market"
         # comps; update() does not commit, so commit here.
-        lc = lifecycle.update(conn)
+        lc = lifecycle.update(conn, exclude_sources=suspect)
         conn.commit()
         log(f"lifecycle: {lc['active']} active, "
             f"{lc['newly_delisted']} newly delisted, "

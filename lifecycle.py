@@ -150,14 +150,18 @@ ON CONFLICT(listing_key) DO UPDATE SET
 
 # ------------------------------------------------------------------- update
 
-def update(conn) -> dict:
+def update(conn, exclude_sources=frozenset()) -> dict:
     """Full lifecycle sweep. Idempotent — safe to run after every crawl.
+
+    exclude_sources: sources whose current crawl looked suspicious (the
+    pipeline's yield canary) — their listings are treated like a disabled
+    source's for this sweep, so a broken parser can never mass-delist.
 
     Returns {active, newly_delisted, newly_relisted, delisted_total,
     likely_sold_total}.
     """
     ensure_table(conn)
-    enabled = set(config.enabled_sources())
+    enabled = set(config.enabled_sources()) - set(exclude_sources)
     now = conn.execute("SELECT datetime('now')").fetchone()[0]
 
     # Cohort freshness: how recently the crawler last covered each
