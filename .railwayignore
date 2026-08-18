@@ -20,3 +20,6 @@ prospects.html
 
 .claude/
 .dashboard-password.txt
+
+# Git history — not needed in the image, and new since the repo was initialised.
+.git/
