@@ -12,17 +12,30 @@ from __future__ import annotations
 import html
 import json
 import sqlite3
+import statistics
+from datetime import datetime, timezone
 
 import cma
+import config
 import lifecycle
 import owners
 import valuations
+from sources.base import canonical_agency
 
 DISCLAIMER = ("Comparative market analysis for guidance only — not a formal "
               "valuation; only a registered professional valuer may issue a "
               "valuation (SA Property Valuers Profession Act).")
 
 _TIER_ORDER = {"hot": 0, "warm": 1, "cold": 2}
+
+# Same palette the prospect report uses, so a mandate verdict reads identically
+# wherever it appears.
+_MANDATE_COLORS = {
+    "open": "#1e8449", "probably_open": "#148f77", "unknown": "#5d5d66",
+    "probably_sole": "#a04000", "sole": "#922b21",
+}
+
+_PROOF_FRESH_HOURS = getattr(config, "PROOF_FRESH_HOURS", 72)
 
 
 def _e(s) -> str:
@@ -58,6 +71,111 @@ def _sat_url(lat, lng) -> str:
     # same pattern the dashboard uses: satellite view at the parcel centroid
     return (f"https://www.google.com/maps/place/{lat},{lng}"
             f"/@{lat},{lng},110m/data=!3m1!1e3")
+
+
+def _rget(row, key, default=None):
+    """sqlite3.Row lookup that tolerates a column the DB doesn't have yet —
+    the same forgiveness the rest of the engine gives optional tables."""
+    if row is None:
+        return default
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
+
+def _utcnow() -> datetime:
+    """Naive UTC, comparable to SQLite's datetime('now') text."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _age_hours(ts) -> float | None:
+    d = cma._parse_date(ts)
+    if d is None:
+        return None
+    return max(0.0, (_utcnow() - d).total_seconds() / 3600.0)
+
+
+def _age_label(hours: float | None) -> str:
+    """Hours while the sighting is arguably still 'live', days after that."""
+    if hours is None:
+        return "—"
+    return f"{hours:.0f}h" if hours < 48 else f"{hours / 24.0:.0f}d"
+
+
+def _days_since(ts) -> int | None:
+    h = _age_hours(ts)
+    return None if h is None else int(h // 24)
+
+
+def _pool_label(v) -> str:
+    """`pool` is a TEXT column: mostly '1'/'0', occasionally prose
+    ('Communal Pool', 'Heated') — keep the prose, translate the flags."""
+    if v is None:
+        return "—"
+    s = str(v).strip()
+    if s == "" or s.lower() in ("0", "false", "no", "none"):
+        return "—"
+    if s.lower() in ("1", "true", "yes"):
+        return "yes"
+    return s
+
+
+def _money_or_dash(v) -> str:
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return "—"
+    return "—" if n <= 0 else "R " + f"{n:,}".replace(",", " ")
+
+
+def _pct(v, digits=1) -> str:
+    return "—" if v is None else f"{v:.{digits}f}%"
+
+
+def _chip(text: str, cls: str = "") -> str:
+    return f'<span class="chip {cls}">{text}</span>'
+
+
+def _sparkline(points: list[tuple[datetime, float]], width: int = 300,
+               height: int = 58, color: str = "#e8c47a") -> str:
+    """Inline SVG price line — no libraries, prints fine, scales to the card.
+
+    points: chronological [(datetime, value)]. Fewer than two distinct
+    observations is not a trend, so nothing is drawn.
+    """
+    pts = [(d, float(v)) for d, v in points if d and v]
+    if len(pts) < 2:
+        return ""
+    vals = [v for _, v in pts]
+    lo, hi = min(vals), max(vals)
+    span = (hi - lo) or (hi or 1) * 0.02
+    t0, t1 = pts[0][0], pts[-1][0]
+    tspan = (t1 - t0).total_seconds()
+    pad = 5
+
+    def xy(i, d, v):
+        frac = ((d - t0).total_seconds() / tspan) if tspan > 0 \
+            else (i / max(len(pts) - 1, 1))
+        x = pad + frac * (width - 2 * pad)
+        y = height - pad - ((v - lo) / span) * (height - 2 * pad)
+        return round(x, 1), round(y, 1)
+
+    coords = [xy(i, d, v) for i, (d, v) in enumerate(pts)]
+    line = " ".join(f"{x},{y}" for x, y in coords)
+    area = (f"{coords[0][0]},{height - pad} " + line
+            + f" {coords[-1][0]},{height - pad}")
+    dots = "".join(
+        f'<circle cx="{x}" cy="{y}" r="2.4" fill="{color}"/>'
+        for x, y in (coords[0], coords[-1]))
+    return (
+        f'<svg viewBox="0 0 {width} {height}" width="100%" height="{height}" '
+        f'preserveAspectRatio="none" role="img" aria-label="price history" '
+        f'style="max-width:{width}px;display:block">'
+        f'<polygon points="{area}" fill="{color}" opacity=".12"/>'
+        f'<polyline points="{line}" fill="none" stroke="{color}" '
+        f'stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>'
+        f'{dots}</svg>')
 
 
 # ---------------------------------------------------------------- shared CSS
@@ -104,6 +222,77 @@ _CSS = """
  button.primary { background:#e8c47a; color:#111; border:none; font-weight:650; }
  button.danger { border-color:#5a2f2a; color:#d98b7e; }
  select option:disabled { color:#555; }
+ /* ---- report cards, chips, meters (added by the full-detail overhaul) ---- */
+ .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
+        gap:.85rem; margin:.55rem 0 .2rem; align-items:start; }
+ .cards.wide { grid-template-columns:repeat(auto-fit,minmax(400px,1fr)); }
+ .card { background:#131318; border:1px solid #26262b; border-radius:8px;
+        padding:.85rem 1rem; }
+ .card h3 { margin:0 0 .6rem; font-size:.6rem; letter-spacing:.16em; font-weight:500;
+        text-transform:uppercase; color:#8b8b93; }
+ .chips { display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; }
+ .chip { font-size:.64rem; background:#1c1c22; border:1px solid #32323a; color:#a9a9b4;
+        padding:2px 8px; border-radius:10px; white-space:nowrap; display:inline-block; }
+ .chip b { color:#e8e8e8; font-weight:650; }
+ .chip.gold  { border-color:#4a4026; color:#e8c47a; background:#16140e; }
+ .chip.red   { border-color:#5a2f2a; color:#e08b7e; background:#1a1012; }
+ .chip.amber { border-color:#4d3c18; color:#d6a95a; background:#17120a; }
+ .chip.green { border-color:#204d33; color:#6fbf8e; background:#0e1712; }
+ .chip.violet{ border-color:#3d3060; color:#a291d6; background:#131029; }
+ .mv { color:#fff; padding:3px 9px; border-radius:3px; font-size:.68rem; letter-spacing:.04em; }
+ .kv { display:grid; grid-template-columns:auto 1fr; gap:.3rem .9rem; font-size:.78rem;
+        margin:0; }
+ .kv dt { color:#8b8b93; font-size:.62rem; text-transform:uppercase; letter-spacing:.1em;
+        white-space:nowrap; padding-top:.12rem; }
+ .kv dd { margin:0; }
+ .bignum { font-size:2.7rem; font-weight:650; color:#e8c47a; line-height:.95; }
+ .sub { font-size:.72rem; color:#b0b0b8; }
+ .meter { height:5px; background:#1f1f26; border-radius:3px; overflow:hidden; margin-top:4px; }
+ .meter i { display:block; height:100%; background:#e8c47a; }
+ .wrapx { overflow-x:auto; margin-top:.3rem; }
+ .wrapx table { min-width:900px; }
+ /* eleven columns of portal detail have to fit the page, not scroll off it */
+ table.portaltbl { min-width:1080px; }
+ table.portaltbl th, table.portaltbl td { padding:.45rem .35rem; font-size:.76rem; }
+ table.portaltbl th { font-size:.57rem; letter-spacing:.08em; }
+ table.portaltbl .meta { font-size:.63rem; }
+ .nowrap { white-space:nowrap; }
+ details.desc { border:1px solid #26262b; border-radius:8px; background:#131318;
+        padding:.55rem .95rem; margin-top:.75rem; }
+ details.desc summary { cursor:pointer; color:#e8c47a; font-size:.74rem; letter-spacing:.06em; }
+ details.desc .body { white-space:pre-wrap; font-size:.83rem; line-height:1.65;
+        color:#c5c5ce; margin-top:.75rem; }
+ .thumbs { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
+ .thumbs figure { margin:0; }
+ .thumbs img { width:104px; height:76px; object-fit:cover; border-radius:5px;
+        border:1px solid #2c2c33; background:#1a1a1f; display:block; }
+ .thumbs figcaption { font-size:.58rem; color:#7c7c86; margin-top:.15rem;
+        text-align:center; letter-spacing:.06em; }
+ .proof { font-size:.7rem; color:#6f8f7a; margin-top:.3rem; }
+ .proof.stale { color:#d6a95a; }
+ .ev { margin:.35rem 0 0; padding-left:1.05rem; }
+ .ev li { font-size:.69rem; color:#7f9f8a; line-height:1.55; }
+ .flagline { color:#b4645a; font-size:.75rem; line-height:1.5; }
+ .note { color:#d6a95a; font-size:.75rem; line-height:1.5; }
+ .hero { display:flex; gap:1.4rem; flex-wrap:wrap; align-items:flex-start; }
+ .hero img.shot { width:340px; max-width:100%; height:238px; object-fit:cover;
+        border-radius:8px; border:1px solid #2c2c33; background:#16161b; }
+ .delta.up { color:#e08b7e; } .delta.down { color:#6fbf8e; }
+ @media print {
+   .card { background:#fff; border-color:#ccc; break-inside:avoid; }
+   .card h3 { color:#555; }
+   .chip { background:#f5f5f5; border-color:#ccc; color:#333; }
+   .chip b { color:#111; }
+   .bignum { color:#111; }
+   .kv dt { color:#555; }
+   .meter { background:#eee; } .meter i { background:#888; }
+   details.desc { background:#fff; border-color:#ccc; }
+   details.desc[open] summary { color:#111; }
+   details.desc .body { color:#222; }
+   .wrapx table { min-width:0; }
+   .proof { color:#555; }
+   .ev li { color:#555; }
+ }
  @media print {
    :root { color-scheme: light; }
    body { background:#fff; color:#111; font-size:11pt; }
@@ -398,8 +587,608 @@ ownerLoad();
 """
 
 
+# ------------------------------------------------- batched group-level reads
+#
+# Everything below is deliberately query-frugal: four extra round trips for
+# the whole page (members, price history, scores, erf) and nothing per row.
+
+def _member_rows(conn: sqlite3.Connection, group_id: int) -> list[sqlite3.Row]:
+    """Every portal listing in the group, with its lifecycle row attached.
+
+    listing_lifecycle is built by a sibling module and may be absent; ensuring
+    the table (it is a CREATE IF NOT EXISTS) keeps the LEFT JOIN legal on a
+    database that has never run a lifecycle sweep, and the join then simply
+    yields NULLs.
+    """
+    try:
+        lifecycle.ensure_table(conn)
+    except sqlite3.Error:
+        pass
+    try:
+        return conn.execute(
+            """SELECT l.*, g.agency_count, g.source_count, g.match_evidence,
+                      lc.status AS lc_status, lc.delisted_at, lc.relisted_at,
+                      lc.days_on_market AS crawl_dom, lc.total_cut_pct,
+                      lc.likely_sold, lc.price_at_first_seen
+               FROM property_groups g
+               JOIN listings l ON l.listing_key = g.listing_key
+               LEFT JOIN listing_lifecycle lc ON lc.listing_key = l.listing_key
+               WHERE g.group_id = ?
+               ORDER BY l.source, l.listing_key""", (group_id,)).fetchall()
+    except sqlite3.OperationalError:
+        return conn.execute(
+            """SELECT l.*, g.agency_count, g.source_count, g.match_evidence
+               FROM property_groups g
+               JOIN listings l ON l.listing_key = g.listing_key
+               WHERE g.group_id = ?
+               ORDER BY l.source, l.listing_key""", (group_id,)).fetchall()
+
+
+def _history_by_key(conn: sqlite3.Connection,
+                    keys: list[str]) -> dict[str, list[tuple[str, int]]]:
+    """One query for the whole group — never one per listing."""
+    if not keys:
+        return {}
+    out: dict[str, list[tuple[str, int]]] = {}
+    for r in conn.execute(
+            f"""SELECT listing_key, price_zar, observed_at FROM price_history
+                WHERE listing_key IN ({','.join('?' * len(keys))})
+                ORDER BY observed_at, rowid""", keys):
+        if r["price_zar"]:
+            out.setdefault(r["listing_key"], []).append(
+                (r["observed_at"], r["price_zar"]))
+    return out
+
+
+def _score_row(conn: sqlite3.Connection, group_id: int) -> sqlite3.Row | None:
+    """Best-scored member's row — the group's verdict."""
+    return conn.execute(
+        """SELECT s.* FROM scores s
+           JOIN property_groups g ON g.listing_key = s.listing_key
+           WHERE g.group_id = ?
+           ORDER BY (s.prospect_score IS NULL), s.prospect_score DESC
+           LIMIT 1""", (group_id,)).fetchone()
+
+
+def _erf_row(conn: sqlite3.Connection, group_id: int,
+             keys: list[str]) -> sqlite3.Row | None:
+    """Best cadastre resolution for the group (erf_lookup may be missing)."""
+    rank = {"confirmed": 3, "ok": 2, "check": 1}
+    try:
+        rows = conn.execute(
+            f"""SELECT * FROM erf_lookup
+                WHERE group_id = ?
+                   OR listing_key IN ({','.join('?' * len(keys)) or "''"})""",
+            (str(group_id), *keys)).fetchall()
+    except sqlite3.OperationalError:
+        return None
+    if not rows:
+        return None
+    return max(rows, key=lambda r: (
+        1 if _rget(r, "erf_number") else 0,
+        rank.get(_rget(r, "status") or "", 0),
+        1 if _rget(r, "latitude") else 0))
+
+
+def _group_price_series(history: dict[str, list[tuple[str, int]]]
+                        ) -> list[tuple[datetime, float]]:
+    """The group's asking price over time.
+
+    Portals lag each other after a reduction, so a single portal's line is not
+    "the price". Replaying every observation in order and taking the median of
+    the latest-known price per portal gives one curve that moves when the
+    market actually moved.
+    """
+    events = sorted((ts, key, price)
+                    for key, rows in history.items() for ts, price in rows)
+    latest: dict[str, int] = {}
+    series: list[tuple[datetime, float]] = []
+    for ts, key, price in events:
+        latest[key] = price
+        d = cma._parse_date(ts)
+        if d is None:
+            continue
+        series.append((d, statistics.median(sorted(latest.values()))))
+    return series
+
+
+def _brand_proof(members: list[sqlite3.Row]) -> list[tuple[str, float]]:
+    """Per distinct agency BRAND, how long ago its freshest listing was seen.
+
+    Two brands only prove an open mandate while both listings are actually
+    live, so the proof is worth exactly as much as its stalest brand.
+    """
+    freshest: dict[str, datetime] = {}
+    for m in members:
+        brand = canonical_agency(_rget(m, "agency"))
+        seen = cma._parse_date(_rget(m, "last_seen"))
+        if brand and seen and (brand not in freshest or seen > freshest[brand]):
+            freshest[brand] = seen
+    now = _utcnow()
+    return sorted(((b, (now - t).total_seconds() / 3600.0)
+                   for b, t in freshest.items()), key=lambda x: -x[1])
+
+
+def _best_lifecycle(members: list[sqlite3.Row]) -> sqlite3.Row | None:
+    rows = [m for m in members if _rget(m, "lc_status")]
+    if not rows:
+        return None
+    order = {"delisted": 2, "relisted": 3, "active": 1}
+    return max(rows, key=lambda m: order.get(m["lc_status"], 0))
+
+
+def _source_label(source: str | None) -> str:
+    info = config.SOURCES.get(source or "", {})
+    return info.get("label") or (source or "—")
+
+
+def _photo_src(member: sqlite3.Row) -> str | None:
+    """Stored hero URL, else the cache-only photo endpoint.
+
+    `fetch=0` matters: a report page must never kick off live portal fetches.
+    """
+    url = _rget(member, "photo_url")
+    if url and url != "-":
+        return url
+    key = _rget(member, "listing_key")
+    return f"/api/photo/{key}?fetch=0" if key else None
+
+
+# ------------------------------------------------------- report sub-sections
+
+def _identity_chips(members: list[sqlite3.Row], lc: sqlite3.Row | None,
+                    score: sqlite3.Row | None) -> str:
+    chips = []
+    if any(_rget(m, "under_offer") for m in members):
+        chips.append(_chip("UNDER OFFER", "red"))
+    if any(_rget(m, "price_reduced") for m in members):
+        chips.append(_chip("price reduced", "amber"))
+    if any(_rget(m, "is_development") for m in members):
+        chips.append(_chip("development", "violet"))
+    explicit = {(_rget(m, "mandate_explicit") or "").strip()
+                for m in members} - {""}
+    if "sole" in explicit:
+        chips.append(_chip("portal says SOLE mandate", "red"))
+    if "not_sole" in explicit:
+        chips.append(_chip("portal says NOT sole", "green"))
+    status = _rget(lc, "lc_status")
+    if status == "relisted":
+        chips.append(_chip("relisted", "amber"))
+    elif status == "delisted":
+        chips.append(_chip("delisted", ""))
+    verdict = _rget(score, "mandate_verdict")
+    if verdict:
+        colour = _MANDATE_COLORS.get(verdict, "#5d5d66")
+        chips.insert(0, f'<span class="mv" style="background:{colour}">'
+                        f'{_e(verdict.replace("_", " "))}</span>')
+    tier = _rget(score, "tier")
+    if tier:
+        chips.insert(0, f'<span class="tier {_e(tier)}">{_e(tier).upper()}'
+                        f'</span>')
+    return f'<div class="chips" style="margin:.55rem 0">{"".join(chips)}</div>' \
+        if chips else ""
+
+
+def _score_card(score: sqlite3.Row | None) -> str:
+    if score is None:
+        return ('<div class="card"><h3>Prospect score</h3>'
+                '<div class="meta">Not scored yet — run a scoring pass.</div>'
+                '</div>')
+    tier = _rget(score, "tier") or "cold"
+    subs = (("luxury fit", _rget(score, "luxury_fit")),
+            ("open-mandate confidence", _rget(score, "open_mandate_confidence")),
+            ("marketing weakness", _rget(score, "marketing_weakness")))
+    bars = ""
+    for label, v in subs:
+        pct = max(0, min(100, int(v or 0)))
+        bars += (f'<div style="margin-top:.5rem"><div style="display:flex;'
+                 f'justify-content:space-between;font-size:.68rem;color:#9a9aa2">'
+                 f'<span>{_e(label)}</span><b style="color:#e8e8e8">'
+                 f'{"—" if v is None else int(v)}</b></div>'
+                 f'<div class="meter"><i style="width:{pct}%"></i></div></div>')
+    sellable = _rget(score, "sellable")
+    sell_chip = ("" if sellable is None else _chip(
+        "pitchable" if sellable else "not pitchable — sole mandate",
+        "green" if sellable else "red"))
+    return f"""<div class="card"><h3>Prospect score</h3>
+<div style="display:flex;gap:.9rem;align-items:baseline;flex-wrap:wrap">
+  <div class="bignum">{_rget(score, 'prospect_score') if _rget(score, 'prospect_score') is not None else '—'}</div>
+  <div><span class="tier {_e(tier)}">{_e(tier).upper()}</span>
+   <div class="meta">{_e(_rget(score, 'scored_by') or 'unscored')} ·
+    {_e((_rget(score, 'scored_at') or '')[:16])}</div></div>
+</div>
+<div class="chips" style="margin-top:.5rem">{sell_chip}</div>
+{bars}
+</div>"""
+
+
+def _mandate_card(members: list[sqlite3.Row], score: sqlite3.Row | None) -> str:
+    agencies = sorted({(_rget(m, "agency") or "").strip()
+                       for m in members} - {""})
+    brands = sorted({b for b in (canonical_agency(_rget(m, "agency"))
+                                 for m in members) if b})
+    proof = _brand_proof(members)
+    verdict = _rget(score, "mandate_verdict") or "unknown"
+    colour = _MANDATE_COLORS.get(verdict, "#5d5d66")
+    conf = _rget(score, "open_mandate_confidence")
+
+    proof_html = ""
+    if len(brands) > 1 and proof:
+        worst = proof[0][1]
+        cls = "proof stale" if worst > _PROOF_FRESH_HOURS else "proof"
+        seen = " · ".join(f"{_e(b)} {_age_label(h)} ago" for b, h in proof)
+        warn = (f'<div class="note">Stalest brand is {_age_label(worst)} old '
+                f'(> {_PROOF_FRESH_HOURS}h) — re-crawl before pitching the '
+                f'open mandate as proven.</div>'
+                if worst > _PROOF_FRESH_HOURS else "")
+        proof_html = (f'<div class="{cls}">proof last confirmed live: {seen}'
+                      f'</div>{warn}')
+    elif brands:
+        age = _age_label(proof[0][1]) if proof else "—"
+        proof_html = (f'<div class="proof">single brand — last confirmed live '
+                      f'{age} ago</div>')
+
+    # A portal carrying five units of the same complex repeats its mandate
+    # flag five times; the fact, not the repetition, is what matters.
+    seen_flags: dict[tuple[str, str], int] = {}
+    for m in members:
+        ex = (_rget(m, "mandate_explicit") or "").strip()
+        if ex:
+            k = (_source_label(_rget(m, "source")), ex)
+            seen_flags[k] = seen_flags.get(k, 0) + 1
+    explicit_bits = [
+        f'{_e(src)}: <b>{_e(ex.replace("_", " "))}</b>'
+        + (f' <span class="meta">×{n}</span>' if n > 1 else "")
+        for (src, ex), n in sorted(seen_flags.items())]
+    texts = sorted({(_rget(m, "mandate_text") or "").strip()
+                    for m in members} - {"", "unknown"})
+
+    note = _rget(score, "mandate_expiry_note")
+    rows = [
+        ("verdict", f'<span class="mv" style="background:{colour}">'
+                    f'{_e(verdict.replace("_", " "))}</span>'
+                    + (f' <span class="meta">confidence {int(conf)}/100</span>'
+                       if conf is not None else "")),
+        ("distinct brands", f'<b>{len(brands)}</b> — {_e(", ".join(brands)) or "—"}'),
+        ("agency names", _e(", ".join(agencies)) or "—"),
+        ("portals", f'{len({_rget(m, "source") for m in members})} '
+                    f'({_e(", ".join(sorted({_source_label(_rget(m, "source")) for m in members})))})'),
+    ]
+    if explicit_bits:
+        rows.append(("portal mandate flag", "<br>".join(explicit_bits)))
+    if texts:
+        rows.append(("mandate wording", _e(", ".join(texts))))
+    kv = "".join(f"<dt>{_e(k) if '<' not in k else k}</dt><dd>{v}</dd>"
+                 for k, v in rows)
+    return f"""<div class="card"><h3>Mandate &amp; evidence</h3>
+<dl class="kv">{kv}</dl>
+{proof_html}
+{f'<div class="note" style="margin-top:.45rem">{_e(note)}</div>' if note else ''}
+</div>"""
+
+
+def _evidence_card(members: list[sqlite3.Row]) -> str:
+    raw = next((_rget(m, "match_evidence") for m in members
+                if _rget(m, "match_evidence")), None)
+    try:
+        ev = json.loads(raw or "[]")
+    except (ValueError, TypeError):
+        ev = []
+    if not ev:
+        return ""
+    items = "".join(f"<li>{_e(x)}</li>" for x in ev[:10])
+    more = (f'<div class="meta">+{len(ev) - 10} more</div>'
+            if len(ev) > 10 else "")
+    return f"""<div class="card"><h3>Why these listings are one property</h3>
+<ul class="ev">{items}</ul>{more}</div>"""
+
+
+def _internal_score_block(score: sqlite3.Row | None) -> str:
+    if score is None:
+        return ""
+    pitch = _rget(score, "pitch_angle")
+    reasoning = _rget(score, "reasoning")
+    flags = _rget(score, "red_flags")
+    if not (pitch or reasoning or flags):
+        return ""
+    return f"""<div class="internal">
+<span class="tag">Internal — not for the seller · scoring rationale</span>
+{f'<div style="font-size:.92rem;line-height:1.55;margin-bottom:.5rem">{_e(pitch)}</div>' if pitch else ''}
+{f'<div class="meta" style="line-height:1.6">{_e(reasoning)}</div>' if reasoning else ''}
+{f'<div class="flagline" style="margin-top:.5rem">Red flags: {_e(flags)}</div>' if flags else ''}
+</div>"""
+
+
+def _deal_signals(members: list[sqlite3.Row],
+                  history: dict[str, list[tuple[str, int]]],
+                  lc: sqlite3.Row | None) -> str:
+    # --- days on market on both bases, stated separately: the portal's own
+    # listing date is the truth; first_seen is only a floor set by our crawl.
+    listed = [d for d in (cma._parse_date(_rget(m, "listing_date"))
+                          for m in members) if d]
+    seen = [d for d in (cma._parse_date(_rget(m, "first_seen"))
+                        for m in members) if d]
+    # listing_date is a calendar date the portal printed (local); first_seen is
+    # SQLite's UTC stamp — mixing the two clocks would put this chip a day out
+    # from the same figure in the subject block.
+    dom_portal = (datetime.now() - min(listed)).days if listed else None
+    dom_crawl = (_utcnow() - min(seen)).days if seen else None
+
+    chips = []
+    if dom_portal is not None:
+        chips.append(_chip(f'<b>{dom_portal}</b> days on market '
+                           f'<span style="opacity:.7">portal listing date</span>',
+                           "gold" if dom_portal >= 90 else ""))
+    if dom_crawl is not None:
+        chips.append(_chip(f'<b>{dom_crawl}+</b> days observed '
+                           f'<span style="opacity:.7">since first crawl</span>'))
+    if any(_rget(m, "under_offer") for m in members):
+        chips.append(_chip("under offer", "red"))
+    if any(_rget(m, "price_reduced") for m in members):
+        chips.append(_chip("portal flags a price reduction", "amber"))
+    cut = max((_rget(m, "total_cut_pct") or 0.0 for m in members), default=0.0)
+    if cut:
+        chips.append(_chip(f'total cut <b>{cut:.1f}%</b>', "amber"))
+    status = _rget(lc, "lc_status")
+    if status:
+        cls = {"relisted": "amber", "delisted": "", "active": "green"}.get(status, "")
+        chips.append(_chip(f"lifecycle: {_e(status)}", cls))
+    if status == "relisted":
+        gone = cma._parse_date(_rget(lc, "delisted_at"))
+        back = cma._parse_date(_rget(lc, "relisted_at"))
+        gap = f" after {(back - gone).days}d off-market" if gone and back else ""
+        chips.append(_chip(f"relisted{gap} — possible failed mandate", "amber"))
+    if _rget(lc, "likely_sold"):
+        chips.append(_chip("vanished while under offer — likely sold", "red"))
+
+    # --- per-listing chronology, then one curve for the group
+    labels = {m["listing_key"]: _source_label(_rget(m, "source"))
+              for m in members}
+    rows_out = []
+    for key, obs in history.items():
+        first = obs[0][1]
+        prev = None
+        for ts, price in obs:
+            delta = "" if prev is None else price - prev
+            if delta == "":
+                delta_html = '<span class="meta">first sighting</span>'
+            elif delta == 0:
+                delta_html = '<span class="meta">—</span>'
+            else:
+                cls = "down" if delta < 0 else "up"
+                sign = "−" if delta < 0 else "+"
+                delta_html = (f'<span class="delta {cls}">{sign}'
+                              f'{_fmt_r(abs(delta))[2:]}</span>')
+            from_first = ((first - price) / first * 100) if first else None
+            ff_html = ('<span class="meta">—</span>' if not from_first
+                       else f'<span class="delta '
+                            f'{"down" if from_first > 0 else "up"}">'
+                            f'{"−" if from_first > 0 else "+"}'
+                            f'{abs(from_first):.1f}%</span>')
+            rows_out.append((ts, f"""<tr>
+  <td class="nowrap">{_e(ts[:16])}</td>
+  <td>{_e(labels.get(key, key))}<div class="meta">{_e(key)}</div></td>
+  <td class="price">{_fmt_r(price)}</td>
+  <td>{delta_html}</td>
+  <td>{ff_html}</td>
+</tr>"""))
+            prev = price
+    rows_out.sort(key=lambda x: x[0])
+    shown = rows_out[-60:]
+    truncated = ('<div class="meta">showing the most recent 60 of '
+                 f'{len(rows_out)} observations</div>'
+                 if len(rows_out) > len(shown) else "")
+    timeline = (f"""<table><tr><th>Observed</th><th>Portal</th><th>Price</th>
+<th>Change</th><th>vs that listing's first</th></tr>
+{''.join(h for _, h in shown)}</table>{truncated}"""
+                if shown else
+                '<div class="meta">No price observations recorded yet.</div>')
+
+    spark = _sparkline(_group_price_series(history))
+    spark_html = (f'<div class="card" style="max-width:360px">'
+                  f'<h3>Group asking price</h3>{spark}'
+                  f'<div class="meta" style="margin-top:.35rem">median of the '
+                  f'latest price known per portal, replayed over time</div>'
+                  f'</div>' if spark else "")
+
+    return f"""<h2>Deal signals</h2>
+<div class="chips">{''.join(chips) or '<span class="meta">no deal signals recorded</span>'}</div>
+<div style="display:flex;gap:1.1rem;flex-wrap:wrap;align-items:flex-start;margin-top:.8rem">
+  {spark_html}
+  <div style="flex:1;min-width:340px">{timeline}</div>
+</div>"""
+
+
+def _portal_table(members: list[sqlite3.Row]) -> str:
+    rows = ""
+    for m in members:
+        badges = []
+        if _rget(m, "under_offer"):
+            badges.append(_chip("under offer", "red"))
+        if _rget(m, "price_reduced"):
+            badges.append(_chip("reduced", "amber"))
+        ex = (_rget(m, "mandate_explicit") or "").strip()
+        if ex:
+            badges.append(_chip(ex.replace("_", " "),
+                                "red" if ex == "sole" else "green"))
+        mt = (_rget(m, "mandate_text") or "").strip()
+        if mt and mt != "unknown":
+            badges.append(_chip(f"“{_e(mt)}”"))
+        st = _rget(m, "lc_status")
+        if st and st != "active":
+            badges.append(_chip(st, "amber" if st == "relisted" else ""))
+
+        age = _age_hours(_rget(m, "last_seen"))
+        stale = age is not None and age > _PROOF_FRESH_HOURS
+        listed = _rget(m, "listing_date")
+        listed_days = _days_since(listed)
+
+        size = " / ".join(x for x in (
+            f"{_fmt_area(_rget(m, 'floor_size_m2'))} floor"
+            if _rget(m, "floor_size_m2") else None,
+            f"{_fmt_area(_rget(m, 'erf_size_m2'))} erf"
+            if _rget(m, "erf_size_m2") else None) if x) or "—"
+        extras = " · ".join(x for x in (
+            f"{_fmt_num(_rget(m, 'garages'))} gar" if _rget(m, "garages") else None,
+            f"{_fmt_num(_rget(m, 'parking'))} park" if _rget(m, "parking") else None,
+            f"pool {_pool_label(_rget(m, 'pool'))}"
+            if _pool_label(_rget(m, "pool")) != "—" else None) if x) or "—"
+        url = _rget(m, "url")
+        portal = _e(_source_label(_rget(m, "source")))
+        portal_html = (f'<a href="{_e(url)}" target="_blank" rel="noopener">'
+                       f'{portal}</a>' if url else portal)
+        rows += f"""<tr>
+  <td>{portal_html}<div class="meta">{_e(_rget(m, 'listing_key'))}</div></td>
+  <td>{_e(_rget(m, 'agency') or '—')}
+      <div class="meta">{_e(_rget(m, 'agent_name') or 'agent not published')}</div></td>
+  <td class="price">{_fmt_r(_rget(m, 'price_zar'))}</td>
+  <td class="nowrap">{_fmt_num(_rget(m, 'bedrooms'))} bd · {_fmt_num(_rget(m, 'bathrooms'))} ba</td>
+  <td class="nowrap">{size}</td>
+  <td class="nowrap">levies {_money_or_dash(_rget(m, 'levies'))}
+      <div class="meta">rates {_money_or_dash(_rget(m, 'rates'))}</div></td>
+  <td class="nowrap">{extras}</td>
+  <td class="nowrap">{_e(listed) or '—'}
+      {f'<div class="meta">{listed_days}d ago</div>' if listed_days is not None else ''}</td>
+  <td class="nowrap">{_fmt_num(_rget(m, 'photo_count'))}</td>
+  <td class="nowrap"{' style="color:#d6a95a"' if stale else ''}>{_age_label(age)}
+      <div class="meta">{_e((_rget(m, 'last_seen') or '')[:10])}</div></td>
+  <td><div class="chips">{''.join(badges) or '<span class="meta">—</span>'}</div></td>
+</tr>"""
+    return f"""<div class="wrapx"><table class="portaltbl">
+<tr><th>Portal</th><th>Agency / agent</th><th>Price</th><th>Beds/baths</th>
+<th>Size</th><th>Levies / rates</th><th>Garaging · pool</th><th>Listed</th>
+<th>Photos</th><th>Last seen</th><th>Flags</th></tr>
+{rows}</table></div>"""
+
+
+def _thumbs(members: list[sqlite3.Row]) -> str:
+    figs = ""
+    for m in members:
+        src = _photo_src(m)
+        if not src:
+            continue
+        url = _rget(m, "url")
+        img = (f'<img loading="lazy" src="{_e(src)}" alt="" '
+               f'onerror="this.closest(\'figure\').remove()">')
+        if url:
+            img = (f'<a href="{_e(url)}" target="_blank" rel="noopener" '
+                   f'tabindex="-1">{img}</a>')
+        figs += (f'<figure>{img}<figcaption>'
+                 f'{_e(_source_label(_rget(m, "source")))}</figcaption></figure>')
+    return f'<div class="thumbs noprint">{figs}</div>' if figs else ""
+
+
+def _description_block(members: list[sqlite3.Row]) -> str:
+    best = max(members, key=lambda m: len(_rget(m, "description") or ""),
+               default=None)
+    text = _rget(best, "description") or ""
+    if not text.strip():
+        return ""
+    src = _source_label(_rget(best, "source"))
+    words = len(text.split())
+    return f"""<details class="desc">
+<summary>Full listing description — longest of the {len(members)} portal copies
+({_e(src)}, {words} words)</summary>
+<div class="body">{_e(text.strip())}</div></details>"""
+
+
+def _valuation_block(subj: dict, stats: dict, gv_value, gv_roll,
+                     erf: sqlite3.Row | None) -> str:
+    asking = subj.get("price_zar")
+    cards = []
+
+    # --- municipal GV anchor
+    if gv_value:
+        ratio = (asking / gv_value) if asking else None
+        if ratio is None:
+            verdict = '<span class="meta">no asking price to compare</span>'
+        elif ratio > 1.3:
+            verdict = _chip(f"asking is <b>{ratio:.2f}×</b> GV — overpriced "
+                            f"vs the roll", "red")
+        elif ratio < 0.9:
+            verdict = _chip(f"asking is <b>{ratio:.2f}×</b> GV — possible "
+                            f"value", "green")
+        else:
+            verdict = _chip(f"asking is <b>{ratio:.2f}×</b> GV — in line", "")
+        cards.append(f"""<div class="card"><h3>Municipal valuation</h3>
+<div class="bignum" style="font-size:1.7rem">{_fmt_r(gv_value)}</div>
+<div class="meta">{_e(gv_roll or '')} general valuation roll</div>
+<div class="chips" style="margin-top:.55rem">{verdict}</div>
+<div class="meta" style="margin-top:.4rem">A municipal rates valuation, not a
+market valuation — it lags the market and is a sanity check, not a price.</div>
+</div>""")
+
+    # --- price per m² against the suburb median
+    rows = []
+    for label, size_key, med_key in (
+            ("floor", "floor_size_m2", "median_r_per_m2_floor"),
+            ("erf", "erf_size_m2", "median_r_per_m2_erf_houses")):
+        size = subj.get(size_key)
+        med = stats.get(med_key)
+        if not (asking and size):
+            continue
+        ppm2 = asking / size
+        cell = f'<b>R {round(ppm2):,}'.replace(",", " ") + "</b>/m²"
+        if med:
+            diff = (ppm2 - med) / med * 100
+            cls = "up" if diff > 0 else "down"
+            cell += (f'<div class="meta">suburb median R '
+                     f'{med:,}'.replace(",", " ") + f'/m² · '
+                     f'<span class="delta {cls}">{"+" if diff > 0 else "−"}'
+                     f'{abs(diff):.0f}%</span></div>')
+        else:
+            cell += '<div class="meta">no suburb median for this basis</div>'
+        rows.append((f"R/m² ({label})", cell))
+    if rows:
+        kv = "".join(f"<dt>{_e(k)}</dt><dd>{v}</dd>" for k, v in rows)
+        cards.append(f'<div class="card"><h3>Price per m²</h3>'
+                     f'<dl class="kv">{kv}</dl></div>')
+
+    # --- cadastre / erf
+    if erf is not None and _rget(erf, "status"):
+        bits = []
+        num = _rget(erf, "erf_number")
+        if num:
+            portion = _rget(erf, "portion")
+            bits.append(("erf", f'<b>{_e(num)}'
+                                f'{"/" + _e(portion) if portion else ""}</b>'))
+        for label, key in (("official address", "official_address"),
+                           ("official suburb", "official_suburb"),
+                           ("SG code", "sg26_code"),
+                           ("resolution", "method")):
+            v = _rget(erf, key)
+            if v:
+                bits.append((label, _e(v)))
+        area = _rget(erf, "parcel_area_m2")
+        if area:
+            bits.append(("parcel area", _fmt_area(area)))
+        bits.append(("status", _e(_rget(erf, "status"))))
+        note = _rget(erf, "note")
+        lat, lng = _rget(erf, "latitude"), _rget(erf, "longitude")
+        sat = (f'<div style="margin-top:.5rem"><a class="noprint" '
+               f'href="{_sat_url(lat, lng)}" target="_blank" rel="noopener">'
+               f'satellite view of the parcel &rarr;</a></div>'
+               if lat and lng else "")
+        kv = "".join(f"<dt>{_e(k)}</dt><dd>{v}</dd>" for k, v in bits)
+        cards.append(f"""<div class="card"><h3>Land parcel (public cadastre)</h3>
+<dl class="kv">{kv}</dl>
+{f'<div class="note" style="margin-top:.4rem">{_e(note)}</div>' if note else ''}
+{sat}</div>""")
+
+    if not cards:
+        return ""
+    return (f'<h2>Valuation anchors &amp; land</h2>'
+            f'<div class="cards">{"".join(cards)}</div>')
+
+
 def render_report(conn: sqlite3.Connection, group_id: int) -> str | None:
-    """The full CMA report page; None when the group doesn't exist."""
+    """The full CMA report page; None when the group doesn't exist.
+
+    Page order is deliberate: who/what this is, then whether it is worth
+    pitching (score + mandate), then the pressure the seller is under (deal
+    signals), then the money (guidance + comps), then the raw per-portal
+    record, the land, the owner and finally what has left the market nearby.
+    """
     data = cma.analyse(conn, group_id)
     if data is None:
         return None
@@ -408,46 +1197,40 @@ def render_report(conn: sqlite3.Connection, group_id: int) -> str | None:
     stats = data["suburb_stats"] or {}
     asking = subj.get("price_zar")
 
-    # GV value with roll, via valuations (market_value 0/None = no anchor)
+    # Four batched reads for the whole page — nothing per row.
+    members = _member_rows(conn, group_id)
+    keys = [m["listing_key"] for m in members]
+    history = _history_by_key(conn, keys)
+    score = _score_row(conn, group_id)
+    erf = _erf_row(conn, group_id, keys)
+    lc = _best_lifecycle(members)
+
     val = valuations.for_groups(conn).get(str(group_id))
     gv_value = (val or {}).get("market_value")
     gv_roll = (val or {}).get("roll")
 
-    # parcel centroid for the satellite link (same pattern as the dashboard)
-    ll = conn.execute(
-        "SELECT latitude, longitude FROM erf_lookup WHERE group_id = ?"
-        " AND latitude IS NOT NULL AND longitude IS NOT NULL LIMIT 1",
-        (str(group_id),)).fetchone()
-
-    # best-scored member's pitch angle (internal aid)
-    score_row = conn.execute(
-        """SELECT s.pitch_angle, s.reasoning, s.tier, s.prospect_score
-           FROM scores s JOIN property_groups g ON g.listing_key = s.listing_key
-           WHERE g.group_id = ?
-           ORDER BY (s.prospect_score IS NULL), s.prospect_score DESC
-           LIMIT 1""", (group_id,)).fetchone()
-
     slug = subj.get("suburb_slug")
     offmarket = lifecycle.history_comps(conn, slug, limit=8) if slug else []
+    evidence_html = _evidence_card(members)
 
-    # ---------------- subject block
-    erf_label = subj["erf_number"] or ""
+    # ---------------- identity
+    erf_label = subj["erf_number"] or (_rget(erf, "erf_number") or "")
+    street = subj.get("official_address") or next(
+        (_rget(m, "street_address_raw") for m in members
+         if _rget(m, "street_address_raw")), None)
     address_line = " · ".join(x for x in (
-        subj.get("official_address"),
+        street,
         f"Erf {erf_label}" if erf_label else None,
-        subj.get("official_suburb") or subj.get("suburb")) if x)
+        subj.get("official_suburb") or subj.get("suburb"),
+        subj.get("property_type")) if x)
 
-    photo = ""
-    if subj.get("photo_url") and subj["photo_url"] != "-":
-        photo = (f'<img src="{_e(subj["photo_url"])}" alt="" '
-                 f'style="width:280px;max-width:100%;height:200px;object-fit:cover;'
-                 f'border-radius:6px;border:1px solid #2c2c33" '
-                 f'onerror="this.remove()">')
-    elif subj.get("listing_key"):
-        photo = (f'<img src="/api/photo/{_e(subj["listing_key"])}" alt="" '
-                 f'style="width:280px;max-width:100%;height:200px;object-fit:cover;'
-                 f'border-radius:6px;border:1px solid #2c2c33" '
-                 f'onerror="this.remove()">')
+    hero_member = max(members, key=lambda m: (
+        1 if (_rget(m, "photo_url") or "-") != "-" else 0,
+        _rget(m, "photo_count") or 0), default=None)
+    hero_src = subj.get("photo_url") if (subj.get("photo_url") or "-") != "-" \
+        else (_photo_src(hero_member) if hero_member is not None else None)
+    photo = (f'<img class="shot" src="{_e(hero_src)}" alt="" '
+             f'onerror="this.remove()">' if hero_src else "")
 
     size_bits = []
     if subj.get("floor_size_m2"):
@@ -456,43 +1239,68 @@ def render_report(conn: sqlite3.Connection, group_id: int) -> str | None:
         size_bits.append(f"{_fmt_area(subj['erf_size_m2'])} erf")
 
     dom = subj.get("days_on_market")
-    dom_txt = (f"{dom} days on market "
-               f"<span class='meta'>({_e(subj.get('days_on_market_basis'))})"
-               f"</span>" if dom is not None else "days on market unknown")
+    dom_txt = (f"<b>{dom}</b> days on market "
+               f"<span class='meta'>({_e(subj.get('days_on_market_basis'))} "
+               f"basis)</span>" if dom is not None
+               else "<span class='meta'>days on market unknown</span>")
 
-    hist_rows = ""
-    seen_prices = []
-    for h in subj.get("price_history") or []:
-        if h["price_zar"] in seen_prices:
+    # Two listings on one portal are common (different agencies, same house),
+    # so a bare portal name would give two identical chips — qualify them.
+    per_source: dict = {}
+    brands_per_source: dict = {}
+    for m in members:
+        src = _rget(m, "source")
+        per_source[src] = per_source.get(src, 0) + 1
+        brands_per_source.setdefault(src, set()).add(
+            canonical_agency(_rget(m, "agency")) or "")
+    portal_bits = []
+    for m in members:
+        if not _rget(m, "url"):
             continue
-        seen_prices.append(h["price_zar"])
-        hist_rows += (f'<div class="meta">{_e(h["observed_at"])} — '
-                      f'{_fmt_r(h["price_zar"])}</div>')
-    cut = subj.get("price_cut")
-    if cut:
-        hist_rows += (f'<div style="color:#d6a95a;font-size:.75rem;'
-                      f'margin-top:.2rem">moved {_fmt_r(cut["first_price"])} '
-                      f'&rarr; {_fmt_r(cut["latest_price"])} '
-                      f'({cut["cut_pct"]}%)</div>')
+        src = _rget(m, "source")
+        label = _source_label(src)
+        if per_source.get(src, 0) > 1:
+            # The agency only disambiguates when the portal's listings differ
+            # by agency; otherwise (one agency, several units) the portal's own
+            # reference is the only thing that tells them apart.
+            brand = canonical_agency(_rget(m, "agency"))
+            qual = (brand if brand and len(brands_per_source[src]) > 1
+                    else _rget(m, "source_id"))
+            label += f" · {qual}"
+        portal_bits.append(
+            f'<a class="chip noprint" href="{_e(m["url"])}" target="_blank" '
+            f'rel="noopener">{_e(label)} &rarr;</a>')
+    portals = " ".join(portal_bits)
+    lat, lng = _rget(erf, "latitude"), _rget(erf, "longitude")
+    sat = (f'<a class="chip noprint" href="{_sat_url(lat, lng)}" '
+           f'target="_blank" rel="noopener">satellite &rarr;</a>'
+           if lat and lng else "")
 
-    portals = " ".join(
-        f'<a class="noprint" href="{_e(u)}" target="_blank" rel="noopener" '
-        f'style="font-size:.66rem;background:#1c1c22;border:1px solid #32323a;'
-        f'padding:1px 8px;border-radius:9px">{_e(u.split("/")[2].replace("www.", ""))}</a>'
-        for u in subj.get("urls") or [])
-    sat = (f' <a class="noprint" href="{_sat_url(ll["latitude"], ll["longitude"])}"'
-           f' target="_blank" rel="noopener">satellite view</a>' if ll else "")
-
-    gv_html = ""
+    gv_line = ""
     if gv_value:
-        ratio = (f' · asking is <b>{asking / gv_value:.2f}&times;</b> GV'
-                 if asking else "")
-        gv_html = (f'<div style="margin-top:.5rem">Municipal GV '
-                   f'<b>{_fmt_r(gv_value)}</b> '
+        ratio = f" · asking <b>{asking / gv_value:.2f}&times;</b> GV" \
+            if asking else ""
+        gv_line = (f'<div style="margin-top:.45rem;font-size:.8rem">'
+                   f'Municipal GV <b>{_fmt_r(gv_value)}</b> '
                    f'<span class="meta">({_e(gv_roll)} roll)</span>{ratio}</div>')
 
-    # ---------------- price guidance
-    band_html = ""
+    identity = f"""<div class="hero">
+  {photo}
+  <div style="flex:1;min-width:280px">
+    <div class="price" style="font-size:2rem;color:#e8c47a">{_fmt_r(asking)}</div>
+    {_identity_chips(members, lc, score)}
+    <div style="margin-top:.15rem">{_fmt_num(subj.get('beds'))} bed ·
+      {_fmt_num(subj.get('baths'))} bath
+      {(' · ' + ' · '.join(size_bits)) if size_bits else ''}</div>
+    <div style="margin-top:.35rem">{dom_txt}</div>
+    <div class="meta" style="margin-top:.35rem">Marketed by
+      {_e(", ".join(subj.get("agencies") or []) or "—")}</div>
+    {gv_line}
+    <div class="chips" style="margin-top:.6rem">{portals}{sat}</div>
+  </div>
+</div>"""
+
+    # ---------------- price guidance (unchanged maths, same graphic)
     if band.get("mid"):
         band_html = f"""
 <div style="display:flex;gap:2.2rem;flex-wrap:wrap;align-items:baseline">
@@ -532,9 +1340,10 @@ def render_report(conn: sqlite3.Connection, group_id: int) -> str | None:
   <td>{_cut_cell(c.get('price_cut'))}</td>
   <td><b>{c['similarity']}</b><span class="meta">/100</span></td>
 </tr>"""
-    comps_html = (f"""<table><tr><th>Property</th><th>Suburb</th><th>Price</th>
-<th>Size</th><th>R/m²</th><th>Beds</th><th>Status</th><th>Price move</th>
-<th>Similar</th></tr>{comp_rows}</table>""" if comp_rows
+    comps_html = (f"""<div class="wrapx"><table><tr><th>Property</th><th>Suburb</th>
+<th>Price</th><th>Size</th><th>R/m²</th><th>Beds</th><th>Status</th>
+<th>Price move</th><th>Similar</th></tr>{comp_rows}</table></div>"""
+                  if comp_rows
                   else '<div class="meta">No comparable listings found.</div>')
 
     # ---------------- suburb stats strip
@@ -578,26 +1387,8 @@ def render_report(conn: sqlite3.Connection, group_id: int) -> str | None:
 <div class="meta" style="margin-bottom:.4rem">Delisted stock from our own crawl
 history. "Likely sold" = vanished while under offer; the price shown is the
 asking price at disappearance (a proxy, not a deeds record).</div>
-<table><tr><th>Property</th><th>Status</th><th>Last price</th>
-<th>Delisted</th><th>DOM</th><th>Total cut</th></tr>{off_rows}</table>"""
-
-    # ---------------- internal pitch block
-    pitch_html = ""
-    if score_row and (score_row["pitch_angle"] or score_row["reasoning"]):
-        tier_badge = (f'<span class="tier {_e(score_row["tier"])}">'
-                      f'{_e(score_row["tier"]).upper()}</span> '
-                      f'<b>{score_row["prospect_score"]}</b>'
-                      if score_row["tier"] else "")
-        pitch_html = f"""<div class="internal">
-<span class="tag">Internal — not for the seller · pitch angle</span>
-<div style="margin-bottom:.4rem">{tier_badge}</div>
-{f'<div style="font-size:.9rem;margin-bottom:.4rem">{_e(score_row["pitch_angle"])}</div>' if score_row["pitch_angle"] else ''}
-{f'<div class="meta">{_e(score_row["reasoning"])}</div>' if score_row["reasoning"] else ''}
-</div>"""
-
-    agencies = ", ".join(subj.get("agencies") or []) or "—"
-    beds = _fmt_num(subj.get("beds"))
-    baths = _fmt_num(subj.get("baths"))
+<div class="wrapx"><table><tr><th>Property</th><th>Status</th><th>Last price</th>
+<th>Delisted</th><th>DOM</th><th>Total cut</th></tr>{off_rows}</table></div>"""
 
     body = f"""{_HEADER}
 <nav class="crumbs"><a href="/">&larr; dashboard</a> ·
@@ -611,19 +1402,17 @@ asking price at disappearance (a proxy, not a deeds record).</div>
 <div class="disclaimer">{_e(DISCLAIMER)}</div>
 
 <h2>Subject property</h2>
-<div style="display:flex;gap:1.4rem;flex-wrap:wrap">
-  {photo}
-  <div style="flex:1;min-width:260px">
-    <div class="price" style="font-size:1.6rem">{_fmt_r(asking)}</div>
-    <div style="margin-top:.35rem">{beds} bed · {baths} bath
-      {(' · ' + ' · '.join(size_bits)) if size_bits else ''}</div>
-    <div style="margin-top:.35rem">{dom_txt}</div>
-    <div style="margin-top:.35rem" class="meta">Marketed by: {_e(agencies)}</div>
-    <div class="portals" style="margin-top:.45rem;display:flex;gap:.3rem;flex-wrap:wrap">{portals}{sat}</div>
-    {gv_html}
-    <div style="margin-top:.6rem">{hist_rows}</div>
-  </div>
+{identity}
+
+<h2>Prospect verdict</h2>
+<div class="cards">
+{_score_card(score)}
+{_mandate_card(members, score)}
 </div>
+{f'<div class="cards wide">{evidence_html}</div>' if evidence_html else ''}
+{_internal_score_block(score)}
+
+{_deal_signals(members, history, lc)}
 
 <h2>Price guidance</h2>
 {band_html}
@@ -634,10 +1423,19 @@ asking price at disappearance (a proxy, not a deeds record).</div>
 
 {f'<h2>Suburb snapshot — {_e(subj.get("suburb") or slug)}</h2><div class="stats">{stat_bits}</div>' if stat_bits else ''}
 
-{off_html}
+<h2>Every portal listing for this property ({len(members)})</h2>
+<div class="meta" style="margin-bottom:.35rem">One row per portal listing the
+crawl holds — the raw record behind the merged view above. Fields differ
+between portals; blanks mean that portal never published the field.</div>
+{_portal_table(members)}
+{_thumbs(members)}
+{_description_block(members)}
 
-{pitch_html}
+{_valuation_block(subj, stats, gv_value, gv_roll, erf)}
+
 {_owner_block(conn, group_id)}
+
+{off_html}
 </main>"""
 
     own_fields = [f for f in owners.FIELDS if f != "raw"]
