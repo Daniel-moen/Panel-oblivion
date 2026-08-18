@@ -18,6 +18,40 @@ from sources.base import (Source, additional_property, area_m2, coord, jsonld_bl
                           jsonld_by_type, money, num, make_soup)
 
 
+# Beyond the schema.org graph, every page embeds its CRM record as an
+# escaped-JSON blob carrying fields the graph lacks — most importantly the
+# mandate type itself: "Open" (787 of 1 600 cached listings), "Sole" (641),
+# "Joint" (121), "Dual" (38) or "Opposition" (13). That is published mandate
+# ground truth on the same footing as Pam Golding's isExclusiveMandate, on a
+# portal that had none. `sale_state` ("Offer Made"/"Price Reduced"/"Sold")
+# and an `expiry_date` epoch ride along. Search pages embed one blob per
+# result card, so the fields are only trusted when the page carries exactly
+# one mandate key — which is what distinguishes a detail page.
+def _crm_blob(html: str) -> dict:
+    mandates = re.findall(r'\\"mandate\\":\\"(\w+)\\"', html)
+    if len(mandates) != 1:
+        return {}
+    out: dict = {"mandate": mandates[0]}
+    state = re.search(r'\\"sale_state\\":\\"([^"\\]*)\\"', html)
+    if state:
+        out["sale_state"] = state.group(1)
+    expiry = re.search(r'\\"expiry_date\\":(\d+)', html)
+    if expiry and int(expiry.group(1)):
+        from datetime import datetime, timezone
+        out["expiryDate"] = datetime.fromtimestamp(
+            int(expiry.group(1)), tz=timezone.utc).strftime("%Y-%m-%d")
+    return out
+
+
+# The engine's SA-mandate glossary (scorer.SYSTEM_PROMPT): sole/exclusive is
+# closed to Oblivion; joint/dual means the seller has already accepted more
+# than one agency — a prospect signal, not an exclusivity signal. "Opposition"
+# (another agency holds the mandate) is left unmapped: too ambiguous to feed
+# a hard rule.
+_MANDATE_EXPLICIT = {"Sole": "sole", "Open": "not_sole",
+                     "Joint": "not_sole", "Dual": "not_sole"}
+
+
 class ReMax(Source):
     name = "remax"
     label = "RE/MAX"
@@ -57,7 +91,15 @@ class ReMax(Source):
         m = re.search(r"-(\d{5,})(?:[/?#]|$)", url)
         if not m:
             return None
+
+        crm = _crm_blob(html)
+        if crm.get("sale_state") == "Sold":
+            return None      # sold stock lingers in the for-sale search
+
         rec = self.blank(url, slug, m.group(1))
+        rec["mandate_explicit"] = _MANDATE_EXPLICIT.get(crm.get("mandate"))
+        rec["under_offer"] = int(crm.get("sale_state") == "Offer Made")
+        rec["price_reduced"] = int(crm.get("sale_state") == "Price Reduced")
 
         listing = jsonld_by_type(blocks, "RealEstateListing")
         offer = jsonld_by_type(blocks, "Offer")
@@ -111,6 +153,10 @@ class ReMax(Source):
                                rec["title"] or "", re.I)
             rec["property_type"] = type_m.group(1).title() if type_m else None
 
-        rec["raw_overview"] = json.dumps(
-            additional_property(prop) if prop else {}, ensure_ascii=False, default=str)
+        raw = additional_property(prop) if prop else {}
+        # expiryDate is the CRM's own end date for the record. On a "Sole"
+        # listing that is the mandate's likely expiry — the pitch window —
+        # so the scorer reads it back out of raw_overview.
+        raw.update(crm)
+        rec["raw_overview"] = json.dumps(raw, ensure_ascii=False, default=str)
         return self.finish(rec, html)

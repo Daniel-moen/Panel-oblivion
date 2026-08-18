@@ -106,7 +106,17 @@ class MyProperty(Source):
         if not listing:
             return None
 
+        # The Next.js stream renders at most one status badge on the hero —
+        # "Under Offer" or "Sold" (measured across the whole page cache:
+        # never both, never one per related-listing card).
+        badge = re.search(
+            r'uppercase tracking-wide\\",\\"children\\":\\"(Under Offer|Sold)\\"',
+            html)
+        if badge and badge.group(1) == "Sold":
+            return None      # sold stock still appears in the for-sale search
+
         rec = self.blank(url, slug, ident)
+        rec["under_offer"] = int(bool(badge))
         rec["title"] = listing.get("name") or ""
         # The description ships as an HTML fragment; the mandate classifier and
         # the AI scorer both want prose, and "<p>Sole mandate</p>" must not

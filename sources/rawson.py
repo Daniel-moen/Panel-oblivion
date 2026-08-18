@@ -29,6 +29,23 @@ _LISTING_LINK = re.compile(
     r"\((https://rawson\.co\.za/(?:commercial-)?property/for-sale/[^)\s]+?/(\d{5,}))\)")
 _SECTION = re.compile(r"^##\s+(.+?)\s*$", re.M)
 
+# The HTML page shows status badges directly above the title that the
+# markdown rendering drops entirely: "Sole Mandate" / "Joint Mandate" /
+# "Under Offer" / "Reduced" / "New Listing". The block immediately precedes
+# the hero <h1>, which is what anchors it to THIS property — search grids
+# elsewhere carry the same badge classes per result card.
+_BADGE_BLOCK = re.compile(
+    r'((?:<div class="badge badge--\w+">[^<]{1,30}</div>\s*)+)'
+    r'<h1 class="hero__title"')
+
+
+def _hero_badges(html: str) -> set[str]:
+    m = _BADGE_BLOCK.search(html or "")
+    if not m:
+        return set()
+    return {b.strip().lower()
+            for b in re.findall(r">([^<]+)</div>", m.group(1))}
+
 
 class Rawson(Source):
     name = "rawson"
@@ -140,13 +157,28 @@ class Rawson(Source):
                           sections.get("agent", ""), re.M)
         rec["agent_name"] = agent.group(1).strip() if agent else None
 
+        # The markdown drops the page's status badges, so the HTML page is
+        # fetched as well (same rate limit, cached like any other page). It
+        # buys explicit mandate ground truth — Rawson badges "Sole Mandate"
+        # and "Joint Mandate" on the listing itself — plus under-offer and
+        # price-reduced status, and gives finish() a gallery to capture the
+        # hero photo from at crawl time instead of lazily.
+        page_html = self.fetcher.get(url)
+        badges = _hero_badges(page_html)
+        if "sole mandate" in badges:
+            rec["mandate_explicit"] = "sole"
+        elif "joint mandate" in badges:
+            # The engine's glossary: a joint mandate means the seller already
+            # accepts multiple agencies — non-exclusive.
+            rec["mandate_explicit"] = "not_sole"
+        rec["under_offer"] = int("under offer" in badges)
+        rec["price_reduced"] = int("reduced" in badges)
+
         rec["raw_overview"] = json.dumps(
-            {**fields, "office": sections.get("office", "").strip()[:120]},
+            {**fields, "office": sections.get("office", "").strip()[:120],
+             **({"badges": sorted(badges)} if badges else {})},
             ensure_ascii=False)
-        # The markdown carries no gallery; photos.py falls back to the HTML
-        # page's og:image, which the Fetcher will already have cached if the
-        # search step passed through it.
-        return self.finish(rec)
+        return self.finish(rec, page_html)
 
     @staticmethod
     def _location_matches(location: str, slug: str) -> bool:

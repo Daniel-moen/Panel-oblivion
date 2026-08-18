@@ -396,6 +396,45 @@ MAX_PAGES_TOWN_SCOPE = 50
 
 DB_PATH = os.environ.get("DB_PATH", os.path.join(DATA_DIR, "prospects.db"))
 
+# Multi-agency open-mandate proof is only as fresh as its STALEST brand: if
+# one of the two proving listings hasn't been seen for days, the seller may
+# have since consolidated onto a sole mandate with the other agency. Proof
+# where every brand was seen live within this window keeps the hard "open"
+# verdict at full confidence; staler proof degrades to probably_open with a
+# re-verify note. verify.py re-fetches exactly these stale members for
+# hot-tier prospects after each crawl.
+PROOF_FRESH_HOURS = 72
+
+# verify.py: after each scored crawl, hot multi-agency prospects whose
+# members haven't been sighted within VERIFY_STALE_HOURS are re-fetched live
+# (cache dropped) before the report goes out, budgeted per run so the extra
+# load stays a rounding error against every portal's rate limit.
+VERIFY_STALE_HOURS = 24
+VERIFY_MAX_FETCHES = 40
+
+# ------------------------------------------------------------- auto-crawl
+#
+# AUTO_CRAWL=1 turns the dashboard process into the constant loop: a nightly
+# full pass over every suburb and enabled portal (Property24 included — its
+# 12-18s pacing makes the night the right time for it), plus a cheap
+# freshness sweep of the fast portals (page 1 only, Property24 excluded)
+# every AUTO_SWEEP_HOURS. Sweeps keep last_seen fresh, which is what the
+# proof-freshness gate, the delisting sweep and the price history all feed
+# on. Scheduled jobs go through the exact same job path as the dashboard's
+# Scrape button — same single-job guard, same progress display, same
+# only_stale scoring — so a human and the scheduler can never run over each
+# other.
+AUTO_CRAWL = os.environ.get("AUTO_CRAWL") == "1"
+AUTO_CRAWL_HOUR = int(os.environ.get("AUTO_CRAWL_HOUR", "1"))   # local hour
+AUTO_SWEEP_HOURS = float(os.environ.get("AUTO_SWEEP_HOURS", "6"))  # 0 = off
+
+# Yield canary: a portal redesign can make a parser "succeed" while storing
+# far fewer listings, and 48h later the lifecycle sweep would read the gap as
+# a mass delisting — poisoning the comps feed with phantom off-market events.
+# After a crawl, a source whose crawled-suburb listings were confirmed at
+# below this fraction is excluded from that run's delisting sweep and logged.
+LIFECYCLE_MIN_COVERAGE = 0.5
+
 # ---------------------------------------------------------------- dedupe
 #
 # Cross-portal matching thresholds. A pair of listings scoring at or above

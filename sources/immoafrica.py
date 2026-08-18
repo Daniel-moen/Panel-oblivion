@@ -149,6 +149,10 @@ class ImmoAfrica(Source):
         if not listing:
             return None
 
+        # Note: ImmoAfrica renders its "Under Offer" ribbon only on search
+        # result cards, never on detail pages (checked across 930 cached
+        # detail pages), and discovery here is sitemap-driven — so under_offer
+        # stays NULL (unknown) for this source rather than a false 0.
         rec = self.blank(url, slug, ident)
         rec["title"] = listing.get("name") or ""
         rec["description"] = listing.get("description") or ""

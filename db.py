@@ -65,11 +65,15 @@ CREATE INDEX IF NOT EXISTS idx_listings_suburb ON listings(suburb_slug);
 CREATE INDEX IF NOT EXISTS idx_listings_source ON listings(source);
 CREATE INDEX IF NOT EXISTS idx_listings_seen   ON listings(last_seen);
 
+-- One row per observed price CHANGE (plus the first sighting), so the table
+-- is a chronology. The old schema keyed on (listing_key, price_zar), which
+-- made it a SET of distinct prices: R20m -> R18m -> R20m -> R18m looked like
+-- a single cut, and re-cuts to a previous price vanished entirely.
 CREATE TABLE IF NOT EXISTS price_history (
     listing_key     TEXT,
     price_zar       INTEGER,
     observed_at     TEXT DEFAULT (datetime('now')),
-    PRIMARY KEY (listing_key, price_zar)
+    PRIMARY KEY (listing_key, observed_at)
 );
 
 CREATE TABLE IF NOT EXISTS property_groups (
@@ -220,6 +224,34 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute(f"DROP TABLE IF EXISTS {t}")
 
 
+def _migrate_price_history(conn: sqlite3.Connection) -> None:
+    """Re-key price_history from a set of prices to a chronology.
+
+    The old PRIMARY KEY (listing_key, price_zar) silently dropped any price
+    that returned to a previously-seen value. Existing rows are carried over
+    unchanged (they were genuine observations); only the key changes, so
+    from here on every price CHANGE records a row.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table'"
+        " AND name='price_history'").fetchone()
+    if not row or "PRIMARY KEY (listing_key, observed_at)" in (row[0] or ""):
+        return  # fresh schema, or already migrated
+    conn.execute("ALTER TABLE price_history RENAME TO price_history_setpk")
+    conn.execute("""
+        CREATE TABLE price_history (
+            listing_key TEXT,
+            price_zar   INTEGER,
+            observed_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (listing_key, observed_at)
+        )""")
+    conn.execute("""
+        INSERT OR IGNORE INTO price_history (listing_key, price_zar, observed_at)
+        SELECT listing_key, price_zar, observed_at FROM price_history_setpk
+        ORDER BY observed_at ASC""")
+    conn.execute("DROP TABLE price_history_setpk")
+
+
 @contextmanager
 def connect(db_path: str = config.DB_PATH):
     # check_same_thread=False: pipeline.py crawls the portals on one thread per
@@ -230,6 +262,7 @@ def connect(db_path: str = config.DB_PATH):
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=30000")
     _migrate(conn)
+    _migrate_price_history(conn)
     conn.executescript(SCHEMA)
     # forward-compatible column adds
     listing_cols = _columns(conn, "listings")
@@ -269,11 +302,20 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> None:
         row,
     )
     if row.get("price_zar"):
-        conn.execute(
-            "INSERT OR IGNORE INTO price_history (listing_key, price_zar)"
-            " VALUES (?, ?)",
-            (row["listing_key"], row["price_zar"]),
-        )
+        # Record first sighting and every CHANGE — including a return to an
+        # earlier price, which the old set-keyed table swallowed. OR IGNORE
+        # tolerates two observations of the same listing in one second
+        # (e.g. a re-eval racing a crawl).
+        last = conn.execute(
+            "SELECT price_zar FROM price_history WHERE listing_key = ?"
+            " ORDER BY observed_at DESC, rowid DESC LIMIT 1",
+            (row["listing_key"],)).fetchone()
+        if last is None or last[0] != row["price_zar"]:
+            conn.execute(
+                "INSERT OR IGNORE INTO price_history (listing_key, price_zar)"
+                " VALUES (?, ?)",
+                (row["listing_key"], row["price_zar"]),
+            )
 
 
 def recently_seen(conn: sqlite3.Connection, source: str, hours: int = 20) -> set[str]:
