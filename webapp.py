@@ -910,6 +910,53 @@ def api_owner(group_id):
         return jsonify(row)
 
 
+@app.post("/api/deed/<group_id>")
+def api_deed(group_id):
+    """Fetch registered-owner + deed info from LOOM for one property group.
+
+    Resolves the group's erf/suburb/SG code from erf_lookup, calls LOOM, and
+    persists the result into owner_details (same store owners.set_manual uses),
+    so a fetched owner shows up everywhere the manual capture does.
+    """
+    import loom  # kept local: pulls no browser deps, only requests
+    with db.connect() as conn:
+        owners.ensure_table(conn)
+        erf = conn.execute(
+            "SELECT erf_number, official_suburb, sg26_code FROM erf_lookup "
+            "WHERE group_id = ? AND status IN ('ok','confirmed','check') "
+            "AND erf_number IS NOT NULL LIMIT 1", (str(group_id),)).fetchone()
+        if not erf:
+            return jsonify({"error": "no_erf",
+                            "message": "Resolve this property's erf number first."}), 400
+        try:
+            data = loom.fetch_deed(erf=erf["erf_number"],
+                                   town=erf["official_suburb"],
+                                   sg26_code=erf["sg26_code"])
+        except loom.LoomAuthError as e:
+            return jsonify({"error": "loom_auth", "message": str(e)}), 503
+        except loom.LoomError as e:
+            return jsonify({"error": "loom", "message": str(e)}), 502
+
+        fields = {k: data.get(k) for k in owners.FIELDS
+                  if k != "notes" and data.get(k) is not None}
+        fields["notes"] = (f"LOOM · erf {erf['erf_number']} {erf['official_suburb']}"
+                           + (f" · {data['owner_type']}" if data.get("owner_type") else ""))
+        try:
+            row = owners.set_manual(conn, str(group_id), **fields)
+        except Exception as e:                          # noqa: BLE001
+            return jsonify({"error": e.args[0] if e.args else str(e)}), 400
+        log(f"deed: LOOM lookup for group {group_id} → "
+            f"{data.get('owner_name') or 'no owner'} ({data.get('deed_number') or '—'})")
+        return jsonify({**row, "owner_type": data.get("owner_type"),
+                        "town_name": data.get("town_name")})
+
+
+@app.get("/api/deed/status")
+def api_deed_status():
+    import loom
+    return jsonify(loom.token_status())
+
+
 @app.post("/api/gv/refresh")
 def api_gv_refresh():
     # Runs synchronously on purpose: after the first crawl every lookup is

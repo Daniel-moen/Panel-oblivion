@@ -336,6 +336,25 @@ body.drawer-open #drawer { transform:translateX(0); }
 /* erf shown inline on rows/cards, not hidden behind the drawer */
 .erfmini { margin-top:.25rem; font-size:.68rem; color:#c8b07e; }
 .erfmini b { color:var(--gold); letter-spacing:.03em; }
+.deedmenu { margin-top:.35rem; }
+.deedmenu > summary { display:inline-block; cursor:pointer; list-style:none;
+    font-size:.64rem; color:#c8b07e; border:1px solid #4a3f22; border-radius:5px;
+    padding:.12rem .45rem; user-select:none; }
+.deedmenu > summary::-webkit-details-marker { display:none; }
+.deedmenu > summary:hover { border-color:var(--gold); }
+.deedmenu[open] > summary { color:var(--gold); }
+.deedrow { margin-top:.4rem; }
+.deedbtn { display:inline-block; padding:.2rem .5rem; border:1px solid #7a5c2e;
+           border-radius:5px; background:#1c180f; color:var(--gold);
+           font-size:.66rem; cursor:pointer; }
+.deedbtn:hover { border-color:var(--gold); background:#241d10; }
+.deedbox:not(:empty) { margin-top:.45rem; }
+.deedcard { border:1px solid #4a3f22; background:#16140e; border-radius:6px;
+            padding:.5rem .6rem; }
+.deedcard .dfacts { display:grid; gap:.2rem; margin-bottom:.35rem; }
+.deedcard .dfact { display:flex; justify-content:space-between; gap:.75rem; }
+.deedcard .dfact span { color:var(--ink-3); }
+.deedcard .dfact b { color:var(--ink); text-align:right; word-break:break-word; }
 .erfmini .chk { color:#d6a95a; font-size:.6rem; border:1px solid #7a5c2e;
                 border-radius:3px; padding:0 4px; margin-left:.25rem; }
 .rebtn { color:#9fd0a8; border-color:#2e5c3a; }
@@ -702,10 +721,19 @@ const priceHtml = r => r.price_zar
 function erfInline(r) {
   if (!['ok', 'confirmed', 'check'].includes(r.erf_status)) return '';
   const label = `${r.erf_number}${r.erf_portion ? '/' + r.erf_portion : ''}`;
+  const deed = r.group_id != null
+    ? `<details class="deedmenu" onclick="event.stopPropagation()">
+        <summary>&#127963; deeds</summary>
+        <div class="deedrow">
+          <span class="erfa deedbtn" onclick="getDeed(this, '${esc(String(r.group_id))}')"
+            title="Fetch the registered owner, title-deed number and transfer details from LOOM's deeds data">fetch deed info</span>
+          <div class="deedbox"></div>
+        </div>
+      </details>` : '';
   return `<div class="erfmini"><b>ERF ${esc(label)}</b>${
     r.official_address ? ' · ' + esc(r.official_address) : ''}${
     r.official_suburb ? ', ' + esc(r.official_suburb) : ''}${
-    r.erf_status === 'check' ? '<span class="chk">verify</span>' : ''}</div>`;
+    r.erf_status === 'check' ? '<span class="chk">verify</span>' : ''}${deed}</div>`;
 }
 
 /* Per-property "look again" button: live refetch + rescore + erf re-match. */
@@ -716,6 +744,54 @@ function reBtn(r) {
 }
 async function reEval(key) {
   if (await post('/api/listing/reevaluate', {listing_key: key})) erfPoll();
+}
+
+/* Registered-owner + deed lookup from LOOM, on demand, per property. */
+async function getDeed(el, gid) {
+  const box = el.parentElement.querySelector('.deedbox');
+  const orig = el.innerHTML;
+  el.innerHTML = '&#127963; fetching…';
+  el.style.pointerEvents = 'none';
+  try {
+    const res = await fetch('/api/deed/' + encodeURIComponent(gid), {method: 'POST'});
+    let d = null;
+    try { d = await res.json(); } catch (_) { /* non-JSON error body */ }
+    if (!res.ok) {
+      const msg = d && d.error === 'loom_auth'
+        ? 'LOOM session expired — refresh the token (run loom_login.py on the Mac).'
+        : d && d.error === 'no_erf'
+        ? 'Resolve this property’s erf number first.'
+        : (d && d.message) || `server returned HTTP ${res.status}`;
+      if (box) box.innerHTML = `<div class="note">${esc(msg)}</div>`;
+      el.innerHTML = orig;
+    } else {
+      if (box) box.innerHTML = deedHtml(d);
+      el.innerHTML = '&#127963; refresh deed';
+    }
+  } catch (e) {
+    if (box) box.innerHTML = `<div class="note">request failed (${esc(e.message || e)}) —`
+      + ` the app is likely busy mid-scrape; try again once scraping settles.</div>`;
+    el.innerHTML = orig;
+  } finally {
+    el.style.pointerEvents = '';
+  }
+}
+
+function deedHtml(d) {
+  const rows = [
+    ['Registered owner', d.owner_name],
+    ['Owner type', d.owner_type],
+    ['Title deed', d.deed_number],
+    ['Registered', d.purchase_date],
+    ['Purchase price', d.purchase_price ? 'R ' + fmtInt(d.purchase_price) : null],
+    ['Bond holder', d.bond_holder],
+    ['Phone', d.phone],
+    ['Email', d.email],
+  ].filter(([, v]) => v != null && v !== '');
+  if (!rows.length) return `<div class="note">LOOM returned no owner/deed detail.</div>`;
+  return `<div class="deedcard"><div class="dfacts">${rows.map(([k, v]) =>
+      `<div class="dfact"><span>${k}</span><b>${esc(String(v))}</b></div>`).join('')}</div>
+    <div class="meta">via LOOM deeds registry · POPIA: use for the mandate pitch only</div></div>`;
 }
 
 /* 22 ha reads as 22 ha, not 220000 m². */
@@ -965,7 +1041,10 @@ function erfBlock(r) {
       ${r.parcel_area_m2 ? ` · ${fmtArea(r.parcel_area_m2)}` : ''}
       ${r.erf_lat ? `<a class="erfa" href="${satUrl(r.erf_lat, r.erf_lng)}" target="_blank" rel="noopener">satellite</a>` : ''}
       <span class="erfa" data-copy="${esc(cma)}" onclick="copyTxt(this)">copy for CMA</span>
+      ${r.group_id != null ? `<span class="erfa deedbtn" onclick="getDeed(this, '${esc(String(r.group_id))}')"
+        title="Fetch the registered owner, title-deed number and transfer details from LOOM's deeds data">&#127963; get deed info</span>` : ''}
       ${st === 'check' ? `<div class="note">verify: ${esc(r.erf_note || 'size mismatch')}</div>` : ''}
+      ${r.group_id != null ? `<div class="deedbox" id="deed-${esc(String(r.group_id))}"></div>` : ''}
     </div>`;
   }
   if (st === 'candidates') {

@@ -10,3 +10,12 @@ __pycache__/
 prospects.db-shm
 prospects.db-wal
 prospects.db.bak-*
+
+# LOOM bearer token — sensitive, minted by loom_login.py, never commit
+loom_token.json
+loom_token.json.tmp
+loom_login.log
+
+# runtime logs
+webapp.log
+*.log
