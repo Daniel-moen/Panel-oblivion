@@ -16,7 +16,7 @@ prospects.db
 prospects.db-shm
 prospects.db-wal
 prospects.db.bak*
-prospects.html
+/prospects.html
 
 .claude/
 .dashboard-password.txt
