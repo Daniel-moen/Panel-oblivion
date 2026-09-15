@@ -963,12 +963,17 @@ def api_config():
 @app.post("/api/find")
 def api_find():
     """Plain-English brief -> recommended areas + properties (finder.py).
-    Body: {brief, sole}. Synchronous: two model calls, ~10-30s with AI,
-    instant on the keyword fallback."""
+    Body: {brief, sole, type}. type 'rent' briefs against the to-rent book —
+    monthly rent, furnishing, occupation date — and anything else, including
+    no type at all (every caller that predates rentals), is the for-sale
+    book, unchanged. Synchronous: two model calls, ~10-30s with AI, instant
+    on the keyword fallback."""
     body = request.get_json(silent=True) or {}
-    rows = _prospects_payload(bool(body.get("sole")))
+    listing_type = "rent" if body.get("type") == "rent" else "sale"
+    rows = _prospects_payload(bool(body.get("sole")), listing_type)
     try:
-        return jsonify(finder.recommend(body.get("brief") or "", rows))
+        return jsonify(finder.recommend(body.get("brief") or "", rows,
+                                        listing_type=listing_type))
     except ValueError as e:
         return jsonify({"error": "bad_brief", "message": str(e)}), 400
     except Exception as e:      # noqa: BLE001 — surface it in the UI, not a 500 page

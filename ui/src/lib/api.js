@@ -47,7 +47,10 @@ export const api = {
   erfBusy: () => get('/api/erf/busy'),
   mapPoints: (sole) => get('/api/map' + (sole ? '?sole=1' : '')),
   row: (ident) => get('/api/row/' + encodeURIComponent(ident)),
-  find: (brief, sole) => post('/api/find', { brief, sole: !!sole }),
+  /* type 'rent' briefs the finder against the to-rent book; anything
+     else is the for-sale one. */
+  find: (brief, sole, type) =>
+    post('/api/find', { brief, sole: !!sole, type: type === 'rent' ? 'rent' : 'sale' }),
 
   scrape: (payload) => post('/api/scrape', payload),
   stop: () => post('/api/stop'),

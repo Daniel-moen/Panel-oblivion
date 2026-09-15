@@ -1,25 +1,55 @@
 <script>
   /* "Find me…" — a plain-English brief in, recommended areas and properties
      out. The answer panel sits above the normal filter bar; area chips feed
-     the suburb filter so a recommendation turns into a browse in one click. */
+     the suburb filter so a recommendation turns into a browse in one click.
+
+     It briefs against whichever book is open: for sale, or to rent — where
+     the budget is a monthly rent and the asks are a tenant's. */
   import { onMount } from 'svelte';
   import { app } from '$lib/state.svelte.js';
   import { filters } from '$lib/filters.svelte.js';
-  import { finder, runFinder, clearFinder, restoreFinder, pickedRows } from '$lib/finder.svelte.js';
+  import { finder, runFinder, clearFinder, restoreFinder, syncFinderBook,
+           pickedRows } from '$lib/finder.svelte.js';
   import ProspectCard from './ProspectCard.svelte';
-  import { fmtM } from '$lib/format.js';
+  import { fmtM, fmtR } from '$lib/format.js';
 
-  const EXAMPLES = [
+  const SALE_EXAMPLES = [
     '2 bedroom in a quiet area under R3m',
     'family home with a pool and garden, secure estate, R4–7m',
     'lock-up-and-go apartment with sea views, Atlantic Seaboard',
     'retirement-friendly single-level house near the beach'
   ];
 
-  onMount(restoreFinder);
+  const RENT_EXAMPLES = [
+    'furnished 3-bed in Camps Bay under R60k pm',
+    'pet-friendly 2 bed with parking, under R25k a month',
+    'unfurnished family house with a garden, available immediately',
+    'bachelor flat near the university, R12k pm, fibre'
+  ];
+
+  const rent = $derived(app.dealType === 'rent');
+  const examples = $derived(rent ? RENT_EXAMPLES : SALE_EXAMPLES);
+  const placeholder = $derived(
+    rent
+      ? "Describe the rental you're after — e.g. furnished 3-bed in Camps Bay under R60k pm"
+      : "Describe what you're looking for — e.g. 2 bedroom in a quiet area under R3m");
+
+  onMount(() => restoreFinder(app.dealType));
+  /* Toggling For sale / To rent clears the answer: it was about other stock.
+     shown is a plain let, not state — the effect watches the toggle only. */
+  let shown = app.dealType;
+  $effect(() => {
+    const deal = app.dealType;
+    if (deal === shown) return;
+    shown = deal;
+    syncFinderBook(deal);
+  });
 
   const picks = $derived(pickedRows());
   const res = $derived(finder.result);
+
+  /* A rent is quoted in full rand a month; only a sale compresses to R3.2m. */
+  const money = (v) => (rent ? fmtR(v) + ' pm' : fmtM(v));
 
   const critChips = $derived.by(() => {
     const c = res?.criteria;
@@ -33,9 +63,10 @@
     }
     if (c.bathrooms_min) out.push(`${c.bathrooms_min}+ bath`);
     if (c.price_min_zar || c.price_max_zar) {
-      out.push(c.price_min_zar && c.price_max_zar ? `${fmtM(c.price_min_zar)} – ${fmtM(c.price_max_zar)}`
-             : c.price_max_zar ? `under ${fmtM(c.price_max_zar)}` : `over ${fmtM(c.price_min_zar)}`);
+      out.push(c.price_min_zar && c.price_max_zar ? `${money(c.price_min_zar)} – ${money(c.price_max_zar)}`
+             : c.price_max_zar ? `under ${money(c.price_max_zar)}` : `over ${money(c.price_min_zar)}`);
     }
+    if (c.furnished) out.push(c.furnished === 'no' ? 'unfurnished' : 'furnished');
     for (const t of c.property_types || []) out.push(t);
     for (const s of c.suburbs || []) out.push(s);
     for (const w of c.wishes || []) out.push(w);
@@ -50,7 +81,7 @@
 <section class="finder panel" class:answered={!!res}>
   <form class="ask" onsubmit={submit}>
     <span class="spark" aria-hidden="true">✦</span>
-    <input type="text" class="brief" placeholder="Describe what you're looking for — e.g. 2 bedroom in a quiet area under R3m"
+    <input type="text" class="brief" {placeholder}
            bind:value={finder.brief} disabled={finder.busy}
            aria-label="What are you looking for?" />
     <button type="submit" class="btn primary" disabled={finder.busy || finder.brief.trim().length < 3}>
@@ -64,14 +95,15 @@
   {#if !res && !finder.busy}
     <div class="examples">
       <span>Try:</span>
-      {#each EXAMPLES as ex (ex)}
+      {#each examples as ex (ex)}
         <button type="button" class="ex" onclick={() => runFinder(ex)}>{ex}</button>
       {/each}
     </div>
   {/if}
 
   {#if finder.busy}
-    <p class="working">Reading the brief, shortlisting from {app.prospects.length} properties, then ranking the closest fits…</p>
+    <p class="working">Reading the brief, shortlisting from {app.prospects.length}
+      {rent ? 'rentals' : 'properties'}, then ranking the closest fits…</p>
   {/if}
 
   {#if res && !finder.busy}
@@ -120,7 +152,15 @@
           {/each}
         </div>
       {:else if res.candidates === 0}
-        <p class="none">No property in the database passes those hard limits. Loosen the budget, bedrooms or area — or crawl more suburbs.</p>
+        <p class="none">
+          {#if rent}
+            No rental in the database passes those hard limits. Loosen the rent,
+            bedrooms or area — or crawl more suburbs with rentals included.
+          {:else}
+            No property in the database passes those hard limits. Loosen the budget,
+            bedrooms or area — or crawl more suburbs.
+          {/if}
+        </p>
       {/if}
     </div>
   {/if}

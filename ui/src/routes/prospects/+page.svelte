@@ -69,7 +69,7 @@
   {/each}
 </div>
 
-{#if !rent}<AiFinder />{/if}
+<AiFinder />
 
 <FilterBar shown={rows.length} total={app.prospects.length} />
 

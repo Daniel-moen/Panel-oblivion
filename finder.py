@@ -23,6 +23,11 @@ never errors out to "no AI".
 
 Providers are the scoring ones (config.AI_BACKEND_ORDER: Kimi, OpenAI,
 Claude) — same keys, same order, first usable wins.
+
+Both books are searchable. listing_type='rent' swaps in the rental prompts,
+the rental wish list and a monthly-rent budget; a rental has no score, no
+mandate, no erf and no GV, so none of that is asked of the model or shown
+to it. The for-sale path is untouched by any of it.
 """
 from __future__ import annotations
 
@@ -102,6 +107,73 @@ _WISH_PATTERNS: list[tuple[str, str]] = [
     (r"\blagoon|canal|waterfront|marina|river", "water"),
 ]
 
+# Rent-only wishes. A tenant brief is a different conversation to a buyer
+# brief: furnishing, parking, fibre, lease length and who pays the utilities
+# never come up in a sale. Kept in their own dict so SYNONYMS — and with it
+# everything the for-sale path does — stays exactly as it was.
+RENT_SYNONYMS: dict[str, list[str]] = {
+    "furnished": ["furnished", "fully furnished", "semi furnished",
+                  "semi-furnished", "furniture included"],
+    "unfurnished": ["unfurnished", "no furniture"],
+    "parking": ["parking", "parking bay", "garage", "carport",
+                "covered parking", "secure parking"],
+    "fibre": ["fibre", "fiber", "wifi", "wi-fi", "uncapped", "internet",
+              "fibre ready"],
+    "immediate": ["available immediately", "immediate occupation",
+                  "immediately available", "available now", "vacant"],
+    "short term": ["short term", "short-term", "holiday let", "seasonal",
+                   "6 month", "six month"],
+    "long term": ["long term", "long-term", "12 month", "twelve month",
+                  "annual lease", "long lease"],
+    "utilities": ["utilities included", "inclusive of", "all inclusive",
+                  "water and electricity included", "prepaid", "levies included"],
+    "student": ["student", "students", "campus", "university"],
+    "bachelor": ["bachelor", "bachelor flat", "studio"],
+}
+
+_ALL_SYNONYMS = {**SYNONYMS, **RENT_SYNONYMS}
+
+# _WISH_PATTERNS for rent briefs. The "investment" line is dropped: in a
+# rental the words rental/income/tenant are the subject, not a wish, and
+# matching on them would pull every advert's boilerplate into the search
+# terms. The tenant-side asks take its place.
+_WISH_PATTERNS_RENT: list[tuple[str, str]] = [
+    (pat, key) for pat, key in _WISH_PATTERNS if key != "investment"
+] + [
+    (r"unfurnished|no furniture", "unfurnished"),
+    (r"(?<!un)furnished", "furnished"),
+    (r"\bparking|garage|carport", "parking"),
+    (r"\bfibre|fiber|wi-?fi|uncapped|internet", "fibre"),
+    (r"\bimmediate|move in now|asap|right away", "immediate"),
+    (r"\bshort[- ]term|holiday let|seasonal", "short term"),
+    (r"\blong[- ]term|12 ?month|annual lease", "long term"),
+    (r"\butilities|inclusive of|prepaid|levies included", "utilities"),
+    (r"\bstudent|campus|university", "student"),
+    (r"\bbachelor\b", "bachelor"),
+]
+
+# Rent on one scale, so a per-day holiday let and a long let compare. The
+# multipliers match sources/base.py and the front end's format.js.
+_PER_MONTH = {"month": 1.0, "week": 52 / 12, "day": 365 / 12}
+
+
+def monthly_rent(r: dict) -> int | None:
+    """A row's asking rent as rand per month, whatever period it is quoted in."""
+    p = r.get("price_zar")
+    if not p:
+        return None
+    return int(round(p * _PER_MONTH.get(
+        (r.get("rent_period") or "month").strip().lower(), 1.0)))
+
+
+def _wishes_for(rent: bool) -> list[tuple[str, str]]:
+    return _WISH_PATTERNS_RENT if rent else _WISH_PATTERNS
+
+
+def _syn_for(rent: bool) -> dict[str, list[str]]:
+    return _ALL_SYNONYMS if rent else SYNONYMS
+
+
 _TYPE_WORDS = {
     "apartment": ["apartment", "flat", "unit", "penthouse", "studio"],
     "house": ["house", "home", "freestanding", "freehold", "residence"],
@@ -126,6 +198,7 @@ _TYPE_MATCH = {
 class Models:
     """pydantic only when a model call actually happens (same as scorer)."""
     _crit = None
+    _crit_rent = None
     _rank = None
 
     @classmethod
@@ -147,6 +220,29 @@ class Models:
 
             cls._crit = Criteria
         return cls._crit
+
+    @classmethod
+    def criteria_rent(cls):
+        """Same shape as criteria(), but the prices are monthly rent and
+        furnishing is a hard ask a tenant makes ("furnished 3 bed")."""
+        if cls._crit_rent is None:
+            from pydantic import BaseModel
+
+            class RentCriteria(BaseModel):
+                bedrooms_min: int | None
+                bedrooms_max: int | None
+                bathrooms_min: int | None
+                price_min_zar: int | None     # rand PER MONTH
+                price_max_zar: int | None     # rand PER MONTH
+                property_types: list[str]      # apartment|house|townhouse|plot|farm
+                furnished: str | None          # 'yes' | 'no' | null
+                suburbs: list[str]             # from the known list only
+                search_terms: list[str]        # words to look for in listing text
+                avoid_terms: list[str]         # words that disqualify a listing
+                wishes: list[str]              # the soft asks, in the user's words
+
+            cls._crit_rent = RentCriteria
+        return cls._crit_rent
 
     @classmethod
     def ranking(cls):
@@ -213,6 +309,61 @@ each with a one-sentence reason grounded in the listings you saw (price
 level, stock, character). summary: two sentences — what fits, and what the
 brief has to give up if anything. If nothing fits, say so plainly and return
 empty picks."""
+
+
+_PARSE_SYSTEM_RENT = """You turn a RENTAL search brief from an estate agent
+into structured search criteria. The market is the Western Cape, South
+Africa. This is a to-rent search, not a sale: every amount is rand (ZAR)
+PER MONTH. "R45k", "45 000 a month", "under 50k", "60k pm" mean R45 000,
+R45 000, R50 000 and R60 000 a month. A bare "under 60" means R60 000 a
+month. Nothing in this book rents for millions a month, so never return a
+price in the millions.
+
+Rules:
+- price_min_zar / price_max_zar are MONTHLY rent in rand.
+- Only set a numeric field when the brief states or clearly implies it.
+  "3 bedroom" -> bedrooms_min 3 AND bedrooms_max 3. "at least 2 bed" -> min 2.
+  "2-3 bed" -> min 2, max 3.
+- property_types: any of apartment, house, townhouse, plot, farm. Empty
+  when the brief does not say. "flat" is apartment; "home" alone is not a
+  type constraint.
+- furnished: "yes" when the brief asks for a furnished place, "no" when it
+  asks for unfurnished, otherwise null.
+- suburbs: ONLY names that appear in the known-suburbs list you are given,
+  spelled exactly as listed. An area the brief names that is not in the list
+  is dropped (mention nothing about it). If the brief names a region
+  ("Atlantic Seaboard", "Southern Suburbs") pick the listed suburbs in it.
+- search_terms: 6-20 lowercase words or short phrases that a rental advert
+  would contain if it satisfied the soft wishes (pet friendly, parking bay,
+  fibre, sea view, secure complex, immediate occupation, short term...).
+  Include synonyms and how portals actually phrase it.
+- avoid_terms: words that would disqualify a listing given the brief
+  ("no sharing" -> shared, room only). Usually empty.
+- wishes: the soft asks restated briefly, in the user's own terms."""
+
+_RANK_SYSTEM_RENT = """You are the rentals assistant for a Western Cape
+estate agency. An agent describes what they (or their tenant) want; you get
+a shortlist of TO-RENT listings from the agency's own database that passed
+the hard filters, each with an excerpt of its advert.
+
+Every candidate carries rent_per_month — rand per month, already converted
+from whatever period it is advertised in — alongside the advertised price
+and its period. Judge the budget on rent_per_month. Other rental facts you
+may cite: furnished, available_from (occupation date as the portal printed
+it), deposit, beds, baths, type, suburb, agency.
+
+Pick what genuinely fits the brief and say why in one plain sentence each,
+citing something concrete from the listing (the rent, the furnishing, the
+occupation date, a feature, the suburb). Rank best first. fit is 0-100: 85+
+nails the brief, 60-84 fits with a compromise, below 60 is a stretch — leave
+those out unless nothing better exists. Use only listing_keys you were
+given, never invent.
+
+areas: up to 5 suburbs from the shortlist that suit the brief, best first,
+each with a one-sentence reason grounded in the listings you saw (rent
+level, how much stock, what the stock is like). summary: two sentences —
+what fits, and what the brief has to give up if anything. If nothing fits,
+say so plainly and return empty picks."""
 
 
 def _known_suburbs(rows: list[dict]) -> list[str]:
@@ -296,7 +447,8 @@ def _log(msg: str) -> None:
 _MONEY = r"(r\s*)?(\d+(?:[.,]\d+)?(?:\s\d{3})*)\s*(m\b|mil\b|million|k\b|bar\b)?"
 
 
-def _rand(rand: str | None, num: str, unit: str | None) -> int | None:
+def _rand(rand: str | None, num: str, unit: str | None,
+          rent: bool = False) -> int | None:
     unit = (unit or "").strip().lower()
     digits = num.replace(" ", "")
     if not rand and not unit and "." not in digits and "," not in digits \
@@ -307,11 +459,21 @@ def _rand(rand: str | None, num: str, unit: str | None) -> int | None:
         return int(v * 1_000_000)
     if unit == "k":
         return int(v * 1_000)
+    if rent:
+        # A rent brief talks in thousands a month: "R45 000" is itself,
+        # "under R60" is R60 000 — never R60m, which nothing rents for.
+        return int(v * 1_000) if v < 1000 else int(v)
     # bare: 2.5 -> R2.5m, 2500000 -> as is
     return int(v * 1_000_000) if v < 1000 else int(v)
 
 
-def parse_brief_heuristic(brief: str, known: list[str]) -> dict:
+# "R45k pm", "R60 000 per month", "45k p/m" — a rent brief often names the
+# budget without an "under", the period doing the work instead.
+_PER_MONTH_RE = r"\s*(?:p\.?\s?m\.?\b|per month|a month|/\s*month|monthly|pcm\b)"
+
+
+def parse_brief_heuristic(brief: str, known: list[str],
+                          rent: bool = False) -> dict:
     """Regex parse for machines without model credentials."""
     b = " " + brief.lower().replace("’", "'") + " "
     crit: dict[str, Any] = {
@@ -319,6 +481,8 @@ def parse_brief_heuristic(brief: str, known: list[str]) -> dict:
         "price_min_zar": None, "price_max_zar": None,
         "property_types": [], "suburbs": [], "search_terms": [],
         "avoid_terms": [], "wishes": []}
+    if rent:
+        crit["furnished"] = None
 
     m = re.search(r"(\d+)\s*(?:-|to|–)\s*(\d+)\s*(?:bed|br\b|bedroom)", b)
     if m:
@@ -336,21 +500,27 @@ def parse_brief_heuristic(brief: str, known: list[str]) -> dict:
 
     m = re.search(r"(?:under|below|max(?:imum)?|up to|less than|<)\s*" + _MONEY, b)
     if m:
-        crit["price_max_zar"] = _rand(m[1], m[2], m[3])
+        crit["price_max_zar"] = _rand(m[1], m[2], m[3], rent)
     m = re.search(r"(?:over|above|from|min(?:imum)?|at least|more than|>)\s*" + _MONEY, b)
     if m:
-        crit["price_min_zar"] = _rand(m[1], m[2], m[3])
+        crit["price_min_zar"] = _rand(m[1], m[2], m[3], rent)
     if not (crit["price_min_zar"] or crit["price_max_zar"]):
         # In "3-4 bed, R2.5 - 4m" the first range found is the bedrooms, which
         # is not money — keep scanning until both sides read as rands.
         for m in re.finditer(_MONEY + r"\s*(?:-|to|–|and)\s*" + _MONEY, b):
-            lo, hi = _rand(m[1], m[2], m[3] or m[6]), _rand(m[4], m[5], m[6])
+            lo = _rand(m[1], m[2], m[3] or m[6], rent)
+            hi = _rand(m[4], m[5], m[6], rent)
             if lo and hi:
                 crit["price_min_zar"], crit["price_max_zar"] = lo, hi
                 break
     m = re.search(r"budget(?: of| is|:)?\s*" + _MONEY, b)
     if m and not crit["price_max_zar"]:
-        crit["price_max_zar"] = _rand(m[1], m[2], m[3])
+        crit["price_max_zar"] = _rand(m[1], m[2], m[3], rent)
+    if rent and not (crit["price_min_zar"] or crit["price_max_zar"]):
+        # "3 bed in Camps Bay, R45k pm" — the period names the budget.
+        m = re.search(_MONEY + _PER_MONTH_RE, b)
+        if m:
+            crit["price_max_zar"] = _rand(m[1], m[2], m[3], rent)
 
     for t, words in _TYPE_WORDS.items():
         if any(re.search(r"\b" + re.escape(w) + r"s?\b", b) for w in words):
@@ -363,31 +533,46 @@ def parse_brief_heuristic(brief: str, known: list[str]) -> dict:
         if re.search(r"\b" + re.escape(s.lower()) + r"\b", b):
             crit["suburbs"].append(s)
 
+    if rent:
+        if re.search(r"unfurnished|no furniture|not furnished", b):
+            crit["furnished"] = "no"
+        elif re.search(r"(?<!un)furnished", b):
+            crit["furnished"] = "yes"
+
+    syn = _syn_for(rent)
     terms: list[str] = []
-    for pat, key in _WISH_PATTERNS:
+    for pat, key in _wishes_for(rent):
         if re.search(pat, b):
             crit["wishes"].append(key)
-            terms += SYNONYMS[key]
+            terms += syn[key]
     crit["search_terms"] = list(dict.fromkeys(terms))
     return crit
 
 
-def parse_brief(brief: str, known: list[str]) -> tuple[dict, str]:
+def parse_brief(brief: str, known: list[str],
+                rent: bool = False) -> tuple[dict, str]:
     """-> (criteria dict, 'provider:model' or 'heuristic')."""
     user = ("Brief:\n" + brief.strip() + "\n\nKnown suburbs:\n"
             + ", ".join(known))
-    parsed, who = _ask(_PARSE_SYSTEM, user, Models.criteria(), max_tokens=1024)
+    system = _PARSE_SYSTEM_RENT if rent else _PARSE_SYSTEM
+    model = Models.criteria_rent() if rent else Models.criteria()
+    parsed, who = _ask(system, user, model, max_tokens=1024)
     if parsed is None:
-        return parse_brief_heuristic(brief, known), "heuristic"
+        return parse_brief_heuristic(brief, known, rent), "heuristic"
     crit = parsed.model_dump()
     crit["suburbs"] = [s for s in crit["suburbs"] if s in known]
+    if rent:
+        f = (crit.get("furnished") or "").strip().lower()
+        crit["furnished"] = ("yes" if f.startswith("y") else
+                             "no" if f.startswith("n") else None)
     # Fold in the static synonyms for any wish the model named, so the
     # shortlist never misses the obvious phrasing.
+    syn = _syn_for(rent)
     extra: list[str] = []
     for w in crit.get("wishes") or []:
-        for pat, key in _WISH_PATTERNS:
+        for pat, key in _wishes_for(rent):
             if re.search(pat, " " + w.lower() + " "):
-                extra += SYNONYMS[key]
+                extra += syn[key]
     crit["search_terms"] = list(dict.fromkeys(
         [t.lower().strip() for t in crit["search_terms"] if t.strip()] + extra))
     crit["avoid_terms"] = [t.lower().strip() for t in crit["avoid_terms"] if t.strip()]
@@ -397,10 +582,11 @@ def parse_brief(brief: str, known: list[str]) -> tuple[dict, str]:
 # -------------------------------------------------------------- shortlist
 
 _WISH_OF = {w: k for k, ws in SYNONYMS.items() for w in ws}
+_WISH_OF_RENT = {w: k for k, ws in _ALL_SYNONYMS.items() for w in ws}
 
 
-def _wish_of(term: str) -> str:
-    return _WISH_OF.get(term, term)
+def _wish_of(term: str, rent: bool = False) -> str:
+    return (_WISH_OF_RENT if rent else _WISH_OF).get(term, term)
 
 
 def _type_ok(row_type: str | None, wanted: list[str]) -> bool:
@@ -412,7 +598,25 @@ def _type_ok(row_type: str | None, wanted: list[str]) -> bool:
     return any(any(w in rt for w in _TYPE_MATCH.get(t, (t,))) for t in wanted)
 
 
-def _hard_ok(r: dict, c: dict, *, suburbs: bool = True, beds_slack: int = 0) -> bool:
+def _furnished_ok(r: dict, want: str | None) -> bool:
+    """Furnishing is the one rental fact a tenant asks for as a hard filter.
+    The column is the portal's own word ('Yes', 'No', 'Semi-furnished', or
+    nothing at all) — anything that is not a plain yes/no is unknown, and
+    unknown never disqualifies a listing."""
+    if not want:
+        return True
+    have = (r.get("furnished") or "").strip().lower()
+    if have.startswith("y"):
+        is_f = True
+    elif have.startswith("n"):
+        is_f = False
+    else:
+        return True
+    return is_f if want.startswith("y") else not is_f
+
+
+def _hard_ok(r: dict, c: dict, *, suburbs: bool = True, beds_slack: int = 0,
+             rent: bool = False) -> bool:
     beds = r.get("bedrooms")
     if c.get("bedrooms_min") is not None and beds is not None \
             and beds < c["bedrooms_min"] - beds_slack:
@@ -423,7 +627,11 @@ def _hard_ok(r: dict, c: dict, *, suburbs: bool = True, beds_slack: int = 0) -> 
     if c.get("bathrooms_min") is not None and r.get("bathrooms") is not None \
             and r["bathrooms"] < c["bathrooms_min"]:
         return False
-    p = r.get("price_zar") or 0
+    if rent and not _furnished_ok(r, c.get("furnished")):
+        return False
+    # A budget in a rent brief is rand per month; the row may be advertised
+    # per week or per day (holiday lets), so both sides meet in monthly rand.
+    p = (monthly_rent(r) if rent else r.get("price_zar")) or 0
     if p:
         if c.get("price_max_zar") and p > c["price_max_zar"]:
             return False
@@ -450,14 +658,16 @@ def _full_text(conn: sqlite3.Connection, keys: list[str]) -> dict[str, str]:
 
 
 def shortlist(rows: list[dict], crit: dict, conn: sqlite3.Connection,
-              limit: int = MAX_CANDIDATES) -> tuple[list[dict], bool]:
+              limit: int = MAX_CANDIDATES,
+              rent: bool = False) -> tuple[list[dict], bool]:
     """Listings that pass the hard criteria, best keyword coverage first.
     Returns (candidates, relaxed) — relaxed=True when the strict pass found
     too little and the suburb / bedroom constraints were loosened."""
-    passes = [r for r in rows if _hard_ok(r, crit)]
+    passes = [r for r in rows if _hard_ok(r, crit, rent=rent)]
     relaxed = False
     if len(passes) < 8:
-        loose = [r for r in rows if _hard_ok(r, crit, suburbs=False, beds_slack=1)]
+        loose = [r for r in rows if _hard_ok(r, crit, suburbs=False,
+                                             beds_slack=1, rent=rent)]
         if len(loose) > len(passes):
             seen = {r["listing_key"] for r in passes}
             passes += [r for r in loose if r["listing_key"] not in seen]
@@ -477,9 +687,12 @@ def shortlist(rows: list[dict], crit: dict, conn: sqlite3.Connection,
         hits = [w for w in terms if w in t]
         # distinct wishes covered first (quiet AND secure beats five ways of
         # saying quiet), then raw hits, then prospect score — the agent
-        # wants sellable stock, not just a textual fit
-        key = (len({_wish_of(h) for h in hits}), len(hits),
-               r.get("prospect_score") or 0, r.get("price_zar") or 0)
+        # wants sellable stock, not just a textual fit. A rental has no
+        # score, so the better rental is simply the dearer one.
+        wishes_hit = len({_wish_of(h, rent) for h in hits})
+        key = ((wishes_hit, len(hits), monthly_rent(r) or 0, 0) if rent else
+               (wishes_hit, len(hits),
+                r.get("prospect_score") or 0, r.get("price_zar") or 0))
         scored.append((key, r, hits, t))
     scored.sort(key=lambda x: x[0], reverse=True)
 
@@ -503,6 +716,31 @@ def _excerpt(text: str, hits: list[str], n: int = DESC_CHARS) -> str:
 
 # ------------------------------------------------------------------ rank
 
+def _cand_line_rent(r: dict) -> dict:
+    """What the ranking model is told about a rental. No score, no tier, no
+    mandate, no erf, no GV — a rental has none of those; what it has is a
+    rent, a period, a furnishing, an occupation date and a deposit."""
+    return {
+        "listing_key": r["listing_key"],
+        "suburb": r.get("suburb"),
+        "title": (r.get("title") or "")[:90],
+        "type": r.get("property_type"),
+        "beds": r.get("bedrooms"), "baths": r.get("bathrooms"),
+        "rent_per_month": monthly_rent(r),
+        "advertised_price_zar": r.get("price_zar"),
+        "rent_period": r.get("rent_period") or "month",
+        "furnished": r.get("furnished"),
+        "available_from": r.get("available_from"),
+        "deposit": r.get("deposit"),
+        "floor_m2": r.get("floor_size_m2"),
+        "address": r.get("street_address_raw"),
+        "agency": r.get("agency"),
+        "url": r.get("url"),
+        "matched_terms": r.get("_hits") or [],
+        "excerpt": r.get("_excerpt") or "",
+    }
+
+
 def _cand_line(r: dict) -> dict:
     return {
         "listing_key": r["listing_key"],
@@ -521,13 +759,17 @@ def _cand_line(r: dict) -> dict:
     }
 
 
-def rank_heuristic(cands: list[dict], crit: dict) -> dict:
+def _zar_txt(v: float) -> str:
+    return "R" + f"{int(round(v)):,}".replace(",", " ")
+
+
+def rank_heuristic(cands: list[dict], crit: dict, rent: bool = False) -> dict:
     picks = []
     for r in cands[:MAX_PICKS]:
         hits = r.get("_hits") or []
         groups: dict[str, list[str]] = {}
         for h in hits:
-            groups.setdefault(_wish_of(h), []).append(h)
+            groups.setdefault(_wish_of(h, rent), []).append(h)
         bits = [k if k in ws else f"{k} ({', '.join(ws[:2])})" for k, ws in groups.items()]
         why = ("Mentions " + "; ".join(bits[:4])) if bits else "Meets the hard criteria"
         base = 55 + min(len(groups), 4) * 10
@@ -541,14 +783,21 @@ def rank_heuristic(cands: list[dict], crit: dict) -> dict:
     for sub, rs in sorted(by_sub.items(),
                           key=lambda kv: (len(kv[1]), sum(len(x["_hits"]) for x in kv[1])),
                           reverse=True)[:MAX_AREAS]:
-        prices = [x["price_zar"] for x in rs if x.get("price_zar")]
-        med = sorted(prices)[len(prices) // 2] if prices else None
+        amounts = [(monthly_rent(x) if rent else x.get("price_zar")) for x in rs]
+        prices = sorted(a for a in amounts if a)
+        med = prices[len(prices) // 2] if prices else None
+        if med and rent:
+            level = f", typically around {_zar_txt(med)} a month"
+        elif med:
+            level = f", typically around R{med / 1e6:.1f}m"
+        else:
+            level = ""
         areas.append({"suburb": sub,
                       "why": f"{len(rs)} matching listing{'s' if len(rs) != 1 else ''}"
-                             + (f", typically around R{med / 1e6:.1f}m" if med else "")
-                             + "."})
+                             + level + "."})
     wishes = crit.get("wishes") or []
-    summary = (f"{len(cands)} listings pass the hard criteria"
+    summary = (f"{len(cands)} rentals pass the hard criteria" if rent else
+               f"{len(cands)} listings pass the hard criteria"
                + (f"; ranked by how many of your wishes ({', '.join(wishes[:4])}) "
                   "each description mentions" if wishes else "")
                + ". No AI credentials are configured, so this is a keyword match, "
@@ -556,20 +805,27 @@ def rank_heuristic(cands: list[dict], crit: dict) -> dict:
     return {"summary": summary, "areas": areas, "picks": picks}
 
 
-def rank(brief: str, crit: dict, cands: list[dict]) -> tuple[dict, str]:
+def rank(brief: str, crit: dict, cands: list[dict],
+         rent: bool = False) -> tuple[dict, str]:
     if not cands:
-        return {"summary": "Nothing in the database passes the hard criteria. "
-                           "Loosen the budget, bedrooms or area, or crawl more suburbs.",
-                "areas": [], "picks": []}, "none"
+        empty = ("Nothing in the rentals database passes the hard criteria. "
+                 "Loosen the rent, bedrooms or area, or crawl more suburbs "
+                 "with rentals included." if rent else
+                 "Nothing in the database passes the hard criteria. "
+                 "Loosen the budget, bedrooms or area, or crawl more suburbs.")
+        return {"summary": empty, "areas": [], "picks": []}, "none"
+    line = _cand_line_rent if rent else _cand_line
+    what = "rentals" if rent else "listings"
     user = ("Brief:\n" + brief.strip()
             + "\n\nParsed criteria:\n" + json.dumps(
                 {k: v for k, v in crit.items() if v not in (None, [], "")},
                 ensure_ascii=False)
-            + f"\n\nShortlist ({len(cands)} listings, best keyword coverage first):\n"
-            + json.dumps([_cand_line(r) for r in cands], ensure_ascii=False, default=str))
-    parsed, who = _ask(_RANK_SYSTEM, user, Models.ranking(), max_tokens=3000)
+            + f"\n\nShortlist ({len(cands)} {what}, best keyword coverage first):\n"
+            + json.dumps([line(r) for r in cands], ensure_ascii=False, default=str))
+    parsed, who = _ask(_RANK_SYSTEM_RENT if rent else _RANK_SYSTEM, user,
+                       Models.ranking(), max_tokens=3000)
     if parsed is None:
-        return rank_heuristic(cands, crit), "heuristic"
+        return rank_heuristic(cands, crit, rent), "heuristic"
     res = parsed.model_dump()
     valid = {r["listing_key"] for r in cands}
     subs = {r.get("suburb") for r in cands}
@@ -583,23 +839,32 @@ def rank(brief: str, crit: dict, cands: list[dict]) -> tuple[dict, str]:
 _lock = threading.Semaphore(2)        # two briefs in flight at most
 
 
-def recommend(brief: str, rows: list[dict]) -> dict:
+def recommend(brief: str, rows: list[dict],
+              listing_type: str = "sale") -> dict:
     """The whole thing: brief + the dashboard's prospect rows -> answer.
 
-    rows is the /api/prospects payload (one row per property, listing_key
-    of its best listing), so every listing_key returned is one the UI can
-    show and open."""
+    rows is the /api/prospects payload for one book (one row per property,
+    listing_key of its best listing), so every listing_key returned is one
+    the UI can show and open — rentals are keyed by listing_key too, they
+    simply have no group behind them.
+
+    listing_type 'rent' briefs against the to-rent book: monthly rent for a
+    budget, furnishing as a hard ask, tenant wishes instead of buyer ones,
+    and prompts that never mention a mandate or a score. Anything else is
+    the for-sale path, exactly as it was."""
     brief = (brief or "").strip()
     if len(brief) < 3:
         raise ValueError("Describe what you're looking for first.")
+    rent = listing_type == "rent"
     with _lock:
         known = _known_suburbs(rows)
-        crit, parsed_by = parse_brief(brief, known)
+        crit, parsed_by = parse_brief(brief, known, rent)
         with db.connect() as conn:
-            cands, relaxed = shortlist(rows, crit, conn)
-        result, ranked_by = rank(brief, crit, cands)
+            cands, relaxed = shortlist(rows, crit, conn, rent=rent)
+        result, ranked_by = rank(brief, crit, cands, rent)
     return {
         "brief": brief,
+        "listing_type": "rent" if rent else "sale",
         "criteria": crit,
         "candidates": len(cands),
         "relaxed": relaxed,
