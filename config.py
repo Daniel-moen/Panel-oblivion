@@ -463,6 +463,14 @@ AUTO_CRAWL = os.environ.get("AUTO_CRAWL") == "1"
 AUTO_CRAWL_HOUR = int(os.environ.get("AUTO_CRAWL_HOUR", "1"))   # local hour
 AUTO_SWEEP_HOURS = float(os.environ.get("AUTO_SWEEP_HOURS", "6"))  # 0 = off
 
+# The nightly pass crawls both books — for-sale and to-rent — so the rental
+# view fills itself on a hosted deploy instead of only ever from the CLI.
+# Rentals are stored and nothing more (no dedupe, no lifecycle, no scoring),
+# so the only cost is crawl time, which is what the night is for. The cheap
+# every-few-hours freshness sweep stays sale-only.
+# AUTO_CRAWL_RENTALS=0 turns the nightly rental crawl off.
+AUTO_CRAWL_RENTALS = os.environ.get("AUTO_CRAWL_RENTALS", "1") != "0"
+
 # Yield canary: a portal redesign can make a parser "succeed" while storing
 # far fewer listings, and 48h later the lifecycle sweep would read the gap as
 # a mass delisting — poisoning the comps feed with phantom off-market events.

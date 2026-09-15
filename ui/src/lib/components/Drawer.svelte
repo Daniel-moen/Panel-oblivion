@@ -3,21 +3,34 @@
   import Signals from './Signals.svelte';
   import ErfPanel from './ErfPanel.svelte';
   import { app, selected, actions, gidOf, trackProspect } from '$lib/state.svelte.js';
-  import { fmtR, fmtM, fmtInt, fmtArea, addrOf, mvLabel } from '$lib/format.js';
+  import { fmtR, fmtM, fmtInt, fmtArea, addrOf, mvLabel,
+           isRent, priceTxt, furnishedTxt } from '$lib/format.js';
 
   const r = $derived(selected());
 
+  /* A rental is stored and nothing more: no dedupe group, no erf, no GV, no
+     score. The drawer drops every widget built on that work and shows the
+     letting terms in its place. */
+  const rent = $derived(!!r && isRent(r));
+
   const facts = $derived.by(() => {
     if (!r) return [];
+    // A rent divided by floor area is a different number in a different unit,
+    // so the R/m² row belongs to the sale book only.
     const ppm2 = r.price_per_m2
       ? 'R' + fmtInt(r.price_per_m2)
       : r.price_zar && r.floor_size_m2 ? 'R' + fmtInt(r.price_zar / r.floor_size_m2) : '—';
     return [
-      ['Asking price', r.price_zar ? fmtR(r.price_zar) : 'POA'],
-      ['Municipal GV', r.gv_value ? `${fmtM(r.gv_value)}${r.gv_roll ? ' · ' + r.gv_roll : ''}` : '—'],
-      ['Asking vs GV', r.price_vs_gv ? r.price_vs_gv + '× GV' : '—'],
+      [rent ? 'Rent' : 'Asking price', r.price_zar ? priceTxt(r) : 'POA'],
+      ...(rent
+        ? [['Available', r.available_from ? String(r.available_from) : '—'],
+           ['Furnished', furnishedTxt(r.furnished) || '—']]
+        : [['Municipal GV', r.gv_value ? `${fmtM(r.gv_value)}${r.gv_roll ? ' · ' + r.gv_roll : ''}` : '—'],
+           ['Asking vs GV', r.price_vs_gv ? r.price_vs_gv + '× GV' : '—']]),
       ['Days on market', r.days_on_market != null ? r.days_on_market + ' days' : '—'],
-      ['Price / m²', ppm2],
+      ...(rent
+        ? [['Deposit', r.deposit ? fmtR(r.deposit) : '—']]
+        : [['Price / m²', ppm2]]),
       ['Floor / erf', `${fmtArea(r.floor_size_m2) || '—'} / ${fmtArea(r.erf_size_m2) || '—'}`],
       ['Beds / baths', `${r.bedrooms ?? '?'} / ${r.bathrooms ?? '?'}`],
       ['First listed', r.listing_date ? String(r.listing_date).slice(0, 10) : '—']
@@ -53,38 +66,46 @@
 
       <div class="pad head">
         <div class="badges">
-          {#if r.tier}<span class="tier {r.tier}">{r.tier}</span>{/if}
-          <span class="mv {r.mandate_verdict || 'unknown'}">{mvLabel(r.mandate_verdict)}</span>
-          {#if r.prospect_score != null}
-            <span class="scorepill">Score {r.prospect_score}</span>
+          {#if rent}
+            <span class="scorepill">To rent</span>
+          {:else}
+            {#if r.tier}<span class="tier {r.tier}">{r.tier}</span>{/if}
+            <span class="mv {r.mandate_verdict || 'unknown'}">{mvLabel(r.mandate_verdict)}</span>
+            {#if r.prospect_score != null}
+              <span class="scorepill">Score {r.prospect_score}</span>
+            {/if}
           {/if}
         </div>
-        <p class="hprice price">{#if r.price_zar}{fmtR(r.price_zar)}{:else}<span class="poa">Price on application</span>{/if}</p>
+        <p class="hprice price">{#if r.price_zar}{priceTxt(r)}{:else}<span class="poa">{rent ? 'Rent on application' : 'Price on application'}</span>{/if}</p>
         <h2><a href={r.url} target="_blank" rel="noopener">{r.title || r.source_id} ↗</a></h2>
         <p class="hsub">{[r.suburb, r.region].filter(Boolean).join(' · ')}{addrOf(r) ? ` · ${addrOf(r)}` : ''}{r.property_type ? ` · ${r.property_type}` : ''}</p>
 
-        <div class="sigrow"><Signals {r} verdict={false} /></div>
+        {#if !rent}<div class="sigrow"><Signals {r} verdict={false} /></div>{/if}
 
         <div class="actions">
-          {#if stage}
+          {#if rent}
+            <a class="act" href={r.url} target="_blank" rel="noopener">Open on the portal ↗</a>
+          {:else if stage}
             <a class="act cma" href="/leads/properties/{gidOf(r)}"
                title="Open in the management panel">✓ Tracked · {stage.replace(/_/g, ' ')} →</a>
           {:else}
             <button class="act" onclick={() => trackProspect(r)}
               title="Add to the management panel to log contacts, calls and mandates">+ Track property</button>
           {/if}
-          {#if r.reevaluating}
-            <span class="act busy"><span class="spin"></span>&nbsp;Re-evaluating…</span>
-          {:else}
-            <button class="act" onclick={() => actions.reevaluate(r.listing_key)}
-              title="Refetch this listing live from the portal(s), re-score it and re-run the erf match">↻ Re-evaluate</button>
-          {/if}
-          <button class="act" onclick={() => actions.copyRow(String(r.group_id ?? r.listing_key))}
-            title="Copy as a spreadsheet row — paste into Excel or Google Sheets">Copy for sheet</button>
-          {#if r.cma_url}
-            <a class="act cma" href={r.cma_url}>CMA report →</a>
-            <a class="act" href="{r.cma_url}/download" download
-              title="Save the full CMA report as a standalone HTML file">↓ Download report</a>
+          {#if !rent}
+            {#if r.reevaluating}
+              <span class="act busy"><span class="spin"></span>&nbsp;Re-evaluating…</span>
+            {:else}
+              <button class="act" onclick={() => actions.reevaluate(r.listing_key)}
+                title="Refetch this listing live from the portal(s), re-score it and re-run the erf match">↻ Re-evaluate</button>
+            {/if}
+            <button class="act" onclick={() => actions.copyRow(String(r.group_id ?? r.listing_key))}
+              title="Copy as a spreadsheet row — paste into Excel or Google Sheets">Copy for sheet</button>
+            {#if r.cma_url}
+              <a class="act cma" href={r.cma_url}>CMA report →</a>
+              <a class="act" href="{r.cma_url}/download" download
+                title="Save the full CMA report as a standalone HTML file">↓ Download report</a>
+            {/if}
           {/if}
         </div>
         {#if r.reeval_error}<p class="note bad">Re-eval failed — {r.reeval_error}</p>{/if}
@@ -116,12 +137,12 @@
       </section>
 
       <section class="pad">
-        <h3>Listings · {r.brand_count > 1 ? `${r.brand_count} agency brands` : (r.agencies?.[0] || 'agency unknown')}</h3>
+        <h3>{rent ? 'Listing' : 'Listings'} · {r.brand_count > 1 ? `${r.brand_count} agency brands` : (r.agencies?.[0] || 'agency unknown')}</h3>
         {#each r.listings || [] as l (l.url)}
           <a class="listing" href={l.url} target="_blank" rel="noopener">
             <span class="src">{l.source}</span>
             <span class="lag">{l.agency || '—'}</span>
-            <span class="lp price">{fmtM(l.price_zar)}</span>
+            <span class="lp price">{rent ? fmtR(l.price_zar) : fmtM(l.price_zar)}</span>
           </a>
         {/each}
         {#if r.evidence?.length}
@@ -150,10 +171,12 @@
         </section>
       {/if}
 
-      <section class="pad last">
-        <h3>Erf · cadastre</h3>
-        <ErfPanel {r} />
-      </section>
+      {#if !rent}
+        <section class="pad last">
+          <h3>Erf · cadastre</h3>
+          <ErfPanel {r} />
+        </section>
+      {/if}
     </div>
   </aside>
 {/if}

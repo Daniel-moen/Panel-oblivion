@@ -1,6 +1,8 @@
 /* Prospect-list filter state + the filter/sort pipeline. Lives outside the
    page component so the choices survive a hop to the map and back. */
 
+import { app } from './state.svelte.js';
+
 export const filters = $state({
   q: '', suburb: '', tier: '', mandate: '', erf: '',
   min: '', max: '', sort: 'score', view: 'cards'
@@ -16,10 +18,15 @@ export const isFiltering = () =>
 
 const ERF_RESOLVED = ['ok', 'confirmed', 'check'];
 
+/* The price box counts in millions for a sale and in thousands per period
+   for a rental — R3–7m and R30–70k are the two ranges anyone types. */
+export const priceScale = () => (app.dealType === 'rent' ? 1e3 : 1e6);
+
 export function applyFilters(rows) {
   const q = filters.q.trim().toLowerCase();
-  const min = (parseFloat(filters.min) || 0) * 1e6;
-  const max = (parseFloat(filters.max) || Infinity) * 1e6;
+  const scale = priceScale();
+  const min = (parseFloat(filters.min) || 0) * scale;
+  const max = (parseFloat(filters.max) || Infinity) * scale;
   return rows.filter((r) => {
     if (filters.suburb && r.suburb !== filters.suburb) return false;
     if (filters.tier && r.tier !== filters.tier) return false;

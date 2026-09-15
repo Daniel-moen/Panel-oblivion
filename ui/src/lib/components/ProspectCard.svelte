@@ -2,16 +2,21 @@
   import Photo from './Photo.svelte';
   import Signals from './Signals.svelte';
   import { app, gidOf, trackProspect } from '$lib/state.svelte.js';
-  import { fmtR } from '$lib/format.js';
+  import { isRent, priceTxt, rentChips } from '$lib/format.js';
 
   let { r } = $props();
+
+  /* A rental has no score, no tier, no mandate verdict and no GV — none of
+     that is computed for the rent book — so the card drops those widgets and
+     shows what a letting actually states instead. */
+  const rent = $derived(isRent(r));
 
   const meta = $derived.by(() => {
     const bits = [];
     if (r.bedrooms) bits.push(`${r.bedrooms} bed`);
     if (r.property_type) bits.push(r.property_type.toLowerCase());
     if (r.days_on_market != null) bits.push(`${r.days_on_market} days on market`);
-    if (r.price_vs_gv) bits.push(`${r.price_vs_gv}× GV`);
+    if (!rent && r.price_vs_gv) bits.push(`${r.price_vs_gv}× GV`);
     return bits.join(' · ');
   });
 
@@ -25,27 +30,37 @@
          role="button" tabindex="0">
   <div class="ph">
     <Photo {r} alt={r.title || ''} />
-    <div class="over">
-      {#if r.tier}<span class="tier {r.tier}">{r.tier}</span>{:else}<span></span>{/if}
-      <span class="score" class:wait={r.prospect_score == null}
-            title="prospect score">{r.prospect_score ?? '…'}</span>
-    </div>
-    {#if stage}
-      <a class="trk on" href="/leads/properties/{gidOf(r)}" onclick={(e) => e.stopPropagation()}
-         title="Tracked · {stage.replace(/_/g, ' ')}">✓ {stage.replace(/_/g, ' ')}</a>
-    {:else}
-      <button class="trk" onclick={track} title="Add to the management panel">+ Track</button>
+    {#if !rent}
+      <div class="over">
+        {#if r.tier}<span class="tier {r.tier}">{r.tier}</span>{:else}<span></span>{/if}
+        <span class="score" class:wait={r.prospect_score == null}
+              title="prospect score">{r.prospect_score ?? '…'}</span>
+      </div>
+      {#if stage}
+        <a class="trk on" href="/leads/properties/{gidOf(r)}" onclick={(e) => e.stopPropagation()}
+           title="Tracked · {stage.replace(/_/g, ' ')}">✓ {stage.replace(/_/g, ' ')}</a>
+      {:else}
+        <button class="trk" onclick={track} title="Add to the management panel">+ Track</button>
+      {/if}
     {/if}
   </div>
 
   <div class="body">
     <div class="topline">
-      <span class="price cprice">{#if r.price_zar}{fmtR(r.price_zar)}{:else}<span class="poa">POA</span>{/if}</span>
+      <span class="price cprice">{#if r.price_zar}{priceTxt(r)}{:else}<span class="poa">POA</span>{/if}</span>
       <span class="suburb">{r.suburb || ''}</span>
     </div>
     <h3>{r.title || r.source_id}</h3>
     {#if meta}<p class="meta">{meta}</p>{/if}
-    <div class="chips"><Signals {r} max={3} /></div>
+    <div class="chips">
+      {#if rent}
+        {#each rentChips(r) as [text, title] (text)}
+          <span class="sig" {title}>{text}</span>
+        {/each}
+      {:else}
+        <Signals {r} max={3} />
+      {/if}
+    </div>
     {#if r.agencies?.length}
       <p class="ag" title={r.agencies.join(' · ')}>{r.agencies.join(' · ')}</p>
     {/if}

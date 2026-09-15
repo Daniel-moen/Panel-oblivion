@@ -7,8 +7,10 @@
   import ProspectCard from '$lib/components/ProspectCard.svelte';
   import ProspectList from '$lib/components/ProspectList.svelte';
   import Drawer from '$lib/components/Drawer.svelte';
+  import { fmtR, monthlyRent } from '$lib/format.js';
 
   const rows = $derived(sortRows(applyFilters(app.prospects)));
+  const rent = $derived(app.dealType === 'rent');
 
   /* Deep link from lead management: /prospects?open=<listing_key> */
   let opened = false;
@@ -22,7 +24,25 @@
   $effect(() => { rows.length; filters.view; limit = 60; });
   const visible = $derived(rows.slice(0, limit));
 
-  const stat = $derived.by(() => {
+  /* The sale tiles all count scored, deduped, erf-resolved work — none of
+     which a rental has. The rent book gets tiles it can actually fill: how
+     much stock, where it is, and what the middle of the market asks. */
+  const rentStat = $derived.by(() => {
+    const list = app.prospects;
+    const rents = list.map(monthlyRent).filter(Boolean).sort((a, b) => a - b);
+    const median = rents.length ? rents[Math.floor(rents.length / 2)] : null;
+    const suburbs = new Set(list.map((r) => r.suburb).filter(Boolean));
+    const furnished = list.filter((r) => /^y/i.test(r.furnished || '')).length;
+    return [
+      ['Rentals crawled', app.stats?.rentals, 'accent'],
+      ['In this view', list.length, ''],
+      ['Suburbs', suburbs.size, ''],
+      ['Median rent / month', median ? fmtR(Math.round(median)) : null, ''],
+      ['Furnished', furnished, 'dim']
+    ];
+  });
+
+  const saleStat = $derived.by(() => {
     const s = app.stats || {};
     const hot = app.prospects.filter((r) => r.tier === 'hot').length;
     return [
@@ -34,9 +54,11 @@
       ['Listings', s.listings, 'dim']
     ];
   });
+
+  const stat = $derived(rent ? rentStat : saleStat);
 </script>
 
-<svelte:head><title>Oblivion — Prospect Engine</title></svelte:head>
+<svelte:head><title>Oblivion — {rent ? 'Rentals' : 'Prospect Engine'}</title></svelte:head>
 
 <div class="stats">
   {#each stat as [label, v, cls] (label)}
@@ -47,21 +69,27 @@
   {/each}
 </div>
 
-<AiFinder />
+{#if !rent}<AiFinder />{/if}
 
 <FilterBar shown={rows.length} total={app.prospects.length} />
 
 {#if !app.loaded}
-  <div class="empty panel"><span class="spin"></span>&nbsp; Loading prospects…</div>
+  <div class="empty panel"><span class="spin"></span>&nbsp; Loading {rent ? 'rentals' : 'prospects'}…</div>
 {:else if !app.prospects.length}
   <div class="empty panel">
-    <p class="big">No prospects yet</p>
-    <p>Run your first crawl — pick portals and areas, the engine does the rest.</p>
+    {#if rent}
+      <p class="big">No rentals yet</p>
+      <p>The to-rent book is crawled on request — start a crawl with
+        <b>Include rentals</b> ticked, or wait for tonight's full pass.</p>
+    {:else}
+      <p class="big">No prospects yet</p>
+      <p>Run your first crawl — pick portals and areas, the engine does the rest.</p>
+    {/if}
     <button class="btn primary" onclick={() => (app.runOpen = true)}>+ New crawl</button>
   </div>
 {:else if !rows.length}
   <div class="empty panel">
-    <p>Nothing matches these filters.</p>
+    <p>{rent ? 'No rentals match these filters.' : 'Nothing matches these filters.'}</p>
     {#if isFiltering()}<button class="btn" onclick={clearFilters}>Clear filters</button>{/if}
   </div>
 {:else if filters.view === 'cards'}

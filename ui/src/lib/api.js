@@ -33,7 +33,15 @@ export const post = (url, body) =>
 
 export const api = {
   config: () => get('/api/config'),
-  prospects: (sole) => get('/api/prospects' + (sole ? '?sole=1' : '')),
+  /* type 'rent' asks for the to-rent book; anything else is the for-sale
+     one, which is what every caller got before rentals existed. */
+  prospects: (sole, type) => {
+    const p = new URLSearchParams();
+    if (sole) p.set('sole', '1');
+    if (type === 'rent') p.set('type', 'rent');
+    const q = p.toString();
+    return get('/api/prospects' + (q ? '?' + q : ''));
+  },
   stats: () => get('/api/stats'),
   status: () => get('/api/status'),
   erfBusy: () => get('/api/erf/busy'),

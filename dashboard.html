@@ -400,6 +400,7 @@ body.drawer-open #drawer { transform:translateX(0); }
       <select id="pages"><option>1</option><option selected>2</option>
         <option>3</option><option>4</option><option>5</option></select></label>
     <label class="cb"><input type="checkbox" id="useai" checked> AI scoring</label>
+    <label class="cb" title="Also crawl each portal's to-rent book. Rentals are stored for the To rent view — never deduped or scored."><input type="checkbox" id="crawlrent"> Include rentals</label>
     <label class="cb"><input type="checkbox" id="showsole"> Show sole-mandate properties</label>
   </fieldset>
 
@@ -578,7 +579,8 @@ $('go').onclick = async () => {
   if (!suburbs.length) return alert('pick at least one area');
   if (!sources.length) return alert('pick at least one portal');
   if (await post('/api/scrape', {suburbs, sources,
-        pages: +$('pages').value, use_ai: $('useai').checked}))
+        pages: +$('pages').value, use_ai: $('useai').checked,
+        type: $('crawlrent').checked ? 'both' : 'sale'}))
     startPolling();
 };
 $('rescore').onclick = async () => {

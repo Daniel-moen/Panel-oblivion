@@ -74,6 +74,9 @@ job = {
     "done": 0,
     "total": 0,
     "per_source": {},
+    # Which book(s) the running job is crawling — ["sale"], ["rent"] or both.
+    # Surfaced in /api/status so the progress strip can say so.
+    "listing_types": ["sale"],
 }
 job_lock = threading.Lock()
 _stop = threading.Event()
@@ -87,7 +90,7 @@ def log(msg: str) -> None:
     print(line, flush=True)
 
 
-def _run(suburbs, source_names, pages, use_ai):
+def _run(suburbs, source_names, pages, use_ai, listing_types=("sale",)):
     progress = pipeline.Progress()
 
     def poll_progress():
@@ -100,14 +103,16 @@ def _run(suburbs, source_names, pages, use_ai):
 
     threading.Thread(target=poll_progress, daemon=True).start()
     try:
-        job["phase"] = "crawling portals"
+        job["phase"] = ("crawling portals" if listing_types == ("sale",)
+                        else f"crawling portals ({'+'.join(listing_types)})")
         # only_stale: after a crawl, score what actually changed. A reasoning
         # model spends real time per property, so re-judging the whole database
         # to absorb a handful of new listings turned a 1-minute crawl into a
         # 15-minute job. The "Re-score existing data" button still does a full
         # pass when you want one (e.g. after editing the prompt).
         pipeline.run(suburbs, source_names, pages=pages, use_ai=use_ai,
-                     log=log, progress=progress, stop=_stop, only_stale=True)
+                     log=log, progress=progress, stop=_stop, only_stale=True,
+                     listing_types=listing_types)
         job["phase"] = "done"
     except Exception as e:
         job["phase"] = "error"
@@ -119,21 +124,40 @@ def _run(suburbs, source_names, pages, use_ai):
                        per_source=snap["per_source"], running=False)
 
 
-def _start_job(suburbs, srcs, pages, use_ai=True) -> bool:
+def _start_job(suburbs, srcs, pages, use_ai=True,
+               listing_types=("sale",)) -> bool:
     """Claim the single job slot and launch a crawl; False if already busy.
 
     Check-and-set under job_lock so the dashboard button and the auto-crawl
     scheduler can never both claim the slot.
+
+    listing_types defaults to ("sale",) — the crawl this dashboard has always
+    run. Pass ("sale", "rent") or ("rent",) to include the to-rent books.
     """
+    listing_types = _clean_types(listing_types)
     with job_lock:
         if job["running"]:
             return False
         job.update(running=True, phase="starting", log=[], done=0, total=0,
-                   per_source={}, started=datetime.now().isoformat())
+                   per_source={}, started=datetime.now().isoformat(),
+                   listing_types=list(listing_types))
     _stop.clear()
-    threading.Thread(target=_run, args=(suburbs, srcs, pages, use_ai),
+    threading.Thread(target=_run,
+                     args=(suburbs, srcs, pages, use_ai, listing_types),
                      daemon=True).start()
     return True
+
+
+# The crawl's two books. "sale" is everything this engine scores and sells on;
+# "rent" is the to-rent stock, stored but never deduped, priced or scored.
+_TYPE_CHOICES = {"sale": ("sale",), "rent": ("rent",),
+                 "both": ("sale", "rent")}
+
+
+def _clean_types(listing_types) -> tuple[str, ...]:
+    """Normalise to an ordered ("sale", "rent") subset; sale-only by default."""
+    want = {t for t in (listing_types or ()) if t in ("sale", "rent")}
+    return tuple(t for t in ("sale", "rent") if t in want) or ("sale",)
 
 
 @app.post("/api/scrape")
@@ -149,10 +173,16 @@ def api_scrape():
         return jsonify({"error": "no valid portals selected"}), 400
     pages = max(1, min(int(body.get("pages", 2)), 5))
     use_ai = bool(body.get("use_ai", True))
+    # Which book to crawl: "sale" (the default, so every existing caller is
+    # unchanged), "rent", or "both".
+    want = str(body.get("type", "sale")).lower()
+    if want not in _TYPE_CHOICES:
+        return jsonify({"error": "type must be 'sale', 'rent' or 'both'"}), 400
+    listing_types = _TYPE_CHOICES[want]
 
-    if not _start_job(suburbs, srcs, pages, use_ai):
+    if not _start_job(suburbs, srcs, pages, use_ai, listing_types):
         return jsonify({"error": "a job is already running"}), 409
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "listing_types": list(listing_types)})
 
 
 # ------------------------------------------------------------- auto-crawl
@@ -185,11 +215,19 @@ def _auto_crawl_loop():
             if now.hour == config.AUTO_CRAWL_HOUR and \
                     _auto["last_full"] != now.date():
                 # Nightly full pass — Property24 included: overnight is the
-                # right time for its 12-18s pacing.
+                # right time for its 12-18s pacing. Both books too: the rental
+                # crawl is the same fetches against each portal's to-rent
+                # pages, it costs nothing at the scorer (rentals are never
+                # scored), and the night is where that extra crawl time
+                # belongs.
+                types = ("sale", "rent") if config.AUTO_CRAWL_RENTALS \
+                    else ("sale",)
                 if _start_job(suburbs, _auto_sources(include_p24=True),
-                              pages=config.MAX_PAGES_PER_SUBURB):
+                              pages=config.MAX_PAGES_PER_SUBURB,
+                              listing_types=types):
                     _auto["last_full"] = now.date()
-                    log("auto-crawl: nightly full pass started")
+                    log("auto-crawl: nightly full pass started "
+                        f"({'+'.join(types)})")
             elif config.AUTO_SWEEP_HOURS > 0 and (
                     _auto["last_sweep"] is None
                     or (now - _auto["last_sweep"]).total_seconds()
@@ -197,6 +235,15 @@ def _auto_crawl_loop():
                 # Freshness sweep: page 1 of the fast portals only. Keeps
                 # last_seen current, which is what the proof-freshness gate,
                 # the delisting sweep and price history all feed on.
+                #
+                # Sale-only, deliberately: every consumer of a sweep is
+                # for-sale machinery (delisting -> sold proxy, proof
+                # freshness, price history), and nothing in the engine reads
+                # a rental's last_seen. Adding rent here would roughly double
+                # the sweep's request count against every portal — the same
+                # budget that has to stay small enough to run every few hours
+                # — to refresh a timestamp nobody queries. Rentals get their
+                # refresh on the nightly pass instead.
                 if _start_job(suburbs, _auto_sources(include_p24=False),
                               pages=1):
                     _auto["last_sweep"] = now
@@ -255,7 +302,10 @@ def api_rescore():
         finally:
             job["running"] = False
 
-    job.update(running=True, phase="starting", log=[], done=0, total=0)
+    # Re-score is for-sale work only, so the status strip should not still be
+    # advertising the last crawl's book.
+    job.update(running=True, phase="starting", log=[], done=0, total=0,
+               listing_types=["sale"])
     threading.Thread(target=rescore, daemon=True).start()
     return jsonify({"ok": True})
 
@@ -264,7 +314,8 @@ def api_rescore():
 def api_status():
     with job_lock:
         out = {k: job[k] for k in
-               ("running", "phase", "log", "done", "total", "per_source")}
+               ("running", "phase", "log", "done", "total", "per_source",
+                "listing_types")}
     ok, reason = scorer.ai_status()
     out["ai_ok"] = ok
     out["ai_reason"] = reason

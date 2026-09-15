@@ -68,7 +68,13 @@
         <span class="k">Prospect engine</span>
         <span class="v">
           {#if app.loaded}
-            <b class:hot={hot}>{hot}</b> hot · {app.stats?.sellable ?? '—'} sellable
+            <!-- the engine page opens on whichever book was last chosen, so
+                 the door counts that book rather than always the sale one -->
+            {#if app.dealType === 'rent'}
+              <b>{app.stats?.rentals ?? app.prospects.length}</b> rental{(app.stats?.rentals ?? app.prospects.length) === 1 ? '' : 's'}
+            {:else}
+              <b class:hot={hot}>{hot}</b> hot · {app.stats?.sellable ?? '—'} sellable
+            {/if}
             {#if app.status.running} · <i class="live"></i> crawling{/if}
           {:else}&nbsp;{/if}
         </span>

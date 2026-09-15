@@ -11,7 +11,8 @@
   const storedBySource = $derived(app.stats?.by_source || {});
 
   /* selection — persisted so tomorrow's crawl starts where today's left off */
-  let sel = $state({ suburbs: PRIME, sources: null, pages: 2, useAi: true });
+  let sel = $state({ suburbs: PRIME, sources: null, pages: 2, useAi: true,
+                     rentals: false });
   let restored = false;
 
   $effect(() => {
@@ -62,7 +63,10 @@
   async function start() {
     const ok = await actions.scrape({
       suburbs: sel.suburbs, sources: pickedSources,
-      pages: +sel.pages, use_ai: sel.useAi
+      pages: +sel.pages, use_ai: sel.useAi,
+      /* 'both' crawls each portal's to-rent book in the same pass; rentals
+         are only stored, never deduped or scored. */
+      type: sel.rentals ? 'both' : 'sale'
     });
     if (ok) { app.runOpen = false; app.logOpen = true; }
   }
@@ -147,6 +151,11 @@
           <label class="opt sw">
             <span>AI scoring</span>
             <input type="checkbox" bind:checked={sel.useAi} />
+            <i></i>
+          </label>
+          <label class="opt sw" title="Also crawl each portal's to-rent book. Rentals are stored for the To rent view — never scored.">
+            <span>Include rentals</span>
+            <input type="checkbox" bind:checked={sel.rentals} />
             <i></i>
           </label>
         </div>

@@ -4,7 +4,15 @@
 
 import { api } from './api.js';
 
+/* Which book the prospect list shows: 'sale' — everything this engine scores
+   and sells on — or 'rent'. Read synchronously at module load so the very
+   first fetch asks for the right one, and persisted like the crawl selection.
+   localStorage is absent during prerender and can throw in private mode. */
+let storedDeal = null;
+try { storedDeal = localStorage.getItem('obv2.deal'); } catch { /* SSR */ }
+
 export const app = $state({
+  dealType: storedDeal === 'rent' ? 'rent' : 'sale',
   config: { suburbs: {}, sources: [] },
   prospects: [],
   stats: null,
@@ -54,7 +62,7 @@ export function toast(msg, kind = 'info') {
 /* ------------------------------------------------------------- loaders --- */
 export async function loadProspects() {
   try {
-    app.prospects = await api.prospects(app.showSole);
+    app.prospects = await api.prospects(app.showSole, app.dealType);
     app.loaded = true;
   } catch (e) {
     if (!app.loaded) toast('Could not load prospects — is the engine running?', 'error');
@@ -71,6 +79,20 @@ export async function loadConfig() {
 
 export async function setShowSole(v) {
   app.showSole = v;
+  await loadProspects();
+}
+
+/* Switch books. The two lists share nothing — a rental has no score, no
+   property group and no erf — so the open drawer and the current rows are
+   dropped rather than left pointing at the other book. */
+export async function setDealType(v) {
+  const next = v === 'rent' ? 'rent' : 'sale';
+  if (next === app.dealType) return;
+  app.dealType = next;
+  try { localStorage.setItem('obv2.deal', next); } catch { /* private mode */ }
+  app.selectedKey = null;
+  app.prospects = [];
+  app.loaded = false;
   await loadProspects();
 }
 
