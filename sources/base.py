@@ -3,6 +3,18 @@
 Every portal scraper returns the same normalised listing dict, so the rest of
 the pipeline (dedupe, scoring, reporting) is portal-agnostic. Fields absent on
 a given portal are simply None.
+
+Both books are crawled through the same objects. `search_urls()` and
+`parse_detail()` take a `listing_type` of "sale" (the default, so nothing that
+predates rentals changes) or "rent", and a source that cannot build a rent URL
+it has actually verified returns nothing for "rent" rather than guessing — a
+portal answers an unrecognised path with a fallback result set, not a 404, so
+a guessed rent path silently files somebody else's stock under our suburb.
+
+One Source instance serves both books deliberately: the Fetcher (and therefore
+the adaptive rate limiter) belongs to the instance, and a second instance per
+portal would mean two limiters racing each other at the same host — which on
+Property24 is exactly how a sticky block gets earned.
 """
 
 from __future__ import annotations
@@ -38,8 +50,13 @@ LISTING_FIELDS = (
     "photo_count", "street_address", "street_address_raw", "latitude",
     "longitude", "mandate_text",
     "mandate_explicit", "price_reduced", "under_offer", "is_development",
+    "listing_type", "rent_period", "available_from", "furnished", "deposit",
     "raw_overview",
 )
+
+# The two books. "sale" is the default everywhere, so every existing caller,
+# CLI invocation and scheduled job keeps behaving exactly as it did.
+LISTING_TYPES = ("sale", "rent")
 
 
 class Source:
@@ -47,17 +64,23 @@ class Source:
 
     name: str = ""
     label: str = ""
+    # Whether this portal's to-rent URL shape has been VERIFIED against the
+    # live site. False means the rental crawl skips the source entirely rather
+    # than probing a path we only think exists.
+    supports_rent: bool = False
 
     def __init__(self, logger=None):
         self.fetcher = Fetcher(self.name, logger=logger)
         self.log = logger or print
 
     # -- interface ---------------------------------------------------------
-    def search_urls(self, slug: str, max_pages: int) -> list[str]:
+    def search_urls(self, slug: str, max_pages: int,
+                    listing_type: str = "sale") -> list[str]:
         """Detail-page URLs for a suburb, newest/most relevant first."""
         raise NotImplementedError
 
-    def parse_detail(self, url: str, slug: str) -> dict | None:
+    def parse_detail(self, url: str, slug: str,
+                     listing_type: str = "sale") -> dict | None:
         """Fetch one detail page and return a normalised listing dict."""
         raise NotImplementedError
 
@@ -106,7 +129,8 @@ class Source:
                 names_other_area = True
         return not names_other_area
 
-    def blank(self, url: str, slug: str, source_id: str) -> dict:
+    def blank(self, url: str, slug: str, source_id: str,
+              listing_type: str = "sale") -> dict:
         info = config.SUBURBS.get(slug, {})
         suburb_slug = slug
         suburb = info.get("name", slug.replace("-", " ").title())
@@ -123,10 +147,17 @@ class Source:
             if refined:
                 suburb_slug, suburb = refined
         rec: dict = {k: None for k in LISTING_FIELDS}
+        # Rentals get their own key namespace. The sale key shape is left
+        # untouched so no existing row is re-keyed by this change, and the
+        # prefix guarantees a portal that numbers both books from one sequence
+        # (Property24 does) can never have a rental overwrite a sale.
+        key = (f"{self.name}:{source_id}" if listing_type == "sale"
+               else f"{self.name}:{listing_type}:{source_id}")
         rec.update({
             "source": self.name,
             "source_id": str(source_id),
-            "listing_key": f"{self.name}:{source_id}",
+            "listing_type": listing_type,
+            "listing_key": key,
             "url": url,
             "suburb_slug": suburb_slug,
             "suburb": suburb,
@@ -140,7 +171,12 @@ class Source:
             import photos
             urls = photos.extract(self.name, html)
             rec["photo_url"] = urls[0] if urls else None
-        if rec.get("price_zar") and rec.get("floor_size_m2"):
+        # price_per_m2 is an asking-price metric and feeds the suburb medians
+        # cma.py and scorer.py read. A rent divided by floor area is a
+        # different number in a different unit, so it is deliberately left
+        # NULL on rentals rather than quietly poisoning those medians.
+        if (rec.get("listing_type", "sale") == "sale"
+                and rec.get("price_zar") and rec.get("floor_size_m2")):
             try:
                 rec["price_per_m2"] = round(rec["price_zar"] / rec["floor_size_m2"], 2)
             except ZeroDivisionError:
@@ -165,8 +201,9 @@ class Source:
 
 # Detail-URL path segments that are portal plumbing, never place names.
 _URL_NOISE_SEGMENTS = {
-    "for-sale", "to-rent", "results", "residential", "commercial",
+    "for-sale", "to-rent", "to-let", "results", "residential", "commercial",
     "property", "property-for-sale-south-africa",
+    "property-to-rent-south-africa", "rentals",
 }
 _PROVINCE_SLUGS = {
     "western-cape", "eastern-cape", "northern-cape", "gauteng",
@@ -282,6 +319,70 @@ def money(text) -> int | None:
     if v is None or v <= 0:
         return None
     return int(v)
+
+
+# ------------------------------------------------------------ rent pricing
+#
+# Rentals are quoted with their period attached and the period is not
+# decorative: on the Atlantic Seaboard a furnished villa is advertised at
+# "R 25 000 per day" (verified on Property24) while the flat next door is
+# "R 25 000 per month". Reading both as 25 000 would rank a holiday let and a
+# long let identically and would let day-rate stock sail through a monthly
+# floor. So the amount and the period are parsed together and stored together.
+_RENT_PERIODS = (
+    # Longest/most specific patterns first — "per calendar month" must not be
+    # decided by the "day" branch, and "p/m" must not match "pm" inside a word.
+    (re.compile(r"per\s*night|nightly|per\s*day|daily|\bp\s*/\s*d\b|/\s*day\b", re.I), "day"),
+    (re.compile(r"per\s*week|weekly|\bp\s*/\s*w\b|/\s*week\b", re.I), "week"),
+    (re.compile(r"per\s*calendar\s*month|per\s*month|monthly|"
+                r"\bp\s*[/.]?\s*m\b|\bpcm\b|/\s*month\b", re.I), "month"),
+)
+
+# Nights and weeks per month, for comparing two rentals on one scale. 365/12
+# and 52/12 rather than 30 and 4, because the error compounds against the
+# minimum-rent floor.
+_MONTHS = {"month": 1.0, "week": 52.0 / 12.0, "day": 365.0 / 12.0}
+
+
+def rent_period(text) -> str | None:
+    """'month' | 'week' | 'day' from a rent string, or None if unstated."""
+    if not text:
+        return None
+    blob = str(text).replace("\xa0", " ")
+    for pattern, period in _RENT_PERIODS:
+        if pattern.search(blob):
+            return period
+    return None
+
+
+def rent_price(text) -> tuple[int | None, str | None]:
+    """(amount, period) from "R 45 000 per month" / "R25,000 p/m" / "R9 500pd".
+
+    The period defaults to "month" whenever an amount parsed but no period
+    word appeared: every South African portal quotes long lets monthly and
+    only flags the exception (per day, per week). Defaulting to None instead
+    would leave most rentals uncomparable for the sake of a case that does not
+    occur.
+    """
+    amount = money(text)
+    if amount is None:
+        return None, None
+    return amount, rent_period(text) or "month"
+
+
+def monthly_equivalent(amount, period: str | None) -> float | None:
+    """A rent on one scale, so a day rate and a monthly rent can be compared.
+
+    Explicitly an equivalence, not a price anyone pays: nobody rents a Camps
+    Bay villa for 30 consecutive days at the nightly rate. It exists so the
+    MIN_RENT_ZAR floor and any sorting are not fooled by the period.
+    """
+    if amount is None:
+        return None
+    try:
+        return float(amount) * _MONTHS.get(period or "month", 1.0)
+    except (TypeError, ValueError):
+        return None
 
 
 def coord(value) -> float | None:

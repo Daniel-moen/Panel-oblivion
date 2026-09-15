@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 
 import locations
 from sources.base import (Source, additional_property, area_m2, coord, jsonld_blocks,
-                          jsonld_by_type, money, num, make_soup)
+                          jsonld_by_type, money, num, make_soup, rent_period)
 
 
 # Beyond the schema.org graph, every page embeds its CRM record as an
@@ -52,25 +52,38 @@ _MANDATE_EXPLICIT = {"Sole": "sole", "Open": "not_sole",
                      "Joint": "not_sole", "Dual": "not_sole"}
 
 
+# The rental book is the same site under a different root segment and the
+# SAME area path (verified: /property-to-rent-south-africa/western-cape/
+# cape-town/camps-bay lists Camps Bay rentals, and the detail pages carry the
+# usual schema.org @graph with businessFunction LeaseOut).
+_SECTION = {"sale": "property-for-sale-south-africa",
+            "rent": "property-to-rent-south-africa"}
+
+
 class ReMax(Source):
     name = "remax"
     label = "RE/MAX"
+    supports_rent = True
 
-    def search_urls(self, slug: str, max_pages: int) -> list[str]:
-        path = locations.get(self.name, slug)
+    def search_urls(self, slug: str, max_pages: int,
+                    listing_type: str = "sale") -> list[str]:
+        section = _SECTION.get(listing_type)
+        if not section:
+            return []
+        path = locations.get(self.name, slug, listing_type)
         if not path:
             return []
         urls: list[str] = []
         seen: set[str] = set()
         for page in range(1, max_pages + 1):
-            page_url = f"{self.fetcher.base_url}/property-for-sale-south-africa/{path}/"
+            page_url = f"{self.fetcher.base_url}/{section}/{path}/"
             if page > 1:
                 page_url += f"?page={page}"
             html = self.fetcher.get(page_url)
             if not html:
                 break
             found = re.findall(
-                r'href="(/property-for-sale-south-africa/[^"?#]*?-(\d{5,}))"', html)
+                rf'href="(/{section}/[^"?#]*?-(\d{{5,}}))"', html)
             new = 0
             for href, listing_id in found:
                 if listing_id not in seen and self.belongs_to(href, slug):
@@ -81,7 +94,8 @@ class ReMax(Source):
                 break
         return urls
 
-    def parse_detail(self, url: str, slug: str) -> dict | None:
+    def parse_detail(self, url: str, slug: str,
+                     listing_type: str = "sale") -> dict | None:
         html = self.fetcher.get(url)
         if not html:
             return None
@@ -96,7 +110,7 @@ class ReMax(Source):
         if crm.get("sale_state") == "Sold":
             return None      # sold stock lingers in the for-sale search
 
-        rec = self.blank(url, slug, m.group(1))
+        rec = self.blank(url, slug, m.group(1), listing_type)
         rec["mandate_explicit"] = _MANDATE_EXPLICIT.get(crm.get("mandate"))
         rec["under_offer"] = int(crm.get("sale_state") == "Offer Made")
         rec["price_reduced"] = int(crm.get("sale_state") == "Price Reduced")
@@ -116,6 +130,13 @@ class ReMax(Source):
 
         if offer:
             rec["price_zar"] = money(offer.get("price"))
+        if listing_type == "rent":
+            # The Offer block gives the bare number (250000) with no period,
+            # so the period is read off the page copy ("R250 000 per month")
+            # and defaults to monthly, which is what RE/MAX's rental book is.
+            rec["rent_period"] = rent_period(rec["title"]) or rent_period(
+                " ".join(re.findall(r"R[\d\s,.]{3,}\s*(?:per\s+\w+|p\s*/?\s*[mwd])",
+                                    html, re.I)[:3])) or "month"
 
         if prop:
             rec["bedrooms"] = num(prop.get("numberOfBedrooms"))

@@ -136,8 +136,19 @@ def match_score(a: sqlite3.Row, b: sqlite3.Row) -> tuple[float, list[str]]:
 
 
 def rebuild_groups(conn: sqlite3.Connection) -> dict:
-    """Union-find over all listings; rewrites property_groups. Returns stats."""
-    rows = conn.execute("SELECT * FROM listings").fetchall()
+    """Union-find over all FOR-SALE listings; rewrites property_groups.
+
+    Rentals are excluded outright rather than grouped separately. Merging a
+    sale listing with a rental would be actively wrong — a home advertised
+    both for sale and to let is one owner hedging, and collapsing the two
+    would destroy exactly the signal that pairing carries — and grouping
+    rentals among themselves would put them into property_groups, which is
+    the join every for-sale view downstream (scoring, the report, verify,
+    CMA) reaches the listings table through. Leaving rentals ungrouped is
+    what keeps them out of all of it by construction.
+    """
+    rows = conn.execute(
+        "SELECT * FROM listings WHERE listing_type = 'sale'").fetchall()
     parent = {r["listing_key"]: r["listing_key"] for r in rows}
     evidence_log: dict[str, list[str]] = {}
     # Known street addresses per component. The pairwise rule "two different

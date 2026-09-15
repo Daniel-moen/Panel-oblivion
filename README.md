@@ -17,6 +17,42 @@ python main.py run               # full pipeline, then opens the HTML report
 
 ---
 
+## Dashboard UI
+
+The dashboard front end is a SvelteKit 2 / Svelte 5 SPA in `ui/`, prerendered
+to static files by `adapter-static`. `python webapp.py` still serves
+everything on one port: Flask hands out `ui/build/` for `/` and `/map` when
+that directory exists, and falls back to the old single-file
+`dashboard.html` / `map.html` when it doesn't — so a checkout with no Node
+build still runs. The old dashboard stays reachable at `/legacy`.
+
+The SPA talks to the same Flask JSON API (`/api/...`); `/api/config` was added
+to feed it the suburb/portal registry that the legacy page got inlined at
+render time. CMA reports stay server-rendered Python (`/cma`, `/cma/<group_id>`)
+and are linked from the new UI.
+
+```bash
+cd ui && npm install && npm run build   # after editing anything in ui/src (Node 20+)
+cd ui && npm run dev                    # live dev at :5173, proxies /api and /cma to :5051
+```
+
+No server restart after a rebuild — Flask reads the build directory per
+request. `npm run dev` needs `webapp.py` running alongside it for the API.
+
+### Find me… (AI brief)
+
+`/prospects` carries a **Find me…** field that takes a plain-English brief —
+"3-4 bed in Langebaan, R2.5 - 4m, secure and quiet". Two model calls bracket
+the work: the first turns the brief into structured criteria (beds, price
+band, types, suburbs, wish words), Python filters the prospect table against
+them, and the second ranks the shortlist and writes the summary. With no
+working key in `AI_BACKEND_ORDER` — the same credentials scoring uses — both
+fall back to regex parsing and keyword matching, and the reply says so
+(`ranked_by: "heuristic"`). The endpoint is `POST /api/find` with
+`{brief, sole}`; the logic lives in `finder.py`.
+
+---
+
 ## Why multiple portals
 
 A property marketed by **two different agencies** cannot be on a sole mandate.
@@ -124,6 +160,8 @@ Two safeguards matter more than they look:
 ```bash
 python main.py run [suburbs...] [--sources a,b] [--pages N] [--no-ai] [--all]
 python main.py scrape [suburbs...]        # crawl only
+python main.py crawl --rentals            # crawl the to-rent book instead
+python main.py crawl --type both          # both books in one pass
 python main.py dedupe                     # re-match across portals
 python main.py score [--no-ai] [--limit N] [--new-only]
 python main.py report [--all]             # --all includes sole-mandate stock
@@ -151,6 +189,61 @@ property from scratch (~15–20 min on Kimi's 3-request concurrency cap);
 
 ---
 
+## Rentals
+
+The same crawl also reads each portal's **to-rent** book. It is off by
+default and always has to be asked for — no flag means the for-sale crawl,
+exactly as before.
+
+```bash
+python main.py crawl --rentals                      # rentals only
+python main.py crawl camps-bay sea-point --rentals  # ...for specific areas
+python main.py crawl --type both                    # sale + rent, one pass
+```
+
+Why bother, when a tenant is not a mandate: a home advertised **both** for
+sale and to rent is a seller hedging — an owner who could not sell and is
+bridging with a tenant, which is a live prospecting conversation and one only
+a rental crawl can see. Rentals also name the *managing* agency, frequently a
+different brand from the one holding the sale mandate.
+
+**Rentals are a separate book, not a variant of a sale.** They live in the
+same `listings` table under `listing_type='rent'`, keyed
+`<source>:rent:<id>`, and are deliberately kept out of everything for-sale:
+they are never scored (the AI scorer costs money per property and has nothing
+to say about a lease), never deduped or grouped, never erf-resolved, never
+CMA comps, and never part of the sold-proxy lifecycle. The dashboard reaches
+them through the **For sale / To rent** selector in the toolbar, which is a
+different query rather than a client-side filter.
+
+`price_zar` holds the rent **as advertised**, and `rent_period`
+(`month`/`week`/`day`) says for what: Atlantic Seaboard holiday stock is
+quoted per day, so R25 000 can be a month in Sea Point or a night in Camps
+Bay. Compare two rentals with `sources.base.monthly_equivalent()`, which is
+also what `config.MIN_RENT_ZAR` (default R20 000/month equivalent) is applied
+against. `available_from`, `furnished` and `deposit` are filled where the
+portal publishes them.
+
+Portal coverage — every path below was verified against the live site:
+
+| Portal | To-rent path | Notes |
+| --- | --- | --- |
+| Property24 | `/to-rent/<area>/<id>` | Mirrors `/for-sale/` exactly: same area ids, same `?sp=pf=` floor |
+| Private Property | `/to-rent/<area>/<id>` | Same area ids; rental refs are `RR…`, sales `T…` |
+| Pam Golding | `/property-search/residential-properties-to-rent-<area>/<id>` | Own area ids — mined into `locations.json` as `pamgolding_rent`. Thin book: 6 of 84 areas |
+| Prop Data (Seeff + 10 tenants) | `/results/residential/to-let/<town>/<suburb>/` | Note `to-let`, not `to-rent`; sitemap `/residential-to-let/sitemap.txt` |
+| RE/MAX | `/property-to-rent-south-africa/<area>/` | Same area path as the sale book |
+| Rawson | `/property/to-rent/<suburb>.md` | Same markdown endpoints |
+| MyProperty, ImmoAfrica | — | **Skipped.** Rent URL shape could not be confirmed (429/403), and these portals answer an unknown path with a fallback result set rather than a 404 — guessing would file another area's stock under ours. Flip `supports_rent` once a real page has been read |
+
+Both books go through **one** `Source` instance per portal, so they share one
+rate limiter, one learned request spacing and one give-up circuit. A second
+instance for rentals would put two limiters on the same host, each believing
+it owned the whole budget — which on Property24 is how a sticky block is
+earned.
+
+---
+
 ## Layout
 
 ```
@@ -163,8 +256,11 @@ scorer.py       payload building, hard mandate rules, AI + heuristic scoring
 pipeline.py     concurrent crawl orchestration
 db.py           SQLite schema + migration
 report.py       ranked HTML report
-webapp.py       dashboard
+webapp.py       dashboard + JSON API, serves ui/build when present
+ui/             SvelteKit dashboard SPA (src/ = source, build/ = what Flask serves)
 tracker.py      import of the team's xlsx + revealed-preference profile
+panel.py        management panel: stages, contacts, interactions, mandates
+caller.py       AI voice agent: phones owners, pitches the meeting (docs/CALLER.md)
 ```
 
 ### Areas
@@ -287,6 +383,16 @@ fires on wake. A **yield canary** protects the comps feed: a source whose
 crawled-suburb listings were confirmed at under `LIFECYCLE_MIN_COVERAGE`
 (50%) this run — a parser regression or a block — is excluded from that
 run's delisting sweep instead of reading as a mass delisting.
+
+## AI caller (`/caller`)
+
+Once the panel has an owner's phone number, an AI voice agent can phone them,
+disclose it's an AI calling for the agency, and pitch a free film-consultation
+meeting — the mandate itself is always won by the human in that meeting. Calls
+log into the panel as normal interactions and advance stages; CPA calling
+hours, upfront AI disclosure, a POPIA identity gate and a do-not-call list are
+enforced in code. A zero-cost text **simulator** on `/caller` runs the exact
+live-call prompt for tuning the pitch. Setup and details: `docs/CALLER.md`.
 
 ## Notes
 

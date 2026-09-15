@@ -19,3 +19,7 @@ loom_login.log
 # runtime logs
 webapp.log
 *.log
+
+# Front-end tooling (ui/build is committed; it is what webapp.py serves)
+ui/node_modules/
+ui/.svelte-kit/

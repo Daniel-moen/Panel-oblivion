@@ -17,12 +17,13 @@ import threading
 import time
 from datetime import datetime
 
-from flask import Flask, Response, jsonify, redirect, request
+from flask import Flask, Response, jsonify, redirect, request, send_from_directory
 
 import config
 import db
 import dedupe
 import erf
+import finder
 import photos
 import pipeline
 import scorer
@@ -46,6 +47,10 @@ _IS_HOSTED = bool(os.environ.get("PORT") or os.environ.get("RAILWAY_ENVIRONMENT"
 
 @app.before_request
 def _require_auth():
+    # Vapi's end-of-call webhook can't do basic auth; caller.py authenticates
+    # it with its own shared-secret header instead.
+    if request.path == "/api/caller/webhook":
+        return None
     if not _DASH_PASS:
         if _IS_HOSTED:
             return Response(
@@ -205,6 +210,20 @@ def _auto_crawl_loop():
 threading.Thread(target=_auto_crawl_loop, daemon=True).start()
 
 
+def _prune_cache_on_boot():
+    # The crawl pipeline prunes too, but that can be hours away — and a
+    # volume that filled up while the app was down blocks every SQLite
+    # write until something frees space. Do it before serving traffic.
+    import httpclient
+    try:
+        httpclient.prune_cache(log=lambda m: print(m, flush=True))
+    except Exception as e:                              # noqa: BLE001
+        print(f"boot cache prune failed: {type(e).__name__}: {e}", flush=True)
+
+
+threading.Thread(target=_prune_cache_on_boot, daemon=True).start()
+
+
 @app.post("/api/stop")
 def api_stop():
     _stop.set()
@@ -274,7 +293,11 @@ LEFT JOIN scores s ON s.listing_key = l.listing_key
 LEFT JOIN property_groups g ON g.listing_key = l.listing_key
 LEFT JOIN erf_lookup e ON e.listing_key = l.listing_key
 LEFT JOIN tracker t ON t.listing_number = l.source_id AND l.source = 'property24'
-WHERE NOT EXISTS (
+-- One book at a time. 'sale' is what every existing caller gets; the rentals
+-- view asks for 'rent' explicitly. A rental has no score, no property group
+-- and no erf, so it simply arrives with those columns NULL.
+WHERE l.listing_type = :listing_type
+  AND NOT EXISTS (
         SELECT 1 FROM property_groups g2
         JOIN listings l2 ON l2.listing_key = g2.listing_key
         JOIN tracker t2 ON t2.listing_number = l2.source_id
@@ -284,21 +307,27 @@ ORDER BY (s.prospect_score IS NULL) DESC, s.prospect_score DESC, l.price_zar DES
 """
 
 
-def _prospects_payload(show_sole: bool) -> list:
+def _prospects_payload(show_sole: bool, listing_type: str = "sale") -> list:
     now = time.monotonic()
+    key = (show_sole, listing_type)
     with _prospects_lock:
-        hit = _prospects_cache.get(show_sole)
+        hit = _prospects_cache.get(key)
         if hit and now - hit[0] < _PROSPECTS_TTL:
             return hit[1]
-    payload = _build_prospects(show_sole)
+    payload = _build_prospects(show_sole, listing_type)
     with _prospects_lock:
-        _prospects_cache[show_sole] = (time.monotonic(), payload)
+        _prospects_cache[key] = (time.monotonic(), payload)
     return payload
 
 
 @app.get("/api/prospects")
 def api_prospects():
-    return jsonify(_prospects_payload(request.args.get("sole") == "1"))
+    # ?type=rent switches to the rental book. Anything else — including no
+    # parameter at all, which is every caller that predates rentals — is the
+    # for-sale view, unchanged.
+    listing_type = "rent" if request.args.get("type") == "rent" else "sale"
+    return jsonify(_prospects_payload(
+        request.args.get("sole") == "1", listing_type))
 
 
 # Price-cut history is a whole-DB aggregate (~0.5s); lifecycle is one scan.
@@ -326,10 +355,11 @@ def _deal_context() -> tuple[dict, dict]:
     return cuts, cycle
 
 
-def _build_prospects(show_sole: bool) -> list:
+def _build_prospects(show_sole: bool, listing_type: str = "sale") -> list:
     from sources.base import canonical_agency
     with db.connect() as conn:
-        rows = conn.execute(PROSPECT_QUERY).fetchall()
+        rows = conn.execute(
+            PROSPECT_QUERY, {"listing_type": listing_type}).fetchall()
         # One GV-roll lookup for the whole response, not one per row — the
         # dashboard hits this endpoint every 2s while a job runs, and
         # for_groups() walks two tables per call.
@@ -345,6 +375,8 @@ def _build_prospects(show_sole: bool) -> list:
     for members in grouped.values():
         best = max(members, key=lambda m: ((m["photo_count"] or 0),
                                            len(m["description"] or "")))
+        # Rentals are never scored, so `sellable` is NULL on every one of
+        # them and this sole-mandate filter has nothing to say about them.
         if not show_sole and best["sellable"] == 0:
             continue
         brands = {b for b in (canonical_agency(m["agency"]) for m in members) if b}
@@ -448,7 +480,10 @@ def _build_prospects(show_sole: bool) -> list:
         if photo_key and photo_key != best["listing_key"]:
             d["photo_key"] = photo_key
         ppm2 = best["price_per_m2"]
-        if not ppm2 and best["price_zar"] and best["floor_size_m2"]:
+        # Sales only: a rent divided by floor area is a different number in a
+        # different unit, and the column header says "R/m²" asking price.
+        if (not ppm2 and listing_type == "sale"
+                and best["price_zar"] and best["floor_size_m2"]):
             ppm2 = best["price_zar"] / best["floor_size_m2"]
         d["price_per_m2"] = round(ppm2) if ppm2 else None
         gid = best["group_id"]
@@ -491,7 +526,8 @@ def _suburb_centroids() -> dict[str, tuple[float, float]]:
     with db.connect() as conn:
         for r in conn.execute(
                 """SELECT suburb_slug, latitude, longitude FROM listings
-                   WHERE latitude IS NOT NULL AND longitude IS NOT NULL"""):
+                   WHERE listing_type = 'sale'
+                     AND latitude IS NOT NULL AND longitude IS NOT NULL"""):
             # Sanity box for South Africa — a swapped or junk pin must not
             # drag a suburb's centroid into the ocean.
             if -35.5 < r["latitude"] < -21.5 and 16.0 < r["longitude"] < 33.5:
@@ -579,9 +615,18 @@ def api_map():
 
 _MAP_PATH = os.path.join(config.ROOT, "map.html")
 
+# The SvelteKit front end prerenders to ui/build (index.html, map.html, the
+# _app/ asset directory, favicon.svg). When that build is present it serves
+# the pages; without it — a fresh checkout, or before `npm run build` — the
+# legacy single-file dashboard.html and map.html still answer, so the app
+# never depends on a Node toolchain being installed.
+_UI_BUILD = os.path.join(config.ROOT, "ui", "build")
+
 
 @app.get("/map")
 def map_page():
+    if os.path.exists(os.path.join(_UI_BUILD, "map.html")):
+        return send_from_directory(_UI_BUILD, "map.html")
     with open(_MAP_PATH, encoding="utf-8") as f:
         return f.read()
 
@@ -618,7 +663,8 @@ def api_erf_resolve():
                 "(metro) and the Western Cape provincial cadastre "
                 "(everywhere else)…")
             with db.connect() as conn:
-                s = erf.resolve_all(conn, force=force, log=log)
+                s = erf.resolve_all(conn, force=force, retry_failed=True,
+                                    log=log)
             log(f"erf: {s['resolved']} exact, {s['check']} to verify, "
                 f"{s['candidates']} with candidates, "
                 f"{s['unresolved']} unresolved, {s['skipped']} already done")
@@ -655,9 +701,46 @@ def api_erf_locate():
     return jsonify({"ok": True})
 
 
+_locate_all_job = {"running": False, "stop": threading.Event()}
+
+
+@app.post("/api/erf/locate-all")
+def api_erf_locate_all():
+    """Run the AI photo-locator over every candidate property — on demand.
+
+    Deliberately not part of any crawl (config.AI_LOCATE_AUTO): each
+    property is a paid vision call, and a full backlog is hours of them.
+    """
+    if _locate_all_job["running"]:
+        return jsonify({"error": "bulk locate already running"}), 409
+    _locate_all_job["stop"].clear()
+
+    def work():
+        try:
+            s = erf.ai_locate_all(log=log, stop=_locate_all_job["stop"])
+            log(f"ai-locate: bulk run done — {s['located']} located, "
+                f"{s['errors']} failed of {s['groups']} candidates")
+        except Exception as e:            # noqa: BLE001
+            log(f"ai-locate bulk ERROR: {type(e).__name__}: {e}")
+        finally:
+            _locate_all_job["running"] = False
+
+    _locate_all_job["running"] = True
+    threading.Thread(target=work, daemon=True).start()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/erf/locate-all/stop")
+def api_erf_locate_all_stop():
+    _locate_all_job["stop"].set()
+    log("ai-locate: bulk stop requested — finishing current property")
+    return jsonify({"ok": True})
+
+
 @app.get("/api/erf/busy")
 def api_erf_busy():
     return jsonify({"resolving": _erf_job["running"],
+                    "locating_all": _locate_all_job["running"],
                     "locating": [k for k, v in _ai_jobs.items()
                                  if v.get("running")],
                     "reevaluating": [k for k, v in _reeval_jobs.items()
@@ -806,13 +889,54 @@ def api_row(ident):
     })
 
 
+@app.get("/api/config")
+def api_config():
+    """Suburb and portal pickers as JSON — what the page needs to render them.
+
+    Same shapes the legacy dashboard gets inlined at render time, so the
+    SvelteKit front end reads one endpoint instead of a templated page.
+    """
+    # regions() is moving to 3-tuples (slug, name, scope) with whole-town
+    # entries listed first; until every checkout carries that change, pad
+    # 2-tuples with scope="suburb" so the page renders either way.
+    subs = {
+        region: [[t[0], t[1], t[2] if len(t) > 2 else "suburb"] for t in items]
+        for region, items in config.regions().items()}
+    srcs = [[n, config.SOURCES[n]["label"],
+             bool(config.SOURCES[n].get("enabled")),
+             config.SOURCES[n].get("blocked_reason", "")]
+            for n in source_registry.REGISTRY if n in config.SOURCES]
+    return jsonify({"suburbs": subs, "sources": srcs})
+
+
+@app.post("/api/find")
+def api_find():
+    """Plain-English brief -> recommended areas + properties (finder.py).
+    Body: {brief, sole}. Synchronous: two model calls, ~10-30s with AI,
+    instant on the keyword fallback."""
+    body = request.get_json(silent=True) or {}
+    rows = _prospects_payload(bool(body.get("sole")))
+    try:
+        return jsonify(finder.recommend(body.get("brief") or "", rows))
+    except ValueError as e:
+        return jsonify({"error": "bad_brief", "message": str(e)}), 400
+    except Exception as e:      # noqa: BLE001 — surface it in the UI, not a 500 page
+        return jsonify({"error": "find_failed",
+                        "message": f"{type(e).__name__}: {e}"}), 500
+
+
 @app.get("/api/stats")
 def api_stats():
     with db.connect() as conn:
         def one(sql):
             return conn.execute(sql).fetchone()[0]
         return jsonify({
-            "listings": one("SELECT COUNT(*) FROM listings"),
+            # The headline stat has always meant "for-sale listings"; keeping
+            # it that way stops a rental crawl from silently inflating it.
+            "listings": one("SELECT COUNT(*) FROM listings"
+                            " WHERE listing_type='sale'"),
+            "rentals": one("SELECT COUNT(*) FROM listings"
+                           " WHERE listing_type='rent'"),
             "properties": one("SELECT COUNT(DISTINCT group_id) FROM property_groups"),
             "sellable": one("SELECT COUNT(DISTINCT g.group_id) FROM scores s"
                             " JOIN property_groups g ON g.listing_key=s.listing_key"
@@ -825,7 +949,8 @@ def api_stats():
             "erf_ready": one("SELECT COUNT(DISTINCT group_id) FROM erf_lookup"
                              " WHERE status IN ('ok','check','confirmed')"),
             "by_source": {r[0]: r[1] for r in conn.execute(
-                "SELECT source, COUNT(*) FROM listings GROUP BY source")},
+                "SELECT source, COUNT(*) FROM listings"
+                " WHERE listing_type='sale' GROUP BY source")},
         })
 
 
@@ -837,8 +962,7 @@ def api_stats():
 _DASHBOARD_PATH = os.path.join(config.ROOT, "dashboard.html")
 
 
-@app.get("/")
-def index():
+def _legacy_dashboard():
     with open(_DASHBOARD_PATH, encoding="utf-8") as f:
         page = f.read()
     # regions() is moving to 3-tuples (slug, name, scope) with whole-town
@@ -854,15 +978,75 @@ def index():
     return page.replace("__SUBURBS__", subs).replace("__SOURCES__", srcs)
 
 
+@app.get("/")
+def index():
+    if os.path.exists(os.path.join(_UI_BUILD, "index.html")):
+        return send_from_directory(_UI_BUILD, "index.html")
+    return _legacy_dashboard()
+
+
+@app.get("/prospects")
+def prospects_page():
+    return send_from_directory(_UI_BUILD, "prospects.html")
+
+
+@app.get("/leads")
+def leads_page():
+    return send_from_directory(_UI_BUILD, "leads.html")
+
+
+@app.get("/leads/<path:_rest>")
+def leads_subpage(_rest):
+    # Prerendered where possible, else the SPA shell reads the real URL.
+    f = os.path.join(_UI_BUILD, "leads", _rest + ".html")
+    if os.path.exists(f):
+        return send_from_directory(_UI_BUILD, os.path.join("leads", _rest + ".html"))
+    return send_from_directory(_UI_BUILD, "200.html")
+
+
+@app.get("/properties")
+@app.get("/properties/<path:_rest>")
+def properties_redirect(_rest=""):
+    return redirect("/leads/properties" + ("/" + _rest if _rest else ""))
+
+
+@app.get("/hero-<name>.jpg")
+def ui_hero(name):
+    return send_from_directory(_UI_BUILD, f"hero-{name}.jpg")
+
+
+@app.get("/legacy")
+def legacy_dashboard():
+    """The pre-SvelteKit dashboard, still reachable once the build takes over."""
+    return _legacy_dashboard()
+
+
+@app.get("/_app/<path:p>")
+def ui_assets(p):
+    # send_from_directory 404s on its own when the build directory is absent.
+    return send_from_directory(os.path.join(_UI_BUILD, "_app"), p)
+
+
+@app.get("/favicon.svg")
+def ui_favicon():
+    return send_from_directory(_UI_BUILD, "favicon.svg")
+
+
 # --------------------------------------------------------------- CMA pages
 #
 # The CMA feature lives at its own URLs (/cma, /cma/<group_id>) — the main
 # dashboard above is untouched. All HTML for these pages is rendered by
 # cma_web.py; auth is covered by the app-wide _require_auth before_request.
+import caller         # noqa: E402
 import cma            # noqa: E402  (kept below the dashboard on purpose)
 import cma_web        # noqa: E402
 import owners         # noqa: E402
+import panel          # noqa: E402
 import valuations     # noqa: E402
+
+app.register_blueprint(panel.bp)
+app.register_blueprint(caller.bp)
+caller.start_autopilot()   # no-op unless CALLER_AUTOPILOT=1
 
 
 @app.get("/cma")
@@ -879,6 +1063,24 @@ def cma_report(group_id: int):
         return Response(f"property group {group_id} not found", 404,
                         {"Content-Type": "text/plain"})
     return page
+
+
+@app.get("/cma/<int:group_id>/download")
+def cma_download(group_id: int):
+    """The same report as a standalone HTML file the agent can keep or send.
+
+    Owner details and other internal-only blocks are omitted (client=True) —
+    a downloaded file leaves the building, so it must be safe to forward.
+    """
+    with db.connect() as conn:
+        page = cma_web.render_report(conn, group_id, client=True)
+    if page is None:
+        return Response(f"property group {group_id} not found", 404,
+                        {"Content-Type": "text/plain"})
+    return Response(page, headers={
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Disposition":
+            f'attachment; filename="cma-report-{group_id}.html"'})
 
 
 @app.get("/api/cma/<int:group_id>")
@@ -921,10 +1123,19 @@ def api_deed(group_id):
     import loom  # kept local: pulls no browser deps, only requests
     with db.connect() as conn:
         owners.ensure_table(conn)
+        # Match on the group's current listing keys, not erf_lookup.group_id:
+        # dedupe renumbers groups on every run, so the id stamped at erf time
+        # drifts (e.g. 3132 vs 3133) while the listing_key stays stable. Solo
+        # groups come through as 'solo-<listing_key>'.
+        gid = str(group_id)
         erf = conn.execute(
-            "SELECT erf_number, official_suburb, sg26_code FROM erf_lookup "
-            "WHERE group_id = ? AND status IN ('ok','confirmed','check') "
-            "AND erf_number IS NOT NULL LIMIT 1", (str(group_id),)).fetchone()
+            "SELECT e.erf_number, e.official_suburb, e.sg26_code FROM erf_lookup e "
+            "WHERE e.status IN ('ok','confirmed','check') AND e.erf_number IS NOT NULL "
+            "AND (e.listing_key IN (SELECT listing_key FROM property_groups "
+            "                        WHERE CAST(group_id AS TEXT) = ?) "
+            "     OR e.listing_key = ? OR e.group_id = ?) "
+            "ORDER BY e.status = 'confirmed' DESC LIMIT 1",
+            (gid, gid[5:] if gid.startswith("solo-") else "", gid)).fetchone()
         if not erf:
             return jsonify({"error": "no_erf",
                             "message": "Resolve this property's erf number first."}), 400
@@ -945,6 +1156,7 @@ def api_deed(group_id):
             row = owners.set_manual(conn, str(group_id), **fields)
         except Exception as e:                          # noqa: BLE001
             return jsonify({"error": e.args[0] if e.args else str(e)}), 400
+        panel.record_owner(conn, str(group_id), data, fields["notes"])
         log(f"deed: LOOM lookup for group {group_id} → "
             f"{data.get('owner_name') or 'no owner'} ({data.get('deed_number') or '—'})")
         return jsonify({**row, "owner_type": data.get("owner_type"),

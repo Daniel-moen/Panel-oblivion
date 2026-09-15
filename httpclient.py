@@ -21,6 +21,7 @@ crash recovery don't re-hit the sites.
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import os
@@ -146,23 +147,28 @@ class Fetcher:
     # against a 39 MB database). prune_cache() below is the eviction.
     def _cache_path(self, url: str) -> str:
         digest = hashlib.sha256(url.encode()).hexdigest()[:32]
-        return os.path.join(config.CACHE_DIR, self.source, digest + ".html")
+        return os.path.join(config.CACHE_DIR, self.source, digest + ".html.gz")
 
     def _cache_read(self, url: str) -> str | None:
         if not config.CACHE_ENABLED:
             return None
-        path = self._cache_path(url)
-        try:
-            age_h = (time.time() - os.path.getmtime(path)) / 3600
-        except OSError:
-            return None
-        if age_h > config.CACHE_TTL_HOURS:
-            return None
-        try:
-            with open(path, encoding="utf-8") as f:
-                return f.read()
-        except OSError:
-            return None
+        # Portal HTML gzips ~6-8x, which is what lets the live working set
+        # fit the hosted volume at all. Legacy uncompressed .html entries
+        # are still served until they age out of the TTL.
+        for path, opener in ((self._cache_path(url), gzip.open),
+                             (self._cache_path(url)[:-3], open)):
+            try:
+                age_h = (time.time() - os.path.getmtime(path)) / 3600
+            except OSError:
+                continue
+            if age_h > config.CACHE_TTL_HOURS:
+                continue
+            try:
+                with opener(path, "rt", encoding="utf-8") as f:
+                    return f.read()
+            except OSError:
+                continue
+        return None
 
     def _cache_write(self, url: str, body: str) -> None:
         if not config.CACHE_ENABLED:
@@ -170,7 +176,8 @@ class Fetcher:
         path = self._cache_path(url)
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
+            with gzip.open(path, "wt", encoding="utf-8",
+                           compresslevel=6) as f:
                 f.write(body)
         except OSError:
             pass
@@ -336,8 +343,9 @@ def prune_cache(max_age_hours: float | None = None, log=lambda m: None) -> dict:
     """
     ttl = max_age_hours if max_age_hours is not None else config.CACHE_TTL_HOURS
     cutoff = time.time() - ttl * 3600
-    removed = kept = 0
+    removed = 0
     freed = 0
+    live: list[tuple[float, int, str]] = []          # (mtime, size, path)
     for dirpath, _dirs, files in os.walk(config.CACHE_DIR):
         for name in files:
             path = os.path.join(dirpath, name)
@@ -348,10 +356,29 @@ def prune_cache(max_age_hours: float | None = None, log=lambda m: None) -> dict:
                     removed += 1
                     freed += st.st_size
                 else:
-                    kept += 1
+                    live.append((st.st_mtime, st.st_size, path))
             except OSError:
                 continue
-    if removed:
-        log(f"cache: pruned {removed} expired pages "
+    # The TTL can't bound disk use on its own: sweeps keep refreshing
+    # mtimes, so the live set alone once filled the hosted volume solid.
+    # Enforce a hard budget, evicting oldest-first (a stale-ish page is
+    # only ever a re-fetch away).
+    over = sum(s for _, s, _ in live) - config.CACHE_MAX_MB * 1_000_000
+    evicted = 0
+    if over > 0:
+        live.sort()
+        for _mtime, size, path in live:
+            try:
+                os.unlink(path)
+            except OSError:
+                continue
+            evicted += 1
+            freed += size
+            over -= size
+            if over <= 0:
+                break
+    kept = len(live) - evicted
+    if removed or evicted:
+        log(f"cache: pruned {removed} expired + {evicted} over-budget pages "
             f"({freed / 1e6:.0f} MB freed, {kept} live entries kept)")
-    return {"removed": removed, "kept": kept, "freed_bytes": freed}
+    return {"removed": removed + evicted, "kept": kept, "freed_bytes": freed}

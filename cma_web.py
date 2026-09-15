@@ -1,10 +1,13 @@
 """HTML for the Oblivion CMA pages — /cma (index) and /cma/<group_id> (report).
 
 All new markup lives here so webapp.py only gains thin routes; the main
-dashboard page is untouched. Styling mirrors the dashboard's dark aesthetic
-(#0d0d0f / #e8c47a) on screen; @media print flips to an ink-friendly A4
-layout and hides everything marked internal-only (pitch angle, owner
-details, nav), so "print to PDF" yields a client-ready document.
+dashboard page is untouched. Styling mirrors the SvelteKit dashboard's token
+sheet (ui/src/app.css) — same palette, same light/dark themes keyed off the
+same 'oblivion-theme' localStorage entry — so the two surfaces read as one
+app. @media print flips to an ink-friendly A4 layout and hides everything
+marked internal-only (pitch angle, owner details, nav), so "print to PDF"
+yields a client-ready document; render_report(client=True) bakes the same
+omissions into the HTML itself for the standalone download.
 """
 
 from __future__ import annotations
@@ -28,12 +31,15 @@ DISCLAIMER = ("Comparative market analysis for guidance only — not a formal "
 
 _TIER_ORDER = {"hot": 0, "warm": 1, "cold": 2}
 
-# Same palette the prospect report uses, so a mandate verdict reads identically
-# wherever it appears.
-_MANDATE_COLORS = {
-    "open": "#1e8449", "probably_open": "#148f77", "unknown": "#5d5d66",
-    "probably_sole": "#a04000", "sole": "#922b21",
-}
+# Verdicts render as class-styled pills (.mv.<verdict>, same classes and
+# palette as the dashboard) so they follow the light/dark theme.
+_MANDATE_CLASSES = ("open", "probably_open", "unknown", "probably_sole", "sole")
+
+
+def _mv_pill(verdict: str) -> str:
+    cls = verdict if verdict in _MANDATE_CLASSES else "unknown"
+    return (f'<span class="mv {cls}">'
+            f'{_e(verdict.replace("_", " "))}</span>')
 
 _PROOF_FRESH_HOURS = getattr(config, "PROOF_FRESH_HOURS", 72)
 
@@ -138,7 +144,7 @@ def _chip(text: str, cls: str = "") -> str:
 
 
 def _sparkline(points: list[tuple[datetime, float]], width: int = 300,
-               height: int = 58, color: str = "#e8c47a") -> str:
+               height: int = 58, color: str = "var(--accent)") -> str:
     """Inline SVG price line — no libraries, prints fine, scales to the card.
 
     points: chronological [(datetime, value)]. Fewer than two distinct
@@ -165,15 +171,17 @@ def _sparkline(points: list[tuple[datetime, float]], width: int = 300,
     line = " ".join(f"{x},{y}" for x, y in coords)
     area = (f"{coords[0][0]},{height - pad} " + line
             + f" {coords[-1][0]},{height - pad}")
+    # currentColor + a color on the svg lets the stroke follow the theme —
+    # var() does not resolve inside SVG presentation attributes.
     dots = "".join(
-        f'<circle cx="{x}" cy="{y}" r="2.4" fill="{color}"/>'
+        f'<circle cx="{x}" cy="{y}" r="2.4" fill="currentColor"/>'
         for x, y in (coords[0], coords[-1]))
     return (
         f'<svg viewBox="0 0 {width} {height}" width="100%" height="{height}" '
         f'preserveAspectRatio="none" role="img" aria-label="price history" '
-        f'style="max-width:{width}px;display:block">'
-        f'<polygon points="{area}" fill="{color}" opacity=".12"/>'
-        f'<polyline points="{line}" fill="none" stroke="{color}" '
+        f'style="max-width:{width}px;display:block;color:{color}">'
+        f'<polygon points="{area}" fill="currentColor" opacity=".12"/>'
+        f'<polyline points="{line}" fill="none" stroke="currentColor" '
         f'stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>'
         f'{dots}</svg>')
 
@@ -181,74 +189,180 @@ def _sparkline(points: list[tuple[datetime, float]], width: int = 300,
 # ---------------------------------------------------------------- shared CSS
 
 _CSS = """
- :root { color-scheme: dark; }
- * { box-sizing: border-box; }
- body { font-family:-apple-system,BlinkMacSystemFont,Helvetica,sans-serif; margin:0;
-        background:#0d0d0f; color:#e8e8e8; }
- header.bar { padding:1rem 1.6rem; border-bottom:1px solid #26262b; display:flex;
-        align-items:baseline; gap:1rem; flex-wrap:wrap; }
- header.bar h1 { font-weight:300; letter-spacing:.25em; font-size:1rem; margin:0; }
- header.bar .sub { color:#777; font-size:.72rem; letter-spacing:.08em; }
- nav.crumbs { padding:.6rem 1.6rem; font-size:.75rem; color:#8b8b93;
-        border-bottom:1px solid #1a1a1f; }
- main { padding:1.2rem 1.6rem 4rem; max-width:1180px; margin:0 auto; }
- a { color:#e8c47a; text-decoration:none; }
- a:hover { text-decoration:underline; }
- h2 { font-weight:350; letter-spacing:.14em; font-size:.82rem; text-transform:uppercase;
-      color:#999; margin:1.9rem 0 .7rem; border-bottom:1px solid #26262b; padding-bottom:.35rem; }
+ /* Token sheet mirrored from ui/src/app.css — keep the two in step. */
+ :root, :root[data-theme='light'] {
+   color-scheme: light;
+   --bg:#f5f6f8; --bg-2:#ffffff; --bg-3:#f3f4f6; --bg-4:#e9eaee;
+   --line:#eceef1; --line-2:#dcdfe4; --line-3:#b9bec7;
+   --ink:#111827; --ink-2:#4b5563; --ink-3:#9aa1ac;
+   --accent:#2563eb; --accent-2:#1d4ed8; --accent-soft:#eff4ff;
+   --accent-line:#bfd3fe; --accent-ink:#1e3a8a;
+   --bar:rgba(255,255,255,0.88); --hover:#fafbfc;
+   --red:#dc2626; --red-soft:#fef2f2; --red-line:#fecaca;
+   --hot-ink:#b91c1c; --hot-soft:#fee2e2;
+   --warm-ink:#92400e; --warm-soft:#fef3c7;
+   --cold-ink:#4b5563; --cold-soft:#f3f4f6;
+   --open:#047857; --open-soft:#ecfdf5;
+   --popen:#0f766e; --popen-soft:#f0fdfa;
+   --unk:#6b7280; --psole:#c2410c; --psole-soft:#fff7ed; --sole:#b91c1c;
+   --good:#047857; --bad:#dc2626; --bad-ink:#991b1b; --blue:#0369a1;
+   --warn-bg:#fffbeb; --warn-line:#fde68a; --warn-ink:#92400e;
+   --sig-uo-ink:#075985; --sig-uo-bg:#e0f2fe;
+   --sig-dev-ink:#5b21b6; --sig-dev-bg:#f3e8ff;
+   --r-lg:14px; --r:10px; --r-sm:8px;
+   --shadow-1:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.08);
+   --shadow-2:0 4px 10px rgba(16,24,40,.06),0 12px 32px rgba(16,24,40,.12);
+   --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;
+ }
+ :root[data-theme='dark'] {
+   color-scheme: dark;
+   --bg:#0e1013; --bg-2:#16181d; --bg-3:#1d2026; --bg-4:#262a32;
+   --line:#23262d; --line-2:#2f333c; --line-3:#4a505c;
+   --ink:#e8eaee; --ink-2:#a9b0bc; --ink-3:#6f7686;
+   --accent:#3b82f6; --accent-2:#7aa8fa; --accent-soft:rgba(59,130,246,0.14);
+   --accent-line:rgba(96,165,250,0.42); --accent-ink:#b9cdfa;
+   --bar:rgba(14,16,19,0.86); --hover:#1a1d23;
+   --red:#f87171; --red-soft:rgba(248,113,113,0.12); --red-line:rgba(248,113,113,0.35);
+   --hot-ink:#fca5a5; --hot-soft:rgba(248,113,113,0.14);
+   --warm-ink:#fbbf24; --warm-soft:rgba(251,191,36,0.13);
+   --cold-ink:#aab2bf; --cold-soft:rgba(154,163,176,0.12);
+   --open:#34d399; --open-soft:rgba(52,211,153,0.12);
+   --popen:#2dd4bf; --popen-soft:rgba(45,212,191,0.12);
+   --unk:#9aa3b0; --psole:#fb923c; --psole-soft:rgba(251,146,60,0.12); --sole:#f87171;
+   --good:#34d399; --bad:#f87171; --bad-ink:#fca5a5; --blue:#38bdf8;
+   --warn-bg:rgba(251,191,36,0.08); --warn-line:rgba(251,191,36,0.28); --warn-ink:#fbd26a;
+   --sig-uo-ink:#7dd3fc; --sig-uo-bg:rgba(14,165,233,0.15);
+   --sig-dev-ink:#c4b5fd; --sig-dev-bg:rgba(139,92,246,0.16);
+   --shadow-1:0 1px 2px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.3);
+   --shadow-2:0 4px 10px rgba(0,0,0,.35),0 12px 32px rgba(0,0,0,.5);
+ }
+ * { box-sizing:border-box; }
+ body { font:400 14px/1.55 var(--font-ui); margin:0;
+        background:var(--bg); color:var(--ink);
+        -webkit-font-smoothing:antialiased; }
+ header.bar { position:sticky; top:0; z-index:30; display:flex; align-items:center;
+        gap:1.6rem; height:60px; padding:0 clamp(1rem,3vw,2rem);
+        background:var(--bar); backdrop-filter:blur(10px);
+        border-bottom:1px solid var(--line); }
+ header.bar .logo { display:flex; align-items:baseline; gap:.55rem;
+        white-space:nowrap; color:inherit; }
+ header.bar .logo:hover { text-decoration:none; }
+ header.bar .mark { width:10px; height:10px; border-radius:3px;
+        background:var(--accent); align-self:center; }
+ header.bar h1 { font-size:1.02rem; font-weight:800; letter-spacing:-.01em;
+        margin:0; color:var(--ink); }
+ header.bar .sub { color:var(--ink-3); font-size:.72rem; font-weight:500; }
+ header.bar nav { display:flex; gap:.25rem; flex:1; }
+ header.bar nav a { color:var(--ink-2); font-size:.86rem; font-weight:500;
+        padding:.4rem .85rem; border-radius:var(--r-sm); }
+ header.bar nav a:hover { color:var(--ink); background:var(--bg-3); text-decoration:none; }
+ header.bar nav a.on { color:var(--accent-2); background:var(--accent-soft); font-weight:600; }
+ .themebtn { width:32px; height:32px; border-radius:var(--r-sm);
+        border:1px solid var(--line-2); background:var(--bg-2); color:var(--ink-2);
+        font-size:.95rem; line-height:1; padding:0; }
+ .themebtn:hover { color:var(--ink); border-color:var(--line-3); }
+ nav.crumbs { padding:.6rem clamp(1rem,3vw,2rem); font-size:.78rem; color:var(--ink-3);
+        border-bottom:1px solid var(--line); display:flex; align-items:center; gap:.35rem; }
+ nav.crumbs .grow { flex:1; }
+ main { padding:1.2rem clamp(1rem,3vw,2rem) 4rem; max-width:1180px; margin:0 auto; }
+ a { color:var(--accent); text-decoration:none; }
+ a:hover { color:var(--accent-2); text-decoration:underline; }
+ h2 { font-weight:700; letter-spacing:.03em; font-size:.82rem; text-transform:uppercase;
+      color:var(--ink-2); margin:2rem 0 .7rem; border-bottom:1px solid var(--line-2);
+      padding-bottom:.35rem; }
  table { border-collapse:collapse; width:100%; }
- th,td { text-align:left; padding:.5rem .6rem; border-bottom:1px solid #222;
+ th,td { text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--line);
          vertical-align:top; font-size:.82rem; }
- th { color:#888; font-size:.63rem; text-transform:uppercase; letter-spacing:.12em; }
- .tier { color:#fff; font-size:.58rem; padding:2px 6px; border-radius:3px; letter-spacing:.06em; }
- .hot{background:#c0392b}.warm{background:#d68910}.cold{background:#555}
- .price { white-space:nowrap; font-weight:600; }
- .meta { color:#8b8b93; font-size:.7rem; margin-top:.15rem; }
- .badge { background:#1e8449; color:#fff; padding:2px 6px; border-radius:3px; font-size:.62rem; }
- .badge.gray { background:#3a3a42; }
- .badge.blue { background:#2e5c7a; }
- .disclaimer { color:#b09256; font-size:.7rem; border:1px solid #3a3320; background:#16140e;
-        border-radius:6px; padding:.55rem .8rem; margin:.8rem 0; line-height:1.45; }
+ th { color:var(--ink-3); font-size:.63rem; text-transform:uppercase; letter-spacing:.1em; }
+ tr:hover td { background:var(--hover); }
+ tr:first-child:hover th { background:none; }
+ .tier { display:inline-flex; align-items:center; font-weight:700; font-size:.66rem;
+        letter-spacing:.02em; text-transform:uppercase; padding:.14rem .55rem;
+        border-radius:6px; }
+ .tier.hot{color:var(--hot-ink);background:var(--hot-soft)}
+ .tier.warm{color:var(--warm-ink);background:var(--warm-soft)}
+ .tier.cold{color:var(--cold-ink);background:var(--cold-soft)}
+ .price { white-space:nowrap; font-weight:700; letter-spacing:-.01em;
+        font-variant-numeric:tabular-nums; color:var(--ink); }
+ .meta { color:var(--ink-3); font-size:.7rem; margin-top:.15rem; }
+ .badge { color:var(--good); background:var(--open-soft); padding:2px 8px;
+        border-radius:999px; font-size:.66rem; font-weight:600; white-space:nowrap; }
+ .badge.gray { color:var(--ink-2); background:var(--bg-3); }
+ .badge.blue { color:var(--sig-uo-ink); background:var(--sig-uo-bg); }
+ .disclaimer { color:var(--warn-ink); font-size:.72rem; border:1px solid var(--warn-line);
+        background:var(--warn-bg); border-radius:var(--r); padding:.55rem .8rem;
+        margin:.8rem 0; line-height:1.5; }
  .stats { display:flex; gap:1.4rem; flex-wrap:wrap; margin:.6rem 0 .4rem; }
- .stat b { display:block; font-size:1.15rem; font-weight:650; color:#e8c47a; }
- .stat span { font-size:.6rem; color:#888; text-transform:uppercase; letter-spacing:.12em; }
- .internal { border:1px dashed #5a2f2a; border-radius:8px; padding:.9rem 1.1rem;
-        margin-top:1.6rem; background:#141013; }
- .internal .tag { color:#b4645a; font-size:.62rem; text-transform:uppercase;
-        letter-spacing:.16em; margin-bottom:.5rem; display:block; }
- input, select, textarea, button { background:#1a1a1f; color:#e8e8e8; border:1px solid #333;
-        border-radius:5px; padding:.4rem .6rem; font-size:.8rem; font-family:inherit; }
- button { cursor:pointer; }
- button.primary { background:#e8c47a; color:#111; border:none; font-weight:650; }
- button.danger { border-color:#5a2f2a; color:#d98b7e; }
- select option:disabled { color:#555; }
- /* ---- report cards, chips, meters (added by the full-detail overhaul) ---- */
+ .stat b { display:block; font-size:1.15rem; font-weight:700; color:var(--ink); }
+ .stat span { font-size:.62rem; color:var(--ink-3); text-transform:uppercase;
+        letter-spacing:.1em; }
+ .internal { border:1px dashed var(--red-line); border-radius:var(--r);
+        padding:.9rem 1.1rem; margin-top:1.6rem; background:var(--red-soft); }
+ .internal .tag { color:var(--bad-ink); font-size:.64rem; font-weight:600;
+        text-transform:uppercase; letter-spacing:.12em; margin-bottom:.5rem; display:block; }
+ input, select, textarea { background:var(--bg-2); color:var(--ink);
+        border:1px solid var(--line-2); border-radius:var(--r-sm);
+        padding:.45rem .65rem; font:400 .82rem/1.3 var(--font-ui); width:100%;
+        outline:none; }
+ input:focus, select:focus, textarea:focus { border-color:var(--accent); }
+ select { width:auto; }
+ button { background:var(--bg-2); color:var(--ink-2); border:1px solid var(--line-2);
+        border-radius:var(--r-sm); padding:.45rem .9rem;
+        font:600 .8rem/1.3 var(--font-ui); cursor:pointer;
+        transition:color .15s,border-color .15s,background .15s; }
+ button:hover { color:var(--accent); border-color:var(--accent-line);
+        background:var(--accent-soft); }
+ button:disabled { opacity:.5; cursor:default; }
+ button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+ button.primary:hover { background:var(--accent-2); border-color:var(--accent-2); color:#fff; }
+ button.danger { color:var(--bad); }
+ button.danger:hover { background:var(--red-soft); border-color:var(--red-line);
+        color:var(--bad); }
+ select option:disabled { color:var(--ink-3); }
+ a.btnlink { display:inline-flex; align-items:center; gap:.3rem;
+        background:var(--bg-2); color:var(--ink-2); border:1px solid var(--line-2);
+        border-radius:var(--r-sm); padding:.45rem .9rem;
+        font:600 .8rem/1.3 var(--font-ui); }
+ a.btnlink:hover { color:var(--accent); border-color:var(--accent-line);
+        background:var(--accent-soft); text-decoration:none; }
+ /* ---- report cards, chips, meters ---- */
  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
         gap:.85rem; margin:.55rem 0 .2rem; align-items:start; }
  .cards.wide { grid-template-columns:repeat(auto-fit,minmax(400px,1fr)); }
- .card { background:#131318; border:1px solid #26262b; border-radius:8px;
-        padding:.85rem 1rem; }
- .card h3 { margin:0 0 .6rem; font-size:.6rem; letter-spacing:.16em; font-weight:500;
-        text-transform:uppercase; color:#8b8b93; }
+ .card { background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r-lg);
+        padding:.85rem 1rem; box-shadow:var(--shadow-1); }
+ .card h3 { margin:0 0 .6rem; font-size:.64rem; letter-spacing:.12em; font-weight:600;
+        text-transform:uppercase; color:var(--ink-3); }
  .chips { display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; }
- .chip { font-size:.64rem; background:#1c1c22; border:1px solid #32323a; color:#a9a9b4;
-        padding:2px 8px; border-radius:10px; white-space:nowrap; display:inline-block; }
- .chip b { color:#e8e8e8; font-weight:650; }
- .chip.gold  { border-color:#4a4026; color:#e8c47a; background:#16140e; }
- .chip.red   { border-color:#5a2f2a; color:#e08b7e; background:#1a1012; }
- .chip.amber { border-color:#4d3c18; color:#d6a95a; background:#17120a; }
- .chip.green { border-color:#204d33; color:#6fbf8e; background:#0e1712; }
- .chip.violet{ border-color:#3d3060; color:#a291d6; background:#131029; }
- .mv { color:#fff; padding:3px 9px; border-radius:3px; font-size:.68rem; letter-spacing:.04em; }
+ .chip { font:500 .68rem/1.3 var(--font-ui); background:var(--bg-2);
+        border:1px solid var(--line-2); color:var(--ink-2);
+        padding:2px 9px; border-radius:999px; white-space:nowrap; display:inline-block; }
+ .chip b { color:var(--ink); font-weight:700; }
+ .chip.gold  { border-color:var(--accent-line); color:var(--accent-2); background:var(--accent-soft); }
+ .chip.red   { border-color:var(--red-line); color:var(--hot-ink); background:var(--hot-soft); }
+ .chip.amber { border-color:var(--warn-line); color:var(--warm-ink); background:var(--warm-soft); }
+ .chip.green { border-color:transparent; color:var(--good); background:var(--open-soft); }
+ .chip.violet{ border-color:transparent; color:var(--sig-dev-ink); background:var(--sig-dev-bg); }
+ .mv { display:inline-flex; align-items:center; gap:.35rem; font:600 .7rem/1.3 var(--font-ui);
+        white-space:nowrap; text-transform:capitalize; padding:.16rem .6rem;
+        border-radius:999px; color:var(--mvc,var(--unk)); background:var(--mvbg,var(--cold-soft)); }
+ .mv::before { content:''; width:6px; height:6px; border-radius:50%;
+        background:var(--mvc,var(--unk)); flex:none; }
+ .mv.open          { --mvc:var(--open);  --mvbg:var(--open-soft); }
+ .mv.probably_open { --mvc:var(--popen); --mvbg:var(--popen-soft); }
+ .mv.unknown       { --mvc:var(--unk);   --mvbg:var(--cold-soft); }
+ .mv.probably_sole { --mvc:var(--psole); --mvbg:var(--psole-soft); }
+ .mv.sole          { --mvc:var(--sole);  --mvbg:var(--red-soft); }
  .kv { display:grid; grid-template-columns:auto 1fr; gap:.3rem .9rem; font-size:.78rem;
         margin:0; }
- .kv dt { color:#8b8b93; font-size:.62rem; text-transform:uppercase; letter-spacing:.1em;
+ .kv dt { color:var(--ink-3); font-size:.62rem; text-transform:uppercase; letter-spacing:.08em;
         white-space:nowrap; padding-top:.12rem; }
  .kv dd { margin:0; }
- .bignum { font-size:2.7rem; font-weight:650; color:#e8c47a; line-height:.95; }
- .sub { font-size:.72rem; color:#b0b0b8; }
- .meter { height:5px; background:#1f1f26; border-radius:3px; overflow:hidden; margin-top:4px; }
- .meter i { display:block; height:100%; background:#e8c47a; }
+ .bignum { font-size:2.7rem; font-weight:700; color:var(--ink); line-height:.95;
+        letter-spacing:-.02em; }
+ .sub { font-size:.72rem; color:var(--ink-2); }
+ .meter { height:5px; background:var(--bg-3); border-radius:3px; overflow:hidden; margin-top:4px; }
+ .meter i { display:block; height:100%; background:var(--accent); border-radius:3px; }
  .wrapx { overflow-x:auto; margin-top:.3rem; }
  .wrapx table { min-width:900px; }
  /* eleven columns of portal detail have to fit the page, not scroll off it */
@@ -257,64 +371,85 @@ _CSS = """
  table.portaltbl th { font-size:.57rem; letter-spacing:.08em; }
  table.portaltbl .meta { font-size:.63rem; }
  .nowrap { white-space:nowrap; }
- details.desc { border:1px solid #26262b; border-radius:8px; background:#131318;
-        padding:.55rem .95rem; margin-top:.75rem; }
- details.desc summary { cursor:pointer; color:#e8c47a; font-size:.74rem; letter-spacing:.06em; }
+ details.desc { border:1px solid var(--line); border-radius:var(--r-lg);
+        background:var(--bg-2); padding:.55rem .95rem; margin-top:.75rem;
+        box-shadow:var(--shadow-1); }
+ details.desc summary { cursor:pointer; color:var(--accent); font-size:.76rem;
+        font-weight:600; }
  details.desc .body { white-space:pre-wrap; font-size:.83rem; line-height:1.65;
-        color:#c5c5ce; margin-top:.75rem; }
+        color:var(--ink-2); margin-top:.75rem; }
  .thumbs { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
  .thumbs figure { margin:0; }
- .thumbs img { width:104px; height:76px; object-fit:cover; border-radius:5px;
-        border:1px solid #2c2c33; background:#1a1a1f; display:block; }
- .thumbs figcaption { font-size:.58rem; color:#7c7c86; margin-top:.15rem;
+ .thumbs img { width:104px; height:76px; object-fit:cover; border-radius:var(--r-sm);
+        border:1px solid var(--line-2); background:var(--bg-3); display:block; }
+ .thumbs figcaption { font-size:.58rem; color:var(--ink-3); margin-top:.15rem;
         text-align:center; letter-spacing:.06em; }
- .proof { font-size:.7rem; color:#6f8f7a; margin-top:.3rem; }
- .proof.stale { color:#d6a95a; }
+ .proof { font-size:.72rem; color:var(--good); margin-top:.3rem; }
+ .proof.stale { color:var(--warm-ink); }
  .ev { margin:.35rem 0 0; padding-left:1.05rem; }
- .ev li { font-size:.69rem; color:#7f9f8a; line-height:1.55; }
- .flagline { color:#b4645a; font-size:.75rem; line-height:1.5; }
- .note { color:#d6a95a; font-size:.75rem; line-height:1.5; }
+ .ev li { font-size:.7rem; color:var(--ink-2); line-height:1.55; }
+ .flagline { color:var(--bad-ink); font-size:.75rem; line-height:1.5; }
+ .note { color:var(--psole); font-size:.75rem; font-weight:500; line-height:1.5; }
  .hero { display:flex; gap:1.4rem; flex-wrap:wrap; align-items:flex-start; }
  .hero img.shot { width:340px; max-width:100%; height:238px; object-fit:cover;
-        border-radius:8px; border:1px solid #2c2c33; background:#16161b; }
- .delta.up { color:#e08b7e; } .delta.down { color:#6fbf8e; }
+        border-radius:var(--r-lg); border:1px solid var(--line); background:var(--bg-3); }
+ .delta.up { color:var(--bad); } .delta.down { color:var(--good); }
  @media print {
-   .card { background:#fff; border-color:#ccc; break-inside:avoid; }
-   .card h3 { color:#555; }
-   .chip { background:#f5f5f5; border-color:#ccc; color:#333; }
-   .chip b { color:#111; }
-   .bignum { color:#111; }
-   .kv dt { color:#555; }
-   .meter { background:#eee; } .meter i { background:#888; }
-   details.desc { background:#fff; border-color:#ccc; }
-   details.desc[open] summary { color:#111; }
-   details.desc .body { color:#222; }
-   .wrapx table { min-width:0; }
-   .proof { color:#555; }
-   .ev li { color:#555; }
- }
- @media print {
-   :root { color-scheme: light; }
-   body { background:#fff; color:#111; font-size:11pt; }
-   header.bar { border-color:#ccc; }
-   header.bar .sub, .meta { color:#555; }
-   nav.crumbs, .internal, .noprint { display:none !important; }
+   /* force the light palette whatever theme is active on screen */
+   :root, :root[data-theme='dark'] {
+     color-scheme:light;
+     --bg:#fff; --bg-2:#fff; --bg-3:#f3f4f6; --bg-4:#e9eaee;
+     --line:#ddd; --line-2:#ccc; --line-3:#b9bec7;
+     --ink:#111; --ink-2:#444; --ink-3:#555;
+     --accent:#111; --accent-2:#111; --accent-soft:#f5f5f5;
+     --accent-line:#ccc; --accent-ink:#111;
+     --warn-bg:#f5f2ea; --warn-line:#bbb; --warn-ink:#444;
+     --shadow-1:none; --shadow-2:none;
+   }
+   body { font-size:11pt; }
+   header.bar { position:static; height:auto; padding:.4cm 0 .2cm; }
+   nav.crumbs, .internal, .noprint, .themebtn { display:none !important; }
    a { color:#111; text-decoration:none; }
-   h2 { color:#333; border-color:#ccc; }
-   th { color:#555; }
-   th,td { border-color:#ddd; }
-   .disclaimer { color:#444; border-color:#bbb; background:#f5f2ea; }
-   .stat b { color:#111; }
-   .stat span { color:#555; }
-   .price { color:#111; }
-   .tier { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+   .card, details.desc { break-inside:avoid; }
+   .wrapx table { min-width:0; }
+   .tier, .mv, .chip, .badge { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
    main { max-width:none; padding:0 .2cm; }
    @page { size: A4; margin: 1.4cm; }
  }
 """
 
-_HEADER = """<header class="bar"><h1>OBLIVION ESTATES</h1>
- <span class="sub">COMPARATIVE MARKET ANALYSIS</span></header>"""
+_HEADER = """<header class="bar">
+ <a class="logo" href="/"><span class="mark"></span><h1>Oblivion</h1>
+  <span class="sub">CMA reports</span></a>
+ <nav><a href="/">Prospects</a><a href="/map">Map</a>
+  <a class="on" href="/cma">CMA reports</a></nav>
+ <button class="themebtn" id="themebtn" onclick="obTheme()"
+  title="toggle light / dark">◐</button>
+</header>"""
+
+# Standalone-download variant: branding only — no app nav, no theme toggle.
+_HEADER_CLIENT = """<header class="bar">
+ <span class="logo"><span class="mark"></span><h1>Oblivion</h1>
+  <span class="sub">Comparative market analysis</span></span>
+</header>"""
+
+# Runs before first paint so the page can't flash the wrong theme. Same
+# localStorage key the SvelteKit app uses, so the choice follows the user.
+_THEME_JS = """
+document.documentElement.dataset.theme =
+  localStorage.getItem('oblivion-theme') || 'dark';
+function obTheme(){
+  var d = document.documentElement;
+  var t = d.dataset.theme === 'dark' ? 'light' : 'dark';
+  d.dataset.theme = t;
+  localStorage.setItem('oblivion-theme', t);
+  obGlyph();
+}
+function obGlyph(){
+  var b = document.getElementById('themebtn');
+  if (b) b.textContent = document.documentElement.dataset.theme === 'dark' ? '\\u2600' : '\\u263e';
+}
+"""
 
 
 def _page(title: str, body: str, extra_css: str = "",
@@ -322,10 +457,14 @@ def _page(title: str, body: str, extra_css: str = "",
     return (f"""<!doctype html>
 <html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<script>{_THEME_JS}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <title>{_e(title)}</title>
 <style>{_CSS}{extra_css}</style></head><body>
 {body}
-<script>{script}</script></body></html>""")
+<script>obGlyph();{script}</script></body></html>""")
 
 
 # --------------------------------------------------------------------- index
@@ -477,8 +616,9 @@ def _band_graphic(band: dict, asking) -> str:
         return round((v - lo_dom) / span * 100, 1)
 
     ticks = ""
-    for v, label, color in ((low, "low", "#8b8b93"), (mid, "mid", "#e8c47a"),
-                            (high, "high", "#8b8b93")):
+    for v, label, color in ((low, "low", "var(--ink-3)"),
+                            (mid, "mid", "var(--accent)"),
+                            (high, "high", "var(--ink-3)")):
         ticks += (
             f'<div style="position:absolute;left:{pct(v)}%;top:0;height:100%;'
             f'width:2px;background:{color}"></div>'
@@ -494,22 +634,125 @@ def _band_graphic(band: dict, asking) -> str:
             f'<div style="position:absolute;left:{pct(asking)}%;top:-.45rem;'
             f'transform:translateX(-50%);width:0;height:0;'
             f'border-left:7px solid transparent;border-right:7px solid transparent;'
-            f'border-top:9px solid #c0392b"></div>'
+            f'border-top:9px solid var(--bad)"></div>'
             f'<div style="position:absolute;left:{pct(asking)}%;top:-2.5rem;'
-            f'transform:translateX(-50%);font-size:.62rem;color:#c0392b;'
+            f'transform:translateX(-50%);font-size:.62rem;color:var(--bad);'
             f'white-space:nowrap">asking {_fmt_r(asking)}</div>')
     fill = (f'<div style="position:absolute;left:{pct(low)}%;'
             f'width:{max(pct(high) - pct(low), 0.5)}%;top:30%;height:40%;'
-            f'background:linear-gradient(90deg,#3a3320,#e8c47a55,#3a3320);'
+            f'background:linear-gradient(90deg,transparent,'
+            f'color-mix(in srgb, var(--accent) 45%, transparent),transparent);'
             f'border-radius:3px"></div>')
-    return (f'<div style="position:relative;height:22px;background:#1a1a1f;'
-            f'border:1px solid #26262b;border-radius:4px;'
+    return (f'<div style="position:relative;height:22px;background:var(--bg-3);'
+            f'border:1px solid var(--line-2);border-radius:4px;'
             f'margin:3.1rem .4rem 2.2rem">{fill}{ticks}{marker}</div>')
 
 
-def _owner_block(conn: sqlite3.Connection, group_id: int) -> str:
+def _owner_summary_rows(stored: dict, asking) -> list[tuple[str, str]]:
+    """Read-only kv rows for the stored deed record, plus the tenure/equity
+    maths a mandate pitch actually leans on (paper gain, ×multiple, CAGR)."""
+    rows: list[tuple[str, str]] = []
+    for label, key in (("registered owner", "owner_name"), ("phone", "phone"),
+                       ("email", "email"), ("title deed", "deed_number")):
+        if stored.get(key):
+            rows.append((label, f"<b>{_e(stored[key])}</b>"))
+
+    pp, pd = stored.get("purchase_price"), stored.get("purchase_date")
+    if pp:
+        rows.append(("last purchase", f"<b>{_fmt_r(pp)}</b>"
+                     + (f' <span class="meta">{_e(pd)}</span>' if pd else "")))
+    elif pd:
+        rows.append(("last transfer", _e(pd)))
+
+    yrs = None
+    d = cma._parse_date(pd) if pd else None
+    if d is not None:
+        yrs = max(0.0, (_utcnow() - d).days / 365.25)
+        note = (" — long tenure, equity likely" if yrs >= 10
+                else " — recent transfer, thin equity" if yrs < 3 else "")
+        rows.append(("ownership tenure",
+                     f"<b>{yrs:.1f}</b> years<span class='meta'>{note}</span>"))
+
+    try:
+        pp_n = int(pp) if pp else 0
+    except (TypeError, ValueError):
+        pp_n = 0
+    if pp_n > 0 and asking:
+        gain = asking - pp_n
+        mult = asking / pp_n
+        cagr = ((mult ** (1 / yrs) - 1) * 100
+                if yrs and yrs > 0.5 and mult > 0 else None)
+        cls = "delta down" if gain >= 0 else "delta up"
+        rows.append(("paper gain at asking",
+                     f'<b class="{cls}">{"" if gain >= 0 else "−"}'
+                     f'{_fmt_r(abs(gain))}</b> '
+                     f'<span class="meta">{mult:.2f}× purchase'
+                     + (f" · {cagr:.1f}%/yr" if cagr is not None else "")
+                     + "</span>"))
+
+    if stored.get("bond_holder"):
+        rows.append(("bond holder", f"<b>{_e(stored['bond_holder'])}</b>"
+                     " <span class='meta'>bonded — bank settlement due on "
+                     "sale</span>"))
+    elif stored.get("deed_number"):
+        rows.append(("bond", "none on record — possibly unbonded, "
+                             "flexible on timing"))
+    return rows
+
+
+def _transfer_history_html(stored: dict) -> str:
+    """Every past transfer LOOM returned (kept in `raw`) — the full price
+    ladder for the stand, straight from the deeds registry."""
+    try:
+        raw = json.loads(stored.get("raw") or "{}")
+    except (TypeError, ValueError):
+        return ""
+    hist = raw.get("transfer_history") or []
+    rows = sorted((h.get("registration_date") or h.get("sell_date") or "",
+                   h.get("sell_price")) for h in hist)
+    rows = [(d, p) for d, p in rows if d]
+    if len(rows) < 2:
+        return ""
+    bits = []
+    prev = None
+    for d, p in rows:
+        delta = ""
+        if p and prev:
+            mult = p / prev
+            delta = f' <span class="meta">({mult:.1f}× the previous transfer)</span>'
+        bits.append(f'<li>{_e(d[:10])} — '
+                    f'{f"<b>{_fmt_r(p)}</b>" if p else "price not recorded"}'
+                    f'{delta}</li>')
+        if p:
+            prev = p
+    return ('<div style="margin-top:.55rem"><span class="meta">Transfer '
+            'history (deeds registry)</span>'
+            f'<ul class="ev" style="margin-top:.2rem">{"".join(bits)}</ul></div>')
+
+
+def _owner_block(conn: sqlite3.Connection, group_id: int,
+                 asking=None) -> str:
     owners.ensure_table(conn)
+    stored = owners.get(conn, str(group_id)) or {}
     fields = [f for f in owners.FIELDS if f != "raw"]
+
+    summary_rows = _owner_summary_rows(stored, asking) \
+        if any(stored.get(f) for f in fields) else []
+    if summary_rows:
+        kv = "".join(f"<dt>{_e(k)}</dt><dd>{v}</dd>" for k, v in summary_rows)
+        # updated_at lives in the badge next to the buttons — notes only here
+        meta_bits = stored.get("notes") or ""
+        summary = (f'<dl class="kv" style="margin:.3rem 0 .2rem">{kv}</dl>'
+                   + _transfer_history_html(stored)
+                   + (f'<div class="meta">{_e(meta_bits)}</div>'
+                      if meta_bits else ""))
+        form_open = ""
+    else:
+        summary = ('<div class="meta" style="margin:.2rem 0 .4rem">No owner '
+                   'or deed details stored yet — fetch them from LOOM, or '
+                   'capture a manual lookup below.</div>')
+        form_open = ""  # collapsed either way; fetch is the primary path
+
     inputs = ""
     for f in fields:
         label = f.replace("_", " ")
@@ -517,25 +760,34 @@ def _owner_block(conn: sqlite3.Connection, group_id: int) -> str:
                else f'<input id="own_{f}" '
                     f'{"type=number" if f == "purchase_price" else "type=text"}'
                     f'{" placeholder=YYYY-MM-DD" if f == "purchase_date" else ""}>')
-        inputs += (f'<label style="display:block;font-size:.68rem;color:#999;'
+        inputs += (f'<label style="display:block;font-size:.68rem;color:var(--ink-3);'
                    f'text-transform:uppercase;letter-spacing:.1em;'
                    f'margin:.5rem 0 .15rem">{_e(label)}</label>{tag}')
 
     return f"""<div class="internal" id="ownerblock">
-<span class="tag">Internal — not for the seller · owner details (POPIA: minimum data, mandate-pitch use only)</span>
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.2rem .9rem">
-{inputs}
-</div>
+<span class="tag">Internal — not for the seller · owner &amp; deed (POPIA: minimum data, mandate-pitch use only)</span>
+{summary}
 <div style="margin-top:.8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
-  <button class="primary" onclick="ownerSave()">Save owner details</button>
+  <button onclick="deedFetch()" id="deedbtn"
+    title="Look this property's registered owner up in the LOOM deeds registry (needs a resolved erf)">
+    {'Refresh deed (LOOM)' if summary_rows else 'Fetch deed (LOOM)'}</button>
   <button class="danger" onclick="ownerDelete()">POPIA purge</button>
-  <span id="own_updated" class="badge gray" style="display:none"></span>
+  <span id="own_updated" class="badge gray"
+    {'style="display:none"' if not stored.get('updated_at') else ''}>{
+      f"updated {_e(stored['updated_at'])} UTC" if stored.get('updated_at') else ''}</span>
   <span id="own_msg" class="meta"></span>
 </div>
-<div class="meta" style="margin-top:.5rem">Self-sourced: look the owner up
-against the erf number above in a primary source — DeedsWeb (deeds.gov.za),
-the Deeds Office's own search at state-regulated fees — and capture the
-result here. Note the source and search date in "notes".</div>
+<details style="margin-top:.7rem" {form_open}>
+<summary style="cursor:pointer;font-size:.76rem;font-weight:600;color:var(--accent)">Manual capture / edit</summary>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.2rem .9rem;margin-top:.3rem">
+{inputs}
+</div>
+<div style="margin-top:.8rem"><button class="primary" onclick="ownerSave()">Save owner details</button></div>
+<div class="meta" style="margin-top:.5rem">Self-source against the erf number
+above in a primary source — DeedsWeb (deeds.gov.za), the Deeds Office's own
+search at state-regulated fees — and note the source and search date in
+"notes".</div>
+</details>
 </div>"""
 
 
@@ -568,6 +820,45 @@ async function ownerSave(){
   const u = document.getElementById('own_updated');
   if (d.updated_at){ u.style.display=''; u.textContent = 'updated ' + d.updated_at + ' UTC'; }
   setTimeout(() => m.textContent = '', 2500);
+}
+async function deedFetch(){
+  const b = document.getElementById('deedbtn');
+  const m = document.getElementById('own_msg');
+  b.disabled = true; b.textContent = 'Fetching deed…'; m.textContent = '';
+  try {
+    const r = await fetch('/api/deed/' + GID, {method:'POST'});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok){
+      m.textContent = d.error === 'loom_auth'
+        ? 'LOOM session expired — refresh the token (run loom_login.py on the Mac).'
+        : d.error === 'no_erf'
+          ? 'Resolve this property\\u2019s erf number first (dashboard \\u2192 crawl panel).'
+          : (d.message || d.error || ('deed fetch failed (' + r.status + ')'));
+      return;
+    }
+    m.textContent = d.owner_name ? ('deed fetched \\u2713 \\u2014 ' + d.owner_name)
+                                 : 'deed fetched \\u2014 LOOM returned no owner detail';
+    // reload so the server renders the tenure / paper-gain maths
+    setTimeout(() => location.reload(), 900);
+  } finally {
+    b.disabled = false; b.textContent = 'Fetch deed (LOOM)';
+  }
+}
+function toolDeed(){
+  document.getElementById('ownerblock').scrollIntoView({behavior:'smooth', block:'center'});
+  deedFetch();
+}
+async function copyRow(btn){
+  const orig = btn.textContent;
+  try {
+    const r = await fetch('/api/row/' + GID);
+    const d = await r.json();
+    await navigator.clipboard.writeText(d.row);
+    btn.textContent = 'copied \\u2713 \\u2014 paste into Excel / Sheets';
+  } catch (e) {
+    btn.textContent = 'copy failed';
+  }
+  setTimeout(() => btn.textContent = orig, 2500);
 }
 async function ownerDelete(){
   if (!confirm('Purge stored owner details for this property? (POPIA erasure — cannot be undone)')) return;
@@ -758,9 +1049,7 @@ def _identity_chips(members: list[sqlite3.Row], lc: sqlite3.Row | None,
         chips.append(_chip("delisted", ""))
     verdict = _rget(score, "mandate_verdict")
     if verdict:
-        colour = _MANDATE_COLORS.get(verdict, "#5d5d66")
-        chips.insert(0, f'<span class="mv" style="background:{colour}">'
-                        f'{_e(verdict.replace("_", " "))}</span>')
+        chips.insert(0, _mv_pill(verdict))
     tier = _rget(score, "tier")
     if tier:
         chips.insert(0, f'<span class="tier {_e(tier)}">{_e(tier).upper()}'
@@ -782,8 +1071,9 @@ def _score_card(score: sqlite3.Row | None) -> str:
     for label, v in subs:
         pct = max(0, min(100, int(v or 0)))
         bars += (f'<div style="margin-top:.5rem"><div style="display:flex;'
-                 f'justify-content:space-between;font-size:.68rem;color:#9a9aa2">'
-                 f'<span>{_e(label)}</span><b style="color:#e8e8e8">'
+                 f'justify-content:space-between;font-size:.68rem;'
+                 f'color:var(--ink-3)">'
+                 f'<span>{_e(label)}</span><b style="color:var(--ink)">'
                  f'{"—" if v is None else int(v)}</b></div>'
                  f'<div class="meter"><i style="width:{pct}%"></i></div></div>')
     sellable = _rget(score, "sellable")
@@ -809,7 +1099,6 @@ def _mandate_card(members: list[sqlite3.Row], score: sqlite3.Row | None) -> str:
                                  for m in members) if b})
     proof = _brand_proof(members)
     verdict = _rget(score, "mandate_verdict") or "unknown"
-    colour = _MANDATE_COLORS.get(verdict, "#5d5d66")
     conf = _rget(score, "open_mandate_confidence")
 
     proof_html = ""
@@ -845,12 +1134,14 @@ def _mandate_card(members: list[sqlite3.Row], score: sqlite3.Row | None) -> str:
 
     note = _rget(score, "mandate_expiry_note")
     rows = [
-        ("verdict", f'<span class="mv" style="background:{colour}">'
-                    f'{_e(verdict.replace("_", " "))}</span>'
+        ("verdict", _mv_pill(verdict)
                     + (f' <span class="meta">confidence {int(conf)}/100</span>'
                        if conf is not None else "")),
         ("distinct brands", f'<b>{len(brands)}</b> — {_e(", ".join(brands)) or "—"}'),
         ("agency names", _e(", ".join(agencies)) or "—"),
+        ("named agents", _e(", ".join(sorted(
+            {(_rget(m, "agent_name") or "").strip() for m in members}
+            - {""}))) or '<span class="meta">no agent published</span>'),
         ("portals", f'{len({_rget(m, "source") for m in members})} '
                     f'({_e(", ".join(sorted({_source_label(_rget(m, "source")) for m in members})))})'),
     ]
@@ -1050,7 +1341,7 @@ def _portal_table(members: list[sqlite3.Row]) -> str:
   <td class="nowrap">{_e(listed) or '—'}
       {f'<div class="meta">{listed_days}d ago</div>' if listed_days is not None else ''}</td>
   <td class="nowrap">{_fmt_num(_rget(m, 'photo_count'))}</td>
-  <td class="nowrap"{' style="color:#d6a95a"' if stale else ''}>{_age_label(age)}
+  <td class="nowrap"{' style="color:var(--warm-ink)"' if stale else ''}>{_age_label(age)}
       <div class="meta">{_e((_rget(m, 'last_seen') or '')[:10])}</div></td>
   <td><div class="chips">{''.join(badges) or '<span class="meta">—</span>'}</div></td>
 </tr>"""
@@ -1181,13 +1472,18 @@ market valuation — it lags the market and is a sanity check, not a price.</div
             f'<div class="cards">{"".join(cards)}</div>')
 
 
-def render_report(conn: sqlite3.Connection, group_id: int) -> str | None:
+def render_report(conn: sqlite3.Connection, group_id: int,
+                  client: bool = False) -> str | None:
     """The full CMA report page; None when the group doesn't exist.
 
     Page order is deliberate: who/what this is, then whether it is worth
     pitching (score + mandate), then the pressure the seller is under (deal
     signals), then the money (guidance + comps), then the raw per-portal
     record, the land, the owner and finally what has left the market nearby.
+
+    client=True renders the standalone-download variant: no app nav, and the
+    internal-only blocks (owner details, scoring rationale) are omitted from
+    the HTML itself — a file that leaves the building must be forwardable.
     """
     data = cma.analyse(conn, group_id)
     if data is None:
@@ -1287,7 +1583,7 @@ def render_report(conn: sqlite3.Connection, group_id: int) -> str | None:
     identity = f"""<div class="hero">
   {photo}
   <div style="flex:1;min-width:280px">
-    <div class="price" style="font-size:2rem;color:#e8c47a">{_fmt_r(asking)}</div>
+    <div class="price" style="font-size:2rem">{_fmt_r(asking)}</div>
     {_identity_chips(members, lc, score)}
     <div style="margin-top:.15rem">{_fmt_num(subj.get('beds'))} bed ·
       {_fmt_num(subj.get('baths'))} bath
@@ -1305,7 +1601,7 @@ def render_report(conn: sqlite3.Connection, group_id: int) -> str | None:
         band_html = f"""
 <div style="display:flex;gap:2.2rem;flex-wrap:wrap;align-items:baseline">
   <div><span class="meta">LOW</span><div class="price" style="font-size:1.25rem">{_fmt_r(band['low'])}</div></div>
-  <div><span class="meta">RECOMMENDED</span><div class="price" style="font-size:1.8rem;color:#e8c47a">{_fmt_r(band['mid'])}</div></div>
+  <div><span class="meta">RECOMMENDED</span><div class="price" style="font-size:1.8rem;color:var(--accent-2)">{_fmt_r(band['mid'])}</div></div>
   <div><span class="meta">HIGH</span><div class="price" style="font-size:1.25rem">{_fmt_r(band['high'])}</div></div>
 </div>
 {_band_graphic(band, asking)}
@@ -1314,6 +1610,18 @@ def render_report(conn: sqlite3.Connection, group_id: int) -> str | None:
         band_html = (f'<div class="meta">No price guidance possible — '
                      f'{_e(band.get("basis"))}</div>')
     notes_html = "".join(f'<li>{_e(n)}</li>' for n in data.get("notes") or [])
+
+    # ---------------- action toolbar (screen-only, not in the client file)
+    toolbar = "" if client else f"""
+<div class="noprint" style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.7rem 0 .2rem">
+  <button class="primary" onclick="toolDeed()"
+    title="Fetch the registered owner / title deed from LOOM and save it to this property">Fetch deed (LOOM)</button>
+  <button onclick="copyRow(this)"
+    title="Copy this property as a spreadsheet row">Copy for sheet</button>
+  <a class="btnlink" href="/cma/{group_id}/download" download
+    title="Save the client-safe report (no internal blocks) as a standalone HTML file">&darr; Download report</a>
+  <button onclick="window.print()">Print / save PDF</button>
+</div>"""
 
     # ---------------- comps table
     comp_rows = ""
@@ -1329,24 +1637,49 @@ def render_report(conn: sqlite3.Connection, group_id: int) -> str | None:
         title = (f'<a href="{_e(c["url"])}" target="_blank" rel="noopener">'
                  f'{_e(c["title"] or c["listing_key"])}</a>'
                  if c.get("url") else _e(c["title"] or c["listing_key"]))
+        cma_link = (f' · <a class="noprint" href="/cma/{c["group_id"]}">CMA &rarr;</a>'
+                    if isinstance(c.get("group_id"), int) else "")
+        ag = c.get("agency_count") or 1
+        ag_html = (f'<b>{ag}</b>' if ag > 1 else str(ag))
         comp_rows += f"""<tr>
-  <td>{title}<div class="meta">{_e(c['distance'])}</div></td>
+  <td>{title}<div class="meta">{_e(c['distance'])}{cma_link}</div></td>
   <td>{_e(c['suburb'] or '')}</td>
   <td class="price">{_fmt_r(c['price_zar'])}</td>
   <td>{size}</td>
   <td>{ppm2}</td>
   <td>{_fmt_num(c['beds'])}</td>
+  <td>{ag_html}</td>
   <td>{_comp_status(c)}</td>
   <td>{_cut_cell(c.get('price_cut'))}</td>
   <td><b>{c['similarity']}</b><span class="meta">/100</span></td>
 </tr>"""
     comps_html = (f"""<div class="wrapx"><table><tr><th>Property</th><th>Suburb</th>
-<th>Price</th><th>Size</th><th>R/m²</th><th>Beds</th><th>Status</th>
+<th>Price</th><th>Size</th><th>R/m²</th><th>Beds</th><th>Agencies</th><th>Status</th>
 <th>Price move</th><th>Similar</th></tr>{comp_rows}</table></div>"""
                   if comp_rows
                   else '<div class="meta">No comparable listings found.</div>')
 
     # ---------------- suburb stats strip
+    # How this subject sits against the suburb — the "why now" of the pitch.
+    vs_chips = ""
+    med_ask = stats.get("median_asking_zar")
+    if asking and med_ask:
+        diff = (asking - med_ask) / med_ask * 100
+        vs_chips += _chip(
+            f'asking <b>{"+" if diff > 0 else "−"}{abs(diff):.0f}%</b> vs '
+            f'suburb median', "amber" if diff > 25 else "")
+    med_dom = stats.get("median_days_on_market")
+    if dom is not None and med_dom:
+        ratio = dom / med_dom
+        vs_chips += _chip(
+            f'<b>{ratio:.1f}×</b> the suburb median time on market',
+            "amber" if ratio >= 1.5 else "")
+    cut_here = max((_rget(m, "total_cut_pct") or 0.0 for m in members),
+                   default=0.0)
+    if cut_here and stats.get("median_cut_pct"):
+        vs_chips += _chip(f'cut <b>{cut_here:.1f}%</b> vs suburb median cut '
+                          f'<b>{stats["median_cut_pct"]}%</b>')
+
     stat_bits = ""
     if stats.get("active_count"):
         pct_share = stats.get("price_cut_share")
@@ -1390,17 +1723,21 @@ asking price at disappearance (a proxy, not a deeds record).</div>
 <div class="wrapx"><table><tr><th>Property</th><th>Status</th><th>Last price</th>
 <th>Delisted</th><th>DOM</th><th>Total cut</th></tr>{off_rows}</table></div>"""
 
-    body = f"""{_HEADER}
-<nav class="crumbs"><a href="/">&larr; dashboard</a> ·
+    crumbs = f"""<nav class="crumbs"><a href="/">&larr; dashboard</a> ·
  <a href="/cma">CMA index</a> · group {group_id}
- <button class="noprint" style="float:right;font-size:.68rem"
-   onclick="window.print()">Print / save PDF</button></nav>
+ <span class="grow"></span>
+ <a href="/cma/{group_id}/download" download
+   title="Save the client-safe report (no internal blocks) as a standalone HTML file">&darr; Download report</a> ·
+ <button class="noprint" style="font-size:.72rem;padding:.25rem .6rem"
+   onclick="window.print()">Print / save PDF</button></nav>"""
+    body = f"""{_HEADER_CLIENT if client else _HEADER}
+{'' if client else crumbs}
 <main>
 <h1 style="font-weight:300;letter-spacing:.02em;font-size:1.5rem;margin:.4rem 0 .1rem">
 {_e(subj.get('title') or f"Property group {group_id}")}</h1>
 <div class="meta" style="font-size:.85rem">{_e(address_line) or _e(subj.get('suburb') or '')}</div>
 <div class="disclaimer">{_e(DISCLAIMER)}</div>
-
+{toolbar}
 <h2>Subject property</h2>
 {identity}
 
@@ -1410,18 +1747,19 @@ asking price at disappearance (a proxy, not a deeds record).</div>
 {_mandate_card(members, score)}
 </div>
 {f'<div class="cards wide">{evidence_html}</div>' if evidence_html else ''}
-{_internal_score_block(score)}
+{'' if client else _internal_score_block(score)}
 
 {_deal_signals(members, history, lc)}
 
 <h2>Price guidance</h2>
 {band_html}
-{f'<ul style="font-size:.78rem;color:#b0b0b8;line-height:1.6;padding-left:1.2rem;margin-top:.7rem">{notes_html}</ul>' if notes_html else ''}
+{f'<ul style="font-size:.78rem;color:var(--ink-2);line-height:1.6;padding-left:1.2rem;margin-top:.7rem">{notes_html}</ul>' if notes_html else ''}
 
 <h2>Comparable properties</h2>
 {comps_html}
 
 {f'<h2>Suburb snapshot — {_e(subj.get("suburb") or slug)}</h2><div class="stats">{stat_bits}</div>' if stat_bits else ''}
+{f'<div class="chips" style="margin-top:.5rem">{vs_chips}</div>' if stat_bits and vs_chips else ''}
 
 <h2>Every portal listing for this property ({len(members)})</h2>
 <div class="meta" style="margin-bottom:.35rem">One row per portal listing the
@@ -1433,14 +1771,15 @@ between portals; blanks mean that portal never published the field.</div>
 
 {_valuation_block(subj, stats, gv_value, gv_roll, erf)}
 
-{_owner_block(conn, group_id)}
+{'' if client else _owner_block(conn, group_id, asking)}
 
 {off_html}
 </main>"""
 
     own_fields = [f for f in owners.FIELDS if f != "raw"]
-    script = (_OWNER_JS
-              .replace("__GID__", str(group_id))
-              .replace("__OWN_FIELDS__", json.dumps(own_fields)))
+    script = "" if client else (
+        _OWNER_JS
+        .replace("__GID__", str(group_id))
+        .replace("__OWN_FIELDS__", json.dumps(own_fields)))
     title = f"CMA — {subj.get('title') or group_id}"
     return _page(title, body, script=script)

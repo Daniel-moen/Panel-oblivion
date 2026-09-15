@@ -47,7 +47,21 @@ def save(data: dict) -> None:
     os.replace(tmp, config.LOCATIONS_PATH)
 
 
-def get(source: str, slug: str) -> str | None:
+# Portals whose to-rent search path is the for-sale path with a different
+# leading segment, so the sale entry in locations.json serves both books.
+# Verified live, one suburb each:
+#   property24       /to-rent/camps-bay/cape-town/western-cape/11014   (same id)
+#   privateproperty  /to-rent/western-cape/.../camps-bay/652           (same id)
+#   remax            /property-to-rent-south-africa/western-cape/cape-town/camps-bay
+#   seeff (Prop Data) /results/residential/to-let/<town>/<suburb>
+# Pam Golding is NOT here: its area reference embeds the book itself
+# ("residential-properties-to-rent-stellenbosch/2932"), with a different id
+# from the for-sale one, so it gets its own discovered entry.
+_RENT_SHARES_SALE_PATH = frozenset(
+    {"property24", "privateproperty", "remax", "seeff"})
+
+
+def get(source: str, slug: str, listing_type: str = "sale") -> str | None:
     """Search-path fragment for this suburb on this portal, or None if the
     portal has no page for it.
 
@@ -55,8 +69,21 @@ def get(source: str, slug: str) -> str | None:
     page for the area — that is different from "never checked", and must not
     fall through to a guessed path. Guessing there is what made Seeff serve
     all of Somerset West under "Erinvale Golf Estate".
+
+    For listing_type="rent" the rent-specific entry ("<source>_rent") wins;
+    failing that, portals in _RENT_SHARES_SALE_PATH fall back to their sale
+    path, which is the same path. Any other portal returns None — the rental
+    crawl then skips it, which is the right answer for a path nobody has
+    confirmed.
     """
     entry = load().get(slug) or {}
+    if listing_type != "sale":
+        key = f"{source}_{listing_type}"
+        if key in entry:
+            return entry[key] or None
+        if source in _RENT_SHARES_SALE_PATH:
+            return get(source, slug, "sale")
+        return None
     if source in entry:
         return entry[source] or None
     return _derived(source, slug)      # never checked — try a derived default
@@ -108,6 +135,10 @@ def _derived(source: str, slug: str) -> str | None:
 
 _PP_SITEMAP = "https://www.privateproperty.co.za/SiteMap/residential-shapes-0.xml"
 _PG_SITEMAP = "https://www.pamgolding.co.za/sitemaps/propertysearchlocationssale.xml"
+# The same sitemap for the rental book. Far thinner than the sale one (178
+# residential-to-rent areas nationally against thousands for sale), so most
+# configured suburbs legitimately resolve to nothing here.
+_PG_RENT_SITEMAP = "https://www.pamgolding.co.za/sitemaps/propertysearchlocationsrent.xml"
 _P24_SITEMAP = "https://www.property24.com/sitemap/Suburbs?SearchType=ForSale"
 _P24_CITIES_SITEMAP = "https://www.property24.com/sitemap/Cities?SearchType=ForSale"
 
@@ -234,12 +265,21 @@ def _discover_privateproperty(fetcher, slugs, log) -> dict[str, str]:
     return found
 
 
-def _discover_pamgolding(fetcher, slugs, log) -> dict[str, str]:
-    """slug -> 'residential-properties-for-sale-camps-bay/2113'."""
-    log("[Pam Golding] reading area sitemap...")
+def _discover_pamgolding(fetcher, slugs, log,
+                         listing_type: str = "sale") -> dict[str, str]:
+    """slug -> 'residential-properties-for-sale-camps-bay/2113'.
+
+    listing_type="rent" reads the rental sitemap instead and yields
+    'residential-properties-to-rent-stellenbosch/2932'. The area id differs
+    between the two books, which is why Pam Golding cannot share one entry.
+    """
+    rent = listing_type == "rent"
+    log(f"[Pam Golding] reading area sitemap ({listing_type})...")
     by_slug: dict[str, list[tuple[str, str]]] = {}
-    prefix = "residential-properties-for-sale-"
-    for loc in _sitemap_locs(fetcher, _PG_SITEMAP):
+    prefix = ("residential-properties-to-rent-" if rent
+              else "residential-properties-for-sale-")
+    sitemap = _PG_RENT_SITEMAP if rent else _PG_SITEMAP
+    for loc in _sitemap_locs(fetcher, sitemap):
         m = re.search(rf"/property-search/({prefix}[a-z0-9-]+)/(\d+)$", loc)
         if not m:
             continue
@@ -258,7 +298,7 @@ def _discover_pamgolding(fetcher, slugs, log) -> dict[str, str]:
         if slug in found:
             log(f"  {slug} -> {found[slug]}")
         else:
-            log(f"  {slug} -> not listed on Pam Golding")
+            log(f"  {slug} -> not listed on Pam Golding ({listing_type})")
     return found
 
 
@@ -283,8 +323,14 @@ def _validate_slug_portal(src, slugs, log) -> dict[str, str]:
 
 
 def discover(slugs: list[str] | None = None, sources: list[str] | None = None,
-             log=print) -> dict:
-    """Mine/validate portal area references and update locations.json."""
+             log=print, listing_types: tuple[str, ...] = ("sale", "rent")) -> dict:
+    """Mine/validate portal area references and update locations.json.
+
+    Rental references are mined alongside the sale ones and stored under
+    "<source>_rent". Only Pam Golding needs them — every other rent-capable
+    portal reuses its sale path (see _RENT_SHARES_SALE_PATH) — so this adds
+    exactly one extra sitemap fetch to a discovery run.
+    """
     import sources as source_registry
     from httpclient import Fetcher
 
@@ -305,8 +351,13 @@ def discover(slugs: list[str] | None = None, sources: list[str] | None = None,
             result.setdefault(slug, {})["privateproperty"] = path
     if "pamgolding" in sources:
         f = Fetcher("pamgolding", logger=log)
-        for slug, path in _discover_pamgolding(f, slugs, log).items():
-            result.setdefault(slug, {})["pamgolding"] = path
+        if "sale" in listing_types:
+            for slug, path in _discover_pamgolding(f, slugs, log).items():
+                result.setdefault(slug, {})["pamgolding"] = path
+        if "rent" in listing_types:
+            for slug, path in _discover_pamgolding(
+                    f, slugs, log, listing_type="rent").items():
+                result.setdefault(slug, {})["pamgolding_rent"] = path
     # Only RE/MAX still needs its search path probed. Seeff used to be here,
     # but as a Prop Data tenant it now reads the exact path out of its own
     # sitemap — and probing it would actively do harm, because search_urls()
@@ -336,6 +387,12 @@ def discover(slugs: list[str] | None = None, sources: list[str] | None = None,
         for name in sources:
             if name not in self_discovering:
                 entry.setdefault(name, None)
+        # Pam Golding's rental book covers a fraction of the areas its sale
+        # book does, so "no rental page here" is the common case and must be
+        # recorded as a checked null — otherwise get() would fall through and
+        # the rental crawl would keep asking for a page that isn't there.
+        if "pamgolding" in sources and "rent" in listing_types:
+            entry.setdefault("pamgolding_rent", None)
 
     merged = dict(data)
     for slug, entry in result.items():

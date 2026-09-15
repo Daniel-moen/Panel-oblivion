@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script>
+    // Theme must land on <html> before first paint or the page flashes.
+    // Same key the CMA pages read, so both surfaces stay in step.
+    document.documentElement.dataset.theme =
+      localStorage.getItem('oblivion-theme') || 'dark';
+  </script>
+  <link rel="icon" href="../favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="../_app/immutable/entry/start.DjPYzSFF.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/DE2eb1XB.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/BSObxpZG.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/DfFsrPuD.js" rel="modulepreload">
+		<link href="../_app/immutable/entry/app.CdjdRFW7.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/DXVtfVfH.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/DINQoYVt.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/DHUJRDQK.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/Dfb0uRfH.js" rel="modulepreload">
+		<link href="../_app/immutable/nodes/0.BBs_2I87.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/CxIjQ5Nr.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/kF3zgy_K.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/COSVT_12.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/CK0sO--T.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/DEik3-eJ.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/DDK8fYqu.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/BQgJ_Q78.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/MhPf7cKO.js" rel="modulepreload">
+		<link href="../_app/immutable/nodes/2.3Bdx5rKx.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/DLw5Kwrr.js" rel="modulepreload">
+		<link href="../_app/immutable/nodes/5.BLBcZIeR.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/Dtd8jFnD.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/QR6HttsP.js" rel="modulepreload">
+		<link href="../_app/immutable/chunks/BHsvvo1b.js" rel="modulepreload">
+		
+		<link href="../_app/immutable/assets/0.CVMfQpd3.css" rel="stylesheet">
+		<link href="../_app/immutable/assets/2.D47x-hcW.css" rel="stylesheet">
+		<link href="../_app/immutable/assets/5.e2wMYUH5.css" rel="stylesheet">
+</head>
+<body data-sveltekit-preload-data="hover">
+  <div style="display: contents">
+			<script>
+				{
+					__sveltekit_3ufyfo = {
+						base: new URL("..", location).pathname.slice(0, -1)
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("../_app/immutable/entry/start.DjPYzSFF.js"),
+						import("../_app/immutable/entry/app.CdjdRFW7.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+				}
+			</script>
+		</div>
+</body>
+</html>

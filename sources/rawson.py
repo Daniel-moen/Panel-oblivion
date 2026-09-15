@@ -21,12 +21,21 @@ import json
 import re
 
 import config
-from sources.base import Source, area_m2, money, num
+from sources.base import Source, area_m2, money, num, rent_price
 
 # "- **Price:** R19,995,000" and friends.
 _FIELD = re.compile(r"^-\s+\*\*(?P<key>[^*]+?):?\*\*\s*(?P<value>.+?)\s*$", re.M)
 _LISTING_LINK = re.compile(
-    r"\((https://rawson\.co\.za/(?:commercial-)?property/for-sale/[^)\s]+?/(\d{5,}))\)")
+    r"\((https://rawson\.co\.za/(?:commercial-)?property/(?:for-sale|to-rent)"
+    r"/[^)\s]+?/(\d{5,}))\)")
+
+# The rental book is the same markdown endpoint under /to-rent/ (verified:
+# /property/to-rent/camps-bay.md returns "# Camps Bay Flats and Houses to
+# Rent" with prices quoted "R75,000 p/m"). Rental detail URLs live under the
+# branch's rentals office ("/property/to-rent/green-point-rentals/1335310"),
+# which is exactly why membership here is decided on the document's own
+# Location line rather than on the URL.
+_BOOK_SECTION = {"sale": "for-sale", "rent": "to-rent"}
 _SECTION = re.compile(r"^##\s+(.+?)\s*$", re.M)
 
 # The HTML page shows status badges directly above the title that the
@@ -50,12 +59,17 @@ def _hero_badges(html: str) -> set[str]:
 class Rawson(Source):
     name = "rawson"
     label = "Rawson"
+    supports_rent = True
 
-    def search_urls(self, slug: str, max_pages: int) -> list[str]:
+    def search_urls(self, slug: str, max_pages: int,
+                    listing_type: str = "sale") -> list[str]:
+        section = _BOOK_SECTION.get(listing_type)
+        if not section:
+            return []
         urls: list[str] = []
         seen: set[str] = set()
         for page in range(1, max_pages + 1):
-            url = f"{self.fetcher.base_url}/property/for-sale/{slug}.md"
+            url = f"{self.fetcher.base_url}/property/{section}/{slug}.md"
             if page > 1:
                 url += f"?page={page}"
             body = self.fetcher.get(url)
@@ -72,7 +86,8 @@ class Rawson(Source):
                 break
         return urls
 
-    def parse_detail(self, url: str, slug: str) -> dict | None:
+    def parse_detail(self, url: str, slug: str,
+                     listing_type: str = "sale") -> dict | None:
         body = self.fetcher.get(url + ".md")
         if not body:
             return None
@@ -92,17 +107,28 @@ class Rawson(Source):
         heading = re.search(r"^#\s+(.+?)\s*$", body, re.M)
         title = heading.group(1).strip() if heading else ""
 
-        # The for-sale search returns already-sold stock alongside live
-        # listings ("2 Bedroom apartment **sold** in Hermanus Beach Club").
-        # There is no mandate left to win on those, and letting them through
-        # would put sold homes in the prospect report.
-        if re.search(r"\bsold\s+in\b", title, re.I):
+        # The search returns already-concluded stock alongside live listings,
+        # and says so only in the heading: "2 Bedroom apartment **sold** in
+        # Hermanus Beach Club" for sales, "2 Bedroom apartment **rented** in
+        # Sea Point" for rentals (observed on the live to-rent crawl). There
+        # is nothing left to win on either, and letting them through would put
+        # sold homes in the prospect report and let flats in the rental book.
+        if re.search(r"\b(?:sold|rented|let)\s+in\b", title, re.I):
             return None
 
-        rec = self.blank(url, slug, m.group(1))
+        rec = self.blank(url, slug, m.group(1), listing_type)
         rec["agency"] = "Rawson Properties"
         rec["title"] = title
-        rec["price_zar"] = money(fields.get("price"))
+        if listing_type == "rent":
+            # "- **Price:** R75,000 p/m"
+            rec["price_zar"], rec["rent_period"] = rent_price(fields.get("price"))
+            rec["available_from"] = (fields.get("available from")
+                                     or fields.get("occupation date"))
+            rec["furnished"] = fields.get("furnished")
+            if fields.get("deposit"):
+                rec["deposit"] = money(fields["deposit"])
+        else:
+            rec["price_zar"] = money(fields.get("price"))
         rec["property_type"] = fields.get("property type")
         rec["bedrooms"] = num(fields.get("bedrooms"))
         rec["bathrooms"] = num(fields.get("bathrooms"))
@@ -147,7 +173,8 @@ class Rawson(Source):
             # right is what lets the vacant-land filter see a Rawson plot at
             # all, since nothing in its URL says so.
             hit = re.search(r"^(?:[\d.]+\s+Bedroom\s+)?(.+?)\s+"
-                            r"(?:for\s+sale|sold|to\s+let)\b", rec["title"], re.I)
+                            r"(?:for\s+sale|sold|to\s+let|to\s+rent)\b",
+                            rec["title"], re.I)
             rec["property_type"] = hit.group(1).strip().title() if hit else None
         rec["pool"] = int(bool(re.search(r"^\s*-\s*Pool\b", spec, re.I | re.M)
                                or re.search(r"\bPool\b", spec)))

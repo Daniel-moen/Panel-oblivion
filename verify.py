@@ -40,7 +40,7 @@ def _stale_hot_groups(conn) -> list[list]:
            FROM listings l
            JOIN property_groups g ON g.listing_key = l.listing_key
            JOIN scores s ON s.listing_key = l.listing_key
-           WHERE g.agency_count > 1""").fetchall()
+           WHERE l.listing_type = 'sale' AND g.agency_count > 1""").fetchall()
     groups: dict[int, list] = {}
     for r in rows:
         groups.setdefault(r["group_id"], []).append(r)

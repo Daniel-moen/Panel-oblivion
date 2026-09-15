@@ -22,6 +22,10 @@ Two limits are real rather than parser bugs:
     address, coordinates, listing date and the seller's own description,
     which is what cross-portal matching and mandate reading actually need.
 
+The rental book is the same scrape pointed at /to-rent/: identical area ids,
+identical markup, prices quoted "R 250 000 Per Month". Rental references are
+prefixed RR rather than T, which the search regex keys off.
+
 Whole-town areas are deep here. Langebaan alone runs to 46 pages of results
 (~905 listings), which is why pipeline.py gives a `scope: "town"` area a much
 larger page budget than a single suburb.
@@ -37,27 +41,41 @@ from bs4 import BeautifulSoup
 
 import locations
 from sources.base import (Source, additional_property, area_m2, jsonld_blocks,
-                          jsonld_by_type, money, num, make_soup)
+                          jsonld_by_type, money, num, make_soup, rent_price)
+
+# The rental book sits at /to-rent/ under the SAME area path and area id as
+# the sale book (verified: /to-rent/western-cape/cape-town/atlantic-seaboard/
+# camps-bay/652 returns Camps Bay rentals). The one thing that changes is the
+# listing reference prefix — sales are T1234567, rentals RR1234567 — which is
+# what keeps the two books' ids from ever colliding here.
+_SECTION = {"sale": "for-sale", "rent": "to-rent"}
+_REF = {"sale": r"T\d+", "rent": r"RR\d+"}
 
 
 class PrivateProperty(Source):
     name = "privateproperty"
     label = "Private Property"
+    supports_rent = True
 
-    def search_urls(self, slug: str, max_pages: int) -> list[str]:
-        path = locations.get(self.name, slug)
+    def search_urls(self, slug: str, max_pages: int,
+                    listing_type: str = "sale") -> list[str]:
+        section, ref_pat = _SECTION.get(listing_type), _REF.get(listing_type)
+        if not section:
+            return []
+        path = locations.get(self.name, slug, listing_type)
         if not path:
             return []
         urls: list[str] = []
         seen: set[str] = set()
         for page in range(1, max_pages + 1):
-            page_url = f"{self.fetcher.base_url}/for-sale/{path}"
+            page_url = f"{self.fetcher.base_url}/{section}/{path}"
             if page > 1:
                 page_url += f"?page={page}"
             html = self.fetcher.get(page_url)
             if not html:
                 break
-            found = re.findall(r'href="(/for-sale/[^"?#]*?/(T\d+))"', html)
+            found = re.findall(
+                rf'href="(/{section}/[^"?#]*?/({ref_pat}))"', html)
             new = 0
             for href, ref in found:
                 if ref not in seen and self.belongs_to(href, slug):
@@ -68,13 +86,14 @@ class PrivateProperty(Source):
                 break
         return urls
 
-    def parse_detail(self, url: str, slug: str) -> dict | None:
+    def parse_detail(self, url: str, slug: str,
+                     listing_type: str = "sale") -> dict | None:
         html = self.fetcher.get(url)
         if not html:
             return None
         soup = make_soup(html)
 
-        m = re.search(r"/(T\d+)(?:[/?#]|$)", url)
+        m = re.search(rf"/({_REF.get(listing_type, r'T\d+')})(?:[/?#]|$)", url)
         if not m:
             return None
 
@@ -90,7 +109,7 @@ class PrivateProperty(Source):
         if "listing-banner--sold" in status:
             return None      # sold stock stays in search results for a while
 
-        rec = self.blank(url, slug, m.group(1))
+        rec = self.blank(url, slug, m.group(1), listing_type)
         rec["under_offer"] = int("listing-banner--offer-pending" in status)
         rec["price_reduced"] = int("listing-banner--price-reduced" in status)
 
@@ -98,7 +117,14 @@ class PrivateProperty(Source):
         rec["title"] = title.get_text(" ", strip=True) if title else ""
 
         price = soup.select_one(".listing-price-display__price")
-        rec["price_zar"] = money(price.get_text(strip=True)) if price else None
+        # The same element carries the period on a rental ("R 250 000 Per
+        # Month"), so strip=True would glue the number to the word — hence the
+        # " " separator, which money() and rent_price() both tolerate.
+        price_text = price.get_text(" ", strip=True) if price else None
+        if listing_type == "rent":
+            rec["price_zar"], rec["rent_period"] = rent_price(price_text)
+        else:
+            rec["price_zar"] = money(price_text)
 
         desc = soup.select_one(".listing-description__text")
         rec["description"] = desc.get_text(" ", strip=True) if desc else ""
@@ -146,6 +172,19 @@ class PrivateProperty(Source):
         if isinstance(spec.get("property type"), str):
             rec["property_type"] = spec["property type"]
         rec["listing_date"] = _listing_date(spec.get("listing date"))
+
+        if listing_type == "rent":
+            for label in ("available from", "occupation date", "available"):
+                if isinstance(spec.get(label), str):
+                    rec["available_from"] = spec[label]
+                    break
+            furnished = spec.get("furnished")
+            # A bare flag entry ("Furnished") means yes; a labelled one
+            # spells out its own answer.
+            rec["furnished"] = ("Yes" if furnished is True else
+                                furnished if isinstance(furnished, str) else None)
+            if isinstance(spec.get("deposit"), str):
+                rec["deposit"] = money(spec["deposit"])
 
         blocks = jsonld_blocks(soup)
         residence = jsonld_by_type(blocks, "Residence", "SingleFamilyResidence",

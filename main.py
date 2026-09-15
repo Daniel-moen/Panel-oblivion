@@ -3,6 +3,8 @@
 Usage:
     python main.py run [suburb-slug ...] [--sources a,b] [--pages N] [--no-ai]
     python main.py scrape [suburb-slug ...] [--sources a,b] [--pages N]
+    python main.py crawl --rentals       # crawl the to-rent book instead
+    python main.py crawl --type both     # both books in one pass
     python main.py score [--no-ai] [--limit N] [--new-only]
     python main.py dedupe
     python main.py erf [--all] [--force] # resolve erf numbers via CoCT cadastre
@@ -19,6 +21,15 @@ Usage:
 
 Portals crawled: Property24, Private Property, Pam Golding, Seeff, RE/MAX.
 They run concurrently, each at its own polite rate.
+
+Two books are crawled, and the for-sale one is the default everywhere: no
+flag, no change. `--rentals` (or `--type rent`) points the same crawl at each
+portal's to-rent section, and `--type both` does the two in one pass over the
+same rate-limited connections. Rentals are stored alongside sales with
+listing_type='rent' and are excluded from scoring, reports, CMA comps and the
+sold-proxy lifecycle — see config.MIN_RENT_ZAR.
+
+`crawl` is an alias for `scrape` (fetch and store; no AI scoring).
 """
 
 import sys
@@ -43,7 +54,7 @@ def _flag_value(args: list[str], name: str, default=None):
 
 
 def cmd_run(suburbs, source_names, pages, use_ai, do_score=True,
-            only_stale=False):
+            only_stale=False, listing_types=("sale",)):
     import pipeline
     targets = suburbs or list(config.SUBURBS)
     unknown = [s for s in targets if s not in config.SUBURBS]
@@ -51,7 +62,22 @@ def cmd_run(suburbs, source_names, pages, use_ai, do_score=True,
         print(f"unknown suburb: {s}")
     targets = [s for s in targets if s in config.SUBURBS]
     pipeline.run(targets, source_names, pages=pages, use_ai=use_ai,
-                 do_score=do_score, only_stale=only_stale)
+                 do_score=do_score, only_stale=only_stale,
+                 listing_types=listing_types)
+
+
+def _listing_types(rest: list[str]) -> tuple[str, ...]:
+    """Which book(s) to crawl, from --rentals / --type sale|rent|both.
+
+    Defaults to ("sale",): with no flag this is the crawl the engine has
+    always done, byte for byte.
+    """
+    if "--rentals" in rest or "--rental" in rest:
+        return ("rent",)
+    choice = (_flag_value(rest, "--type") or "sale").strip().lower()
+    return {"sale": ("sale",), "rent": ("rent",), "rentals": ("rent",),
+            "both": ("sale", "rent"), "all": ("sale", "rent")}.get(
+                choice, ("sale",))
 
 
 def cmd_dedupe():
@@ -234,7 +260,9 @@ def main():
             if a == "--set" and i + 1 < len(rest)]
     sets += [a.split("=", 1)[1] for a in rest if a.startswith("--set=")]
 
-    skip = {"--limit", "--pages", "--sources", "--cols", "--set"}
+    listing_types = _listing_types(rest)
+
+    skip = {"--limit", "--pages", "--sources", "--cols", "--set", "--type"}
     positional, skip_next = [], False
     for a in rest:
         if skip_next:
@@ -247,13 +275,17 @@ def main():
             continue
         positional.append(a)
 
-    if cmd == "scrape":
-        cmd_run(positional, source_names, pages, use_ai, do_score=False)
+    if cmd in ("scrape", "crawl"):
+        cmd_run(positional, source_names, pages, use_ai, do_score=False,
+                listing_types=listing_types)
     elif cmd == "run":
         cmd_run(positional, source_names, pages, use_ai, do_score=True,
-                only_stale="--new-only" in rest)
+                only_stale="--new-only" in rest,
+                listing_types=listing_types)
         # erf + GV valuations run inside pipeline.run now, for every property.
-        cmd_report(include_sole="--all" in rest)
+        # A rent-only run produces nothing to report on, so it prints none.
+        if "sale" in listing_types:
+            cmd_report(include_sole="--all" in rest)
     elif cmd == "dedupe":
         cmd_dedupe()
     elif cmd == "erf":

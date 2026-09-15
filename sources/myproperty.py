@@ -51,8 +51,18 @@ def _slug_for_path(path: str) -> str | None:
 class MyProperty(Source):
     name = "myproperty"
     label = "MyProperty"
+    # No rentals. The site plausibly mirrors its sale paths under
+    # /en-za/to-rent/, but every attempt to confirm that came back 429 rather
+    # than a page, so the shape is unverified — and an unverified path on a
+    # portal that answers unknown URLs with a fallback result set is how
+    # another suburb's stock ends up filed as ours. Set supports_rent = True
+    # once a real /en-za/to-rent/ page has been read.
+    supports_rent = False
 
-    def search_urls(self, slug: str, max_pages: int) -> list[str]:
+    def search_urls(self, slug: str, max_pages: int,
+                    listing_type: str = "sale") -> list[str]:
+        if listing_type != "sale":
+            return []
         info = config.SUBURBS.get(slug)
         if not info:
             return []
@@ -94,7 +104,10 @@ class MyProperty(Source):
         last = parts[-1]
         return last if re.fullmatch(r"[a-z]{0,4}\d{4,}", last, re.I) else None
 
-    def parse_detail(self, url: str, slug: str) -> dict | None:
+    def parse_detail(self, url: str, slug: str,
+                     listing_type: str = "sale") -> dict | None:
+        if listing_type != "sale":
+            return None
         html = self.fetcher.get(url)
         if not html:
             return None

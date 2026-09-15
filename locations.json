@@ -1,5 +1,7 @@
 {
   "bakoven": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/bakoven/2339",
     "property24": "bakoven/cape-town/western-cape/11012",
     "remax": "western-cape/cape-town/bakoven",
@@ -7,6 +9,7 @@
   },
   "bantry-bay": {
     "pamgolding": "residential-properties-for-sale-bantry-bay/2112",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/bantry-bay/863",
     "property24": "bantry-bay/cape-town/western-cape/11013",
     "remax": "western-cape/cape-town/bantry-bay",
@@ -14,6 +17,7 @@
   },
   "bettys-bay": {
     "pamgolding": "residential-properties-for-sale-bettys-bay/2148",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/overberg/bettys-bay/bettys-bay/566",
     "property24": "bettys-bay/bettys-bay/western-cape/7823",
     "remax": "western-cape/bettys-bay",
@@ -21,6 +25,7 @@
   },
   "big-bay": {
     "pamgolding": "residential-properties-for-sale-big-bay/4576",
+    "pamgolding_rent": "residential-properties-to-rent-big-bay/4576",
     "privateproperty": "western-cape/cape-town/blouberg/big-bay/764",
     "property24": "big-bay/blouberg/western-cape/11579",
     "remax": "western-cape/blouberg/big-bay",
@@ -28,6 +33,7 @@
   },
   "bishopscourt": {
     "pamgolding": "residential-properties-for-sale-bishopscourt/2281",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/bishopscourt/799",
     "property24": "bishopscourt/cape-town/western-cape/8661",
     "remax": null,
@@ -35,18 +41,23 @@
   },
   "bloubergstrand": {
     "pamgolding": "residential-properties-for-sale-bloubergstrand/4571",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/blouberg/bloubergstrand/441",
     "property24": "bloubergstrand/blouberg/western-cape/11580",
     "remax": "western-cape/blouberg/bloubergstrand",
     "seeff": "blouberg/bloubergstrand"
   },
   "boschenmeer-golf-and-country-estate": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/boland/paarl/boschenmeer-golf-and-country-estate/716",
     "property24": "boschenmeer-golf-and-country-estate/paarl/western-cape/10770",
     "remax": null,
     "seeff": null
   },
   "brandwacht": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/boland/worcester/worcester-outlying/brandwacht/8274",
     "property24": "brandwacht/stellenbosch/western-cape/10436",
     "remax": null,
@@ -54,18 +65,23 @@
   },
   "camps-bay": {
     "pamgolding": "residential-properties-for-sale-camps-bay/2113",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/camps-bay/652",
     "property24": "camps-bay/cape-town/western-cape/11014",
     "remax": "western-cape/cape-town/camps-bay",
     "seeff": "cape-town/camps-bay"
   },
   "cape-town-city-centre": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/cape-town-city-bowl/cape-town-city-centre/436",
     "property24": "cape-town-city-centre/cape-town/western-cape/9138",
     "remax": "western-cape/cape-town/cape-town-city-centre",
     "seeff": "cape-town/cape-town-city-centre"
   },
   "chapmans-peak": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/peninsula-false-bay/noordhoek/chapmans-peak/9533",
     "property24": "chapmans-peak/noordhoek/western-cape/15623",
     "remax": null,
@@ -73,6 +89,7 @@
   },
   "claremont-upper": {
     "pamgolding": "residential-properties-for-sale-claremont-upper/6562",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/claremont/claremont-upper/5611",
     "property24": "claremont-upper/cape-town/western-cape/14225",
     "remax": "western-cape/cape-town/claremont-upper",
@@ -80,6 +97,7 @@
   },
   "clifton": {
     "pamgolding": "residential-properties-for-sale-clifton/2128",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/clifton/1502",
     "property24": "clifton/cape-town/western-cape/11015",
     "remax": "western-cape/cape-town/clifton",
@@ -87,18 +105,23 @@
   },
   "constantia": {
     "pamgolding": "residential-properties-for-sale-constantia-cape-town/2283",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/constantia/432",
     "property24": "constantia/cape-town/western-cape/11742",
     "remax": "western-cape/cape-town/constantia",
     "seeff": "cape-town/constantia"
   },
   "dalsig": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/west-coast/malmesbury/malmesbury/dalsig/8433",
     "property24": "dalsig/stellenbosch/western-cape/8528",
     "remax": null,
     "seeff": null
   },
   "de-waterkant": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/cape-town-city-bowl/de-waterkant/1503",
     "property24": "de-waterkant/cape-town/western-cape/9141",
     "remax": "western-cape/cape-town/de-waterkant",
@@ -106,24 +129,30 @@
   },
   "de-zalze-winelands-golf-estate": {
     "pamgolding": "residential-properties-for-sale-de-zalze-winelands-golf-estate/5431",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/boland/stellenbosch/de-zalze-winelands-golf-estate/983",
     "property24": "de-zalze-winelands-golf-estate/stellenbosch/western-cape/10502",
     "remax": null,
     "seeff": null
   },
   "devils-peak-estate": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/cape-town-city-bowl/vredehoek/devils-peak-estate/4737",
     "property24": "devils-peak-estate/cape-town/western-cape/16541",
     "remax": null,
     "seeff": null
   },
   "devonvallei": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "property24": "devonvallei/stellenbosch/western-cape/8521",
     "remax": null,
     "seeff": null
   },
   "die-boord": {
     "pamgolding": "residential-properties-for-sale-die-boord/5580",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/boland/stellenbosch/die-boord/980",
     "property24": "die-boord/stellenbosch/western-cape/8530",
     "remax": null,
@@ -131,12 +160,15 @@
   },
   "eastcliff": {
     "pamgolding": "residential-properties-for-sale-eastcliff-hermanus/4641",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/overberg/hermanus/eastcliff/1593",
     "property24": "eastcliff/hermanus/western-cape/7846",
     "remax": null,
     "seeff": "hermanus/eastcliff"
   },
   "erinvale-golf-estate": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/somerset-west/erinvale-golf-estate/8084",
     "property24": "erinvale-golf-estate/somerset-west/western-cape/8952",
     "remax": null,
@@ -144,6 +176,7 @@
   },
   "franschhoek": {
     "pamgolding": "residential-properties-for-sale-franschhoek/2157",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/boland/franschhoek/franschhoek/646",
     "property24": "franschhoek/franschhoek/western-cape/8653",
     "remax": "western-cape/franschhoek",
@@ -151,12 +184,15 @@
   },
   "fresnaye": {
     "pamgolding": "residential-properties-for-sale-fresnaye/2130",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/fresnaye/855",
     "property24": "fresnaye/cape-town/western-cape/11016",
     "remax": "western-cape/cape-town/fresnaye",
     "seeff": "cape-town/fresnaye"
   },
   "gardens": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/cape-town-city-bowl/gardens/861",
     "property24": "gardens/cape-town/western-cape/9145",
     "remax": "western-cape/cape-town/gardens",
@@ -164,6 +200,7 @@
   },
   "green-point": {
     "pamgolding": "residential-properties-for-sale-green-point-cape-town/2132",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/green-point/864",
     "property24": "green-point/cape-town/western-cape/11017",
     "remax": "western-cape/cape-town/green-point",
@@ -171,12 +208,15 @@
   },
   "heldervue": {
     "pamgolding": "residential-properties-for-sale-heldervue/4007",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/somerset-west/heldervue/719",
     "property24": "heldervue/somerset-west/western-cape/8966",
     "remax": "western-cape/somerset-west/heldervue",
     "seeff": "somerset-west/heldervue"
   },
   "hemel-en-aarde-valley": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/overberg/hermanus/hermanus-outlying/hemel-en-aarde-valley/8540",
     "property24": "hemel-en-aarde-valley/hermanus/western-cape/17530",
     "remax": null,
@@ -184,12 +224,15 @@
   },
   "hermanus": {
     "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/overberg/hermanus/742",
     "property24": "hermanus/western-cape/400",
     "remax": "western-cape/hermanus",
     "seeff": "hermanus/hermanus"
   },
   "hermanus-heights": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/overberg/hermanus/hermanus-heights/1839",
     "property24": "hermanus-heights/hermanus/western-cape/7849",
     "remax": "western-cape/hermanus/hermanus-heights",
@@ -197,12 +240,15 @@
   },
   "higgovale": {
     "pamgolding": "residential-properties-for-sale-higgovale/2119",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/cape-town-city-bowl/higgovale/1771",
     "property24": "higgovale/cape-town/western-cape/9149",
     "remax": "western-cape/cape-town/higgovale",
     "seeff": "cape-town/higgovale"
   },
   "high-constantia": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/constantia/high-constantia/8137",
     "property24": "high-constantia/cape-town/western-cape/16248",
     "remax": null,
@@ -210,35 +256,45 @@
   },
   "hout-bay": {
     "pamgolding": "residential-properties-for-sale-hout-bay/5595",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/hout-bay/1684",
     "property24": "hout-bay/western-cape/615",
     "remax": "western-cape/hout-bay",
     "seeff": "hout-bay/hout-bay"
   },
   "hout-bay-beachfront": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "property24": "hout-bay-beachfront/hout-bay/western-cape/17480",
     "remax": null,
     "seeff": null
   },
   "hout-bay-central": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/hout-bay/hout-bay-central/431",
     "property24": "hout-bay-central/hout-bay/western-cape/16694",
     "remax": null,
     "seeff": null
   },
   "hout-bay-heights": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/hout-bay/hout-bay-heights/7979",
     "property24": "hout-bay-heights/hout-bay/western-cape/10119",
     "remax": null,
     "seeff": "hout-bay/hout-bay-heights-hout-bay"
   },
   "jacobsbaai": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "property24": "jacobsbaai/jacobsbaai/western-cape/11639",
     "remax": "western-cape/jacobsbaai",
     "seeff": null
   },
   "kalk-bay": {
     "pamgolding": "residential-properties-for-sale-kalk-bay/2257",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/peninsula-false-bay/kalk-bay/725",
     "property24": "kalk-bay/cape-town/western-cape/9067",
     "remax": null,
@@ -246,6 +302,7 @@
   },
   "kenilworth-upper": {
     "pamgolding": "residential-properties-for-sale-kenilworth-upper/6563",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/kenilworth/kenilworth-upper/5338",
     "property24": "kenilworth-upper/cape-town/western-cape/14224",
     "remax": "western-cape/cape-town/kenilworth-upper",
@@ -253,24 +310,30 @@
   },
   "knysna": {
     "pamgolding": null,
+    "pamgolding_rent": "residential-properties-to-rent-knysna/526",
     "privateproperty": "western-cape/garden-route/knysna/923",
     "property24": "knysna/western-cape/322",
     "remax": "western-cape/knysna",
     "seeff": "knysna/knysna"
   },
   "kommetjie": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/peninsula-false-bay/kommetjie/805",
     "property24": "kommetjie/kommetjie/western-cape/9068",
     "remax": "western-cape/kommetjie",
     "seeff": "kommetjie/kommetjie"
   },
   "kwaaiwater": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/overberg/hermanus/kwaaiwater/1595",
     "property24": "kwaaiwater/hermanus/western-cape/7850",
     "remax": null,
     "seeff": "hermanus/kwaaiwater"
   },
   "langebaan": {
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/west-coast/langebaan/1403",
     "property24": "langebaan/western-cape/427",
     "remax": "western-cape/langebaan",
@@ -278,6 +341,7 @@
   },
   "llandudno": {
     "pamgolding": "residential-properties-for-sale-llandudno/2135",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/llandudno/1100",
     "property24": "llandudno/cape-town/western-cape/9118",
     "remax": null,
@@ -285,6 +349,7 @@
   },
   "melkbosstrand": {
     "pamgolding": "residential-properties-for-sale-melkbosstrand/2331",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/melkbosstrand/melkbosstrand/442",
     "property24": "melkbosstrand/western-cape/434",
     "remax": "western-cape/melkbosstrand",
@@ -292,6 +357,7 @@
   },
   "mostertsdrift": {
     "pamgolding": "residential-properties-for-sale-mostertsdrift/5588",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/boland/stellenbosch/mostertsdrift/985",
     "property24": "mostertsdrift/stellenbosch/western-cape/11541",
     "remax": null,
@@ -299,6 +365,7 @@
   },
   "mouille-point": {
     "pamgolding": "residential-properties-for-sale-mouille-point/2136",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/mouille-point/1596",
     "property24": "mouille-point/cape-town/western-cape/11018",
     "remax": "western-cape/cape-town/mouille-point",
@@ -306,6 +373,7 @@
   },
   "newlands": {
     "pamgolding": "residential-properties-for-sale-newlands-cape-town/2292",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/newlands/763",
     "property24": "newlands/cape-town/western-cape/8679",
     "remax": "western-cape/cape-town/newlands",
@@ -313,12 +381,15 @@
   },
   "noordhoek": {
     "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/peninsula-false-bay/noordhoek/429",
     "property24": "noordhoek/western-cape/479",
     "remax": null,
     "seeff": "cape-town/noordhoek"
   },
   "nova-constantia": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/constantia/nova-constantia/8143",
     "property24": "nova-constantia/cape-town/western-cape/16249",
     "remax": null,
@@ -326,12 +397,15 @@
   },
   "onrus": {
     "pamgolding": "residential-properties-for-sale-onrus/2178",
+    "pamgolding_rent": "residential-properties-to-rent-onrus/2178",
     "privateproperty": "western-cape/overberg/hermanus/onrus/568",
     "property24": "onrus/hermanus/western-cape/10648",
     "remax": null,
     "seeff": "hermanus/onrus"
   },
   "oranjezicht": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/cape-town-city-bowl/oranjezicht/697",
     "property24": "oranjezicht/cape-town/western-cape/9155",
     "remax": "western-cape/cape-town/oranjezicht",
@@ -339,6 +413,7 @@
   },
   "paarl": {
     "pamgolding": "residential-properties-for-sale-paarl/2180",
+    "pamgolding_rent": "residential-properties-to-rent-paarl/2180",
     "privateproperty": "western-cape/boland/paarl/715",
     "property24": "paarl/western-cape/344",
     "remax": "western-cape/paarl",
@@ -346,12 +421,15 @@
   },
   "paradyskloof": {
     "pamgolding": "residential-properties-for-sale-paradyskloof/5590",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/boland/stellenbosch/paradyskloof/979",
     "property24": "paradyskloof/stellenbosch/western-cape/8540",
     "remax": "western-cape/stellenbosch/paradyskloof",
     "seeff": "stellenbosch/paradyskloof"
   },
   "parel-vallei": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/somerset-west/parel-vallei/1536",
     "property24": "parel-vallei/somerset-west/western-cape/7802",
     "remax": "western-cape/somerset-west/parel-vallei",
@@ -359,6 +437,7 @@
   },
   "paternoster": {
     "pamgolding": "residential-properties-for-sale-paternoster/2337",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/west-coast/paternoster/paternoster/1090",
     "property24": "paternoster/paternoster/western-cape/16685",
     "remax": null,
@@ -366,6 +445,7 @@
   },
   "pearl-valley-golf-and-country-estate": {
     "pamgolding": "residential-properties-for-sale-pearl-valley-golf-and-country-estate/5304",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/boland/paarl/pearl-valley-golf-and-country-estate/1687",
     "property24": "pearl-valley-golf-and-country-estate/paarl/western-cape/11772",
     "remax": null,
@@ -373,6 +453,7 @@
   },
   "plettenberg-bay": {
     "pamgolding": "residential-properties-for-sale-plettenberg-bay/530",
+    "pamgolding_rent": "residential-properties-to-rent-plettenberg-bay/530",
     "privateproperty": "western-cape/garden-route/plettenberg-bay/925",
     "property24": "plettenberg-bay/western-cape/325",
     "remax": "western-cape/plettenberg-bay",
@@ -380,6 +461,7 @@
   },
   "pringle-bay": {
     "pamgolding": "residential-properties-for-sale-pringle-bay/2184",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/overberg/pringle-bay/pringle-bay/690",
     "property24": "pringle-bay/pringle-bay/western-cape/10846",
     "remax": "western-cape/pringle-bay",
@@ -387,12 +469,15 @@
   },
   "rondebosch": {
     "pamgolding": "residential-properties-for-sale-rondebosch/2296",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/rondebosch/435",
     "property24": "rondebosch/cape-town/western-cape/8682",
     "remax": "western-cape/cape-town/rondebosch",
     "seeff": "cape-town/rondebosch"
   },
   "saldanha": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/west-coast/saldanha/saldanha/572",
     "property24": "saldanha/western-cape/410",
     "remax": "western-cape/saldanha",
@@ -400,6 +485,7 @@
   },
   "scarborough": {
     "pamgolding": "residential-properties-for-sale-scarborough/2269",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/peninsula-false-bay/scarborough/837",
     "property24": "scarborough/scarborough/western-cape/10487",
     "remax": null,
@@ -407,6 +493,7 @@
   },
   "scott-estate": {
     "pamgolding": "residential-properties-for-sale-scott-estate/7095",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/hout-bay/scott-estate/2078",
     "property24": "scott-estate/hout-bay/western-cape/10055",
     "remax": null,
@@ -414,6 +501,7 @@
   },
   "sea-point": {
     "pamgolding": "residential-properties-for-sale-sea-point/2137",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/sea-point/437",
     "property24": "sea-point/cape-town/western-cape/11021",
     "remax": "western-cape/cape-town/sea-point",
@@ -421,6 +509,7 @@
   },
   "simons-town": {
     "pamgolding": "residential-properties-for-sale-simons-town/2270",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/simons-town/6585",
     "property24": "simons-town/western-cape/401",
     "remax": "western-cape/simons-town",
@@ -428,30 +517,39 @@
   },
   "somerset-west": {
     "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/somerset-west/711",
     "property24": "somerset-west/western-cape/390",
     "remax": "western-cape/somerset-west",
     "seeff": "somerset-west/somerset-west"
   },
   "somerset-west-central": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/somerset-west/somerset-west-central/413",
     "property24": "somerset-west-central/somerset-west/western-cape/9019",
     "remax": "western-cape/somerset-west/somerset-west-central",
     "seeff": "somerset-west/somerset-west-central"
   },
   "st-helena-bay": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/west-coast/st-helena-bay/1405",
     "property24": "st-helena-bay/western-cape/431",
     "remax": "western-cape/st-helena-bay",
     "seeff": "st-helena-bay/st-helena-bay"
   },
   "st-james": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/peninsula-false-bay/st-james/1600",
     "property24": "st-james/cape-town/western-cape/9039",
     "remax": null,
     "seeff": null
   },
   "steenberg": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/steenberg/1508",
     "property24": "steenberg/cape-town/western-cape/9040",
     "remax": "western-cape/cape-town/steenberg",
@@ -459,6 +557,7 @@
   },
   "stellenbosch": {
     "pamgolding": "residential-properties-for-sale-stellenbosch/2932",
+    "pamgolding_rent": "residential-properties-to-rent-stellenbosch/2932",
     "privateproperty": "western-cape/boland/stellenbosch/712",
     "property24": "stellenbosch/western-cape/459",
     "remax": "western-cape/stellenbosch",
@@ -466,18 +565,22 @@
   },
   "stellenbosch-farms": {
     "pamgolding": "residential-properties-for-sale-stellenbosch-farms/7541",
+    "pamgolding_rent": null,
     "property24": "stellenbosch-farms/stellenbosch/western-cape/8562",
     "remax": "western-cape/stellenbosch/stellenbosch-farms",
     "seeff": "stellenbosch/stellenbosch-farms"
   },
   "sunset-beach": {
     "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/milnerton/sunset-beach/877",
     "property24": "sunset-beach/milnerton/western-cape/11592",
     "remax": "western-cape/milnerton/sunset-beach",
     "seeff": null
   },
   "tamboerskloof": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/cape-town-city-bowl/tamboerskloof/856",
     "property24": "tamboerskloof/cape-town/western-cape/9163",
     "remax": "western-cape/cape-town/tamboerskloof",
@@ -485,6 +588,7 @@
   },
   "three-anchor-bay": {
     "pamgolding": "residential-properties-for-sale-three-anchor-bay/2139",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/three-anchor-bay/860",
     "property24": "three-anchor-bay/cape-town/western-cape/11022",
     "remax": "western-cape/cape-town/three-anchor-bay",
@@ -492,6 +596,7 @@
   },
   "tokai": {
     "pamgolding": "residential-properties-for-sale-tokai/2301",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/tokai/802",
     "property24": "tokai/cape-town/western-cape/9044",
     "remax": null,
@@ -499,6 +604,7 @@
   },
   "val-de-vie-estate": {
     "pamgolding": "residential-properties-for-sale-val-de-vie-estate/5303",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/boland/paarl/val-de-vie-estate/754",
     "property24": "val-de-vie-estate/paarl/western-cape/11726",
     "remax": "western-cape/paarl/val-de-vie-estate",
@@ -506,6 +612,7 @@
   },
   "velddrif": {
     "pamgolding": "residential-properties-for-sale-velddrif/2353",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/west-coast/velddrif/velddrif/695",
     "property24": "velddrif/velddrif/western-cape/17554",
     "remax": "western-cape/velddrif",
@@ -513,6 +620,7 @@
   },
   "voelklip": {
     "pamgolding": "residential-properties-for-sale-voelklip/4639",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/overberg/hermanus/voelklip/692",
     "property24": "voelklip/hermanus/western-cape/7857",
     "remax": "western-cape/hermanus/voelklip",
@@ -520,12 +628,15 @@
   },
   "vredehoek": {
     "pamgolding": "residential-properties-for-sale-vredehoek/2126",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/cape-town-city-bowl/vredehoek/862",
     "property24": "vredehoek/cape-town/western-cape/9166",
     "remax": "western-cape/cape-town/vredehoek",
     "seeff": "cape-town/vredehoek"
   },
   "vredenburg": {
+    "pamgolding": null,
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/west-coast/vredenburg/vredenburg/699",
     "property24": "vredenburg/vredenburg/western-cape/16666",
     "remax": "western-cape/vredenburg",
@@ -533,6 +644,7 @@
   },
   "waterfront": {
     "pamgolding": "residential-properties-for-sale-waterfront-cape-town/2140",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/atlantic-seaboard/waterfront/653",
     "property24": "waterfront/cape-town/western-cape/9169",
     "remax": "western-cape/cape-town/waterfront",
@@ -540,6 +652,7 @@
   },
   "wynberg-upper": {
     "pamgolding": "residential-properties-for-sale-wynberg-upper/6891",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/cape-town/southern-suburbs/wynberg/wynberg-upper/5990",
     "property24": "wynberg-upper/cape-town/western-cape/10102",
     "remax": "western-cape/cape-town/wynberg-upper",
@@ -547,6 +660,7 @@
   },
   "yzerfontein": {
     "pamgolding": "residential-properties-for-sale-yzerfontein/2358",
+    "pamgolding_rent": null,
     "privateproperty": "western-cape/west-coast/yzerfontein/yzerfontein/681",
     "property24": "yzerfontein/yzerfontein/western-cape/7938",
     "remax": "western-cape/yzerfontein",

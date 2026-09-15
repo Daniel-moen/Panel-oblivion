@@ -76,6 +76,13 @@ def _slug_for_path(path: str) -> str | None:
 class ImmoAfrica(Source):
     name = "immoafrica"
     label = "ImmoAfrica"
+    # No rentals. Discovery here is sitemap-driven and the provincial sitemaps
+    # read by _sitemap_index() are the for-sale ones; the rental equivalents
+    # could not be confirmed (the site answered 403 to every probe), and
+    # _DETAIL — the guard that pins suburb, town and province by position —
+    # is written for the `-for-sale` URL shape. Both would have to be verified
+    # together before this can be flipped.
+    supports_rent = False
 
     def __init__(self, logger=None):
         super().__init__(logger=logger)
@@ -108,7 +115,10 @@ class ImmoAfrica(Source):
     def belongs_to(self, href: str, slug: str) -> bool:
         return _slug_for_path(href) == slug
 
-    def search_urls(self, slug: str, max_pages: int) -> list[str]:
+    def search_urls(self, slug: str, max_pages: int,
+                    listing_type: str = "sale") -> list[str]:
+        if listing_type != "sale":
+            return []
         info = config.SUBURBS.get(slug)
         if not info:
             return []
@@ -136,7 +146,10 @@ class ImmoAfrica(Source):
         return list(found.values())
 
     # ------------------------------------------------------------ parsing
-    def parse_detail(self, url: str, slug: str) -> dict | None:
+    def parse_detail(self, url: str, slug: str,
+                     listing_type: str = "sale") -> dict | None:
+        if listing_type != "sale":
+            return None
         html = self.fetcher.get(url)
         if not html:
             return None

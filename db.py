@@ -4,6 +4,12 @@ Listings are keyed by `listing_key` ("<source>:<source_id>") because the same
 physical property legitimately appears once per portal, and portals reuse each
 other's id ranges. Grouping those rows back into one property is dedupe.py's
 job.
+
+Rentals share the table, tagged `listing_type = 'rent'` and keyed
+"<source>:rent:<source_id>". They are a separate book, not a variant of the
+same one: a home advertised for sale AND to rent is two records on purpose
+(that pairing is itself a prospecting signal — a seller hedging with a
+tenant), so nothing in here ever merges the two.
 """
 
 import sqlite3
@@ -13,13 +19,27 @@ import config
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS listings (
-    listing_key     TEXT PRIMARY KEY,   -- '<source>:<source_id>'
+    -- '<source>:<source_id>' for sales, '<source>:rent:<source_id>' for
+    -- rentals. The namespace matters: the same physical home advertised both
+    -- for sale and to rent is two separate records (deliberately — see
+    -- listing_type), and nothing guarantees a portal won't reuse an id
+    -- between its two books.
+    listing_key     TEXT PRIMARY KEY,
     source          TEXT NOT NULL,      -- 'property24' | 'seeff' | ...
     source_id       TEXT NOT NULL,      -- the portal's own listing reference
+    -- 'sale' (the default, and everything crawled before rentals existed) or
+    -- 'rent'. Every for-sale view — scoring, reports, CMA comps, the
+    -- sold-proxy lifecycle, dedupe — filters on 'sale'; rentals are never
+    -- scored and never become comps.
+    listing_type    TEXT NOT NULL DEFAULT 'sale',
     url             TEXT NOT NULL,
     suburb_slug     TEXT NOT NULL,
     suburb          TEXT,
     title           TEXT,
+    -- Sales: the asking price. Rentals: the rent AS ADVERTISED, for the
+    -- period in rent_period — Atlantic Seaboard holiday lets are quoted per
+    -- day, so this is NOT always a monthly figure. Use
+    -- sources.base.monthly_equivalent() before comparing two rentals.
     price_zar       INTEGER,
     property_type   TEXT,
     bedrooms        REAL,
@@ -56,14 +76,28 @@ CREATE TABLE IF NOT EXISTS listings (
     under_offer     INTEGER,
     -- new/off-plan development: a developer launch, not a mandate to win
     is_development  INTEGER,
+    -- rentals only: 'month' | 'week' | 'day', the period price_zar is quoted
+    -- for. NULL on sales.
+    rent_period     TEXT,
+    available_from  TEXT,               -- rentals: occupation date as printed
+    furnished       TEXT,               -- rentals: 'Yes' | 'No' | as printed
+    deposit         INTEGER,            -- rentals: deposit in ZAR where stated
     first_seen      TEXT DEFAULT (datetime('now')),
     last_seen       TEXT DEFAULT (datetime('now')),
+    -- bumped only when a score-relevant field actually differs, unlike
+    -- last_seen which every sighting refreshes. NULL = unchanged since
+    -- insert; readers fall back to first_seen.
+    content_changed TEXT,
     raw_overview    TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_listings_suburb ON listings(suburb_slug);
 CREATE INDEX IF NOT EXISTS idx_listings_source ON listings(source);
 CREATE INDEX IF NOT EXISTS idx_listings_seen   ON listings(last_seen);
+-- idx_listings_type is created in connect() rather than here, after the
+-- listing_type column has been added: this script also runs against a
+-- pre-rentals database, where CREATE TABLE IF NOT EXISTS is a no-op and an
+-- index over a column that does not exist yet is a hard error.
 
 -- One row per observed price CHANGE (plus the first sighting), so the table
 -- is a chronology. The old schema keyed on (listing_key, price_zar), which
@@ -144,14 +178,16 @@ CREATE TABLE IF NOT EXISTS scores (
 """
 
 INSERT_COLUMNS = (
-    "listing_key", "source", "source_id", "url", "suburb_slug", "suburb",
+    "listing_key", "source", "source_id", "listing_type", "url",
+    "suburb_slug", "suburb",
     "title", "price_zar", "property_type", "bedrooms", "bathrooms", "garages",
     "parking", "floor_size_m2", "erf_size_m2", "price_per_m2", "levies",
     "rates", "pool", "listing_date", "agency", "agent_name", "description",
     "photo_count", "photo_url", "street_address", "street_address_raw",
     "latitude", "longitude",
     "mandate_text", "mandate_explicit", "price_reduced", "under_offer",
-    "is_development", "raw_overview",
+    "is_development", "rent_period", "available_from", "furnished", "deposit",
+    "raw_overview",
 )
 
 # Columns refreshed every time a listing is seen again.
@@ -162,7 +198,8 @@ _UPDATE_COLUMNS = (
     "description", "photo_count", "photo_url", "street_address",
     "street_address_raw", "latitude",
     "longitude", "mandate_text", "mandate_explicit", "price_reduced",
-    "under_offer", "is_development", "raw_overview",
+    "under_offer", "is_development", "rent_period", "available_from",
+    "furnished", "deposit", "raw_overview",
 )
 
 
@@ -267,12 +304,44 @@ def connect(db_path: str = config.DB_PATH):
     # forward-compatible column adds
     listing_cols = _columns(conn, "listings")
     for col, decl in (("is_development", "INTEGER"), ("photo_url", "TEXT"),
-                      ("street_address_raw", "TEXT")):
+                      ("street_address_raw", "TEXT"),
+                      # rentals (see SCHEMA). listing_type carries a DEFAULT so
+                      # every pre-rentals row becomes 'sale' the moment the
+                      # column appears — a NULL here would fall out of every
+                      # `listing_type = 'sale'` filter and silently empty the
+                      # dashboard, the report and the CMA comps feed.
+                      ("listing_type", "TEXT NOT NULL DEFAULT 'sale'"),
+                      ("rent_period", "TEXT"),
+                      ("available_from", "TEXT"),
+                      ("furnished", "TEXT"),
+                      ("deposit", "INTEGER")):
         if col not in listing_cols:
             try:
                 conn.execute(f"ALTER TABLE listings ADD COLUMN {col} {decl}")
             except sqlite3.OperationalError:
                 pass
+    # Belt and braces: an older ALTER (or a hand-written row) can leave a NULL
+    # behind, and NULL is not 'sale' to a WHERE clause.
+    try:
+        conn.execute("UPDATE listings SET listing_type = 'sale'"
+                     " WHERE listing_type IS NULL OR listing_type = ''")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_listings_type"
+                     " ON listings(listing_type)")
+    except sqlite3.OperationalError:
+        pass
+    if "content_changed" not in listing_cols:
+        try:
+            conn.execute(
+                "ALTER TABLE listings ADD COLUMN content_changed TEXT")
+            # Backfill with first_seen, not last_seen: last_seen is fresh on
+            # every live listing, which would mark the whole database stale
+            # and trigger one giant paid re-score for no new information.
+            conn.execute("UPDATE listings SET content_changed = first_seen")
+        except sqlite3.OperationalError:
+            pass
     existing = _columns(conn, "scores")
     for col, decl in (("sellable", "INTEGER"),
                       ("mandate_expiry_note", "TEXT"),
@@ -289,15 +358,29 @@ def connect(db_path: str = config.DB_PATH):
         conn.close()
 
 
+# The fields whose change makes a listing worth re-judging. A sweep that
+# merely sees the listing again (last_seen) is not a reason to spend a
+# paid scoring call on it.
+_CONTENT_COLUMNS = (
+    "price_zar", "title", "description", "mandate_text", "mandate_explicit",
+    "price_reduced", "under_offer", "agency", "listing_date",
+)
+
+
 def upsert_listing(conn: sqlite3.Connection, listing: dict) -> None:
     row = {c: listing.get(c) for c in INSERT_COLUMNS}
     placeholders = ", ".join(f":{c}" for c in INSERT_COLUMNS)
     updates = ", ".join(f"{c} = excluded.{c}" for c in _UPDATE_COLUMNS)
+    changed = " OR ".join(f"{c} IS NOT excluded.{c}"
+                          for c in _CONTENT_COLUMNS)
     conn.execute(
         f"""INSERT INTO listings ({', '.join(INSERT_COLUMNS)})
             VALUES ({placeholders})
             ON CONFLICT(listing_key) DO UPDATE SET
                 {updates},
+                content_changed = CASE WHEN {changed}
+                                       THEN datetime('now')
+                                       ELSE content_changed END,
                 last_seen = datetime('now')""",
         row,
     )
@@ -318,12 +401,19 @@ def upsert_listing(conn: sqlite3.Connection, listing: dict) -> None:
             )
 
 
-def recently_seen(conn: sqlite3.Connection, source: str, hours: int = 20) -> set[str]:
-    """source_ids for this portal scraped within the window (skip re-fetching)."""
+def recently_seen(conn: sqlite3.Connection, source: str, hours: int = 20,
+                  listing_type: str = "sale") -> set[str]:
+    """source_ids for this portal scraped within the window (skip re-fetching).
+
+    Scoped to one book: a portal's sale and rent ids live in the same column,
+    and a shared set would let a recently-crawled sale listing suppress the
+    rental crawl of the same id (Property24 numbers them from one sequence, so
+    a collision is not hypothetical).
+    """
     return {
         r["source_id"] for r in conn.execute(
             "SELECT source_id FROM listings WHERE source = ?"
-            " AND last_seen > datetime('now', ?)",
-            (source, f"-{hours} hours"),
+            " AND listing_type = ? AND last_seen > datetime('now', ?)",
+            (source, listing_type, f"-{hours} hours"),
         )
     }

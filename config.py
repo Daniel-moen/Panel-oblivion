@@ -202,6 +202,11 @@ DATA_DIR = os.environ.get("DATA_DIR", ROOT)
 CACHE_DIR = os.environ.get("CACHE_DIR", os.path.join(DATA_DIR, ".httpcache"))
 CACHE_TTL_HOURS = 20
 CACHE_ENABLED = True
+# Hard ceiling on the cache directory. The TTL alone can't bound disk use —
+# a full crawl's *live* working set of uncompressed pages overflowed the
+# 4.6 GB hosted volume (measured 2026-08-27: 4.5 GB / 9,785 pages) — so
+# prune_cache() also evicts oldest-first down to this budget.
+CACHE_MAX_MB = int(os.environ.get("CACHE_MAX_MB", "1024"))
 
 # ---------------------------------------------------------------- areas
 #
@@ -354,6 +359,12 @@ def regions() -> dict:
 # Property24 search URLs default to /for-sale/<slug>/cape-town/western-cape/<id>.
 # Towns outside Cape Town use a different path between /for-sale/ and the id;
 # the wrong path 301s to an unrelated area, so it must match exactly.
+#
+# The rental crawl reuses these unchanged: /to-rent/ mirrors /for-sale/ on
+# Property24 exactly — same area path, same area id, same result markup
+# (verified against /to-rent/camps-bay/cape-town/western-cape/11014). Only
+# the leading segment differs, so a town override fixed here is fixed for
+# both crawls.
 SEARCH_PATH_OVERRIDES = {
     "langebaan": "langebaan/western-cape",
     "saldanha": "saldanha/western-cape",
@@ -379,6 +390,30 @@ MIN_PRICE_ZAR = 1_000_000
 # West Coast towns where most stock is far below MIN_PRICE_ZAR. POA listings
 # still come through, which is fine (POA often means high-end).
 SEARCH_PRICE_FLOOR = MIN_PRICE_ZAR
+
+# ---------------------------------------------------------------- rentals
+#
+# The same crawl, pointed at each portal's to-rent/to-let section
+# (`python main.py crawl --rentals`). Rentals are stored in the same
+# `listings` table with listing_type='rent' and are deliberately kept out of
+# every for-sale view: they are not mandate prospects, they are not comps,
+# and they must never be scored.
+#
+# Why crawl them at all: a home advertised BOTH for sale and to rent is a
+# seller hedging — an owner who could not sell and is bridging with a tenant
+# is a live prospecting conversation, and it is one only a rental crawl can
+# see. A rental also names the managing agency, which is often a different
+# brand to the one holding the sale mandate.
+#
+# MIN_RENT_ZAR mirrors MIN_PRICE_ZAR: Oblivion's book is luxury, so sub-R20k
+# stock is noise. It is compared against the MONTHLY EQUIVALENT of the rent
+# (see sources.base.monthly_equivalent) — Atlantic Seaboard holiday lets are
+# advertised per day, and R25 000/day is not a cheap rental.
+MIN_RENT_ZAR = int(os.environ.get("MIN_RENT_ZAR", "20000"))
+
+# Pre-filter the portal's own rent search where it supports a price floor
+# (Property24's ?sp=pf=N works identically on /to-rent/).
+SEARCH_RENT_FLOOR = MIN_RENT_ZAR
 
 # Pages of search results to crawl per suburb per source (~20 listings/page)
 MAX_PAGES_PER_SUBURB = 3
@@ -478,6 +513,13 @@ OPENAI_MODEL = "gpt-5-mini"          # lightweight; falls back to gpt-4o-mini
 OPENAI_FALLBACK_MODEL = "gpt-4o-mini"
 AI_MODEL = "claude-opus-4-8"
 AI_MAX_TOKENS = 4096
+
+# The AI photo-locator sends every candidate property's photo gallery plus
+# ~12 satellite crops to a vision model — the most expensive stage in the
+# whole pipeline by far (it has drained an OpenAI credit balance twice).
+# Off means crawls and sweeps never trigger it; it runs only when asked —
+# per property from the dashboard, or in bulk via POST /api/erf/locate-all.
+AI_LOCATE_AUTO = os.environ.get("AI_LOCATE_AUTO", "0") == "1"
 
 # Parallel AI scoring requests. Scoring talks to the model provider, not the
 # portals, so it is not bound by the crawl rate limits. Kimi K3 is a reasoning

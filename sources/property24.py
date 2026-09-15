@@ -7,6 +7,10 @@ Notes from the field:
   street address and map coordinates.
 - Promoted tiles on a suburb search page can point at listings in OTHER
   suburbs, so the suburb is re-derived from the detail URL.
+- The rental book lives at /to-rent/ and is otherwise identical, down to the
+  area ids and the price-filter parameter. Its prices carry a period, and on
+  the Atlantic Seaboard that period is often "per day" rather than "per
+  month" — see sources.base.rent_price.
 """
 
 from __future__ import annotations
@@ -18,40 +22,53 @@ from bs4 import BeautifulSoup
 
 import config
 import locations
-from sources.base import Source, area_m2, money, num, make_soup
+from sources.base import (Source, area_m2, money, num, make_soup,
+                          rent_price)
+
+# /to-rent/ mirrors /for-sale/ exactly: same area path, same area id, same
+# result markup and the same ?sp=pf= price filter. Verified against
+# /to-rent/camps-bay/cape-town/western-cape/11014 (21 listings, all in Camps
+# Bay). Only this leading segment differs.
+_SECTION = {"sale": "for-sale", "rent": "to-rent"}
 
 
 class Property24(Source):
     name = "property24"
     label = "Property24"
+    supports_rent = True
 
-    def search_urls(self, slug: str, max_pages: int) -> list[str]:
+    def search_urls(self, slug: str, max_pages: int,
+                    listing_type: str = "sale") -> list[str]:
         info = config.SUBURBS.get(slug)
         if not info:
+            return []
+        section = _SECTION.get(listing_type)
+        if not section:
             return []
         # Preferred: the full '<path>/<area_id>' mined from Property24's own
         # sitemap (locations.py). Falls back to the legacy hardcoded id for
         # areas discovery hasn't run for yet.
-        area_path = locations.get(self.name, slug)
+        area_path = locations.get(self.name, slug, listing_type)
         if not area_path:
             if not info.get("p24"):
                 return []
             legacy = config.SEARCH_PATH_OVERRIDES.get(
                 slug, f"{slug}/{info['town']}/{info['province']}")
             area_path = f"{legacy}/{info['p24']}"
-        floor = (f"?sp=pf%3d{config.SEARCH_PRICE_FLOOR}"
-                 if config.SEARCH_PRICE_FLOOR else "")
+        price_floor = (config.SEARCH_RENT_FLOOR if listing_type == "rent"
+                       else config.SEARCH_PRICE_FLOOR)
+        floor = f"?sp=pf%3d{price_floor}" if price_floor else ""
 
         urls: list[str] = []
         seen: set[str] = set()
         for page in range(1, max_pages + 1):
             suffix = f"/p{page}" if page > 1 else ""
-            page_url = f"{self.fetcher.base_url}/for-sale/{area_path}{suffix}{floor}"
+            page_url = f"{self.fetcher.base_url}/{section}/{area_path}{suffix}{floor}"
             html = self.fetcher.get(page_url)
             if not html:
                 break
             found = re.findall(
-                r'href="(/for-sale/[a-z-]+/[a-z-]+/[a-z-]+/\d+/(\d+))', html)
+                rf'href="(/{section}/[a-z-]+/[a-z-]+/[a-z-]+/\d+/(\d+))', html)
             new = 0
             for href, listing_no in found:
                 if listing_no not in seen:
@@ -62,14 +79,15 @@ class Property24(Source):
                 break
         return urls
 
-    def parse_detail(self, url: str, slug: str) -> dict | None:
+    def parse_detail(self, url: str, slug: str,
+                     listing_type: str = "sale") -> dict | None:
         html = self.fetcher.get(url)
         if not html:
             return None
         soup = make_soup(html)
 
         # Trust the URL's suburb over the page we happened to be crawling.
-        url_match = re.search(r"/for-sale/([a-z-]+)/", url)
+        url_match = re.search(r"/(?:for-sale|to-rent)/([a-z-]+)/", url)
         if url_match and url_match.group(1) in config.SUBURBS:
             slug = url_match.group(1)
 
@@ -85,13 +103,20 @@ class Property24(Source):
         if not listing_number:
             return None
 
-        rec = self.blank(url, slug, listing_number)
+        rec = self.blank(url, slug, listing_number, listing_type)
 
         h1 = soup.find("h1")
         rec["title"] = h1.get_text(strip=True) if h1 else ""
 
         price_el = soup.select_one(".p24_price")
-        rec["price_zar"] = money(price_el.get_text(strip=True)) if price_el else None
+        price_text = price_el.get_text(" ", strip=True) if price_el else None
+        if listing_type == "rent":
+            # The period is part of the price here — Camps Bay holiday stock
+            # is advertised "R 25 000 per day" in the same element that a long
+            # let uses for "R 45 000 per month".
+            rec["price_zar"], rec["rent_period"] = rent_price(price_text)
+        else:
+            rec["price_zar"] = money(price_text)
 
         desc_el = soup.select_one(".js_expandedText")
         rec["description"] = desc_el.get_text(" ", strip=True) if desc_el else ""
@@ -138,4 +163,13 @@ class Property24(Source):
         })
         if overview.get("Price per m²"):
             rec["price_per_m2"] = num(overview["Price per m²"])
+        if listing_type == "rent":
+            # The rental overview swaps the sale rows for its own: no levies
+            # or rates, but an occupation date and a furnished flag — both
+            # things a prospecting call actually wants to know.
+            rec["available_from"] = (overview.get("Occupation Date")
+                                     or overview.get("Available From"))
+            rec["furnished"] = overview.get("Furnished")
+            rec["deposit"] = money(overview.get("Deposit")) \
+                if overview.get("Deposit") else None
         return self.finish(rec, html)

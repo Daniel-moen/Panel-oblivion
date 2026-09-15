@@ -600,7 +600,8 @@ def suburb_stats(conn: sqlite3.Connection, suburb_slug: str) -> dict:
             """SELECT l.*, g.group_id, g.agency_count
                FROM listings l
                JOIN property_groups g ON g.listing_key = l.listing_key
-               WHERE l.suburb_slug = ?""", (suburb_slug,)):
+               WHERE l.suburb_slug = ? AND l.listing_type = 'sale'""",
+            (suburb_slug,)):
         by_group.setdefault(r["group_id"], []).append(r)
 
     now = datetime.now()

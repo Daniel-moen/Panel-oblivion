@@ -301,14 +301,16 @@ def market_context(conn: sqlite3.Connection) -> dict:
                       l.price_per_m2, l.listing_date
                FROM listings l
                LEFT JOIN listing_lifecycle lc ON lc.listing_key = l.listing_key
-               WHERE lc.status IS NULL OR lc.status != 'delisted'"""
+               WHERE l.listing_type = 'sale'
+                 AND (lc.status IS NULL OR lc.status != 'delisted')"""
         ).fetchall()
     except sqlite3.OperationalError:
         # listing_lifecycle doesn't exist yet (fresh DB, lifecycle.update()
         # never ran) — then nothing is provably delisted anyway.
         rows = conn.execute(
             """SELECT suburb_slug, price_zar, floor_size_m2, price_per_m2,
-                      listing_date FROM listings"""
+                      listing_date FROM listings
+               WHERE listing_type = 'sale'"""
         ).fetchall()
 
     now = datetime.now()
@@ -1071,12 +1073,16 @@ def score_all(conn: sqlite3.Connection, use_ai: bool = True,
     TASTE_CONTEXT = tracker.taste_profile(conn) or ""
 
     rows = conn.execute(
+        # listing_type is belt-and-braces: dedupe never puts a rental into
+        # property_groups, so the JOIN already excludes them. Stated anyway,
+        # because this is the query that spends money per property.
         """SELECT l.*, g.group_id, g.agency_count, g.source_count,
                   s.scored_at, s.listing_key AS scored_key
            FROM listings l
            JOIN property_groups g ON g.listing_key = l.listing_key
            LEFT JOIN scores s ON s.listing_key = l.listing_key
-           WHERE l.price_zar >= ? OR l.price_zar IS NULL""",
+           WHERE l.listing_type = 'sale'
+             AND (l.price_zar >= ? OR l.price_zar IS NULL)""",
         (config.MIN_PRICE_ZAR,),
     ).fetchall()
 
@@ -1093,8 +1099,13 @@ def score_all(conn: sqlite3.Connection, use_ai: bool = True,
             for m in members:
                 if m["scored_key"] is None or m["scored_at"] is None:
                     return True                      # never scored
-                if (m["last_seen"] or "") > (m["scored_at"] or ""):
-                    return True                      # re-scraped since scoring
+                # content_changed, not last_seen: a freshness sweep bumps
+                # last_seen on every live listing, which used to mark the
+                # whole database stale every 6 hours (4,775 paid re-scores
+                # per sweep, measured 2026-08-25).
+                changed = m["content_changed"] or m["first_seen"] or ""
+                if changed > (m["scored_at"] or ""):
+                    return True                      # data changed since
             return False
         before = len(qualifying)
         qualifying = [m for m in qualifying if needs_scoring(m)]

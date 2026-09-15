@@ -406,6 +406,7 @@ body.drawer-open #drawer { transform:translateX(0); }
   <button class="primary" id="go">Scrape &amp; score</button>
   <button class="ghost" id="rescore">Re-score existing data</button>
   <button class="ghost" id="erfbtn" title="Match every property against the public cadastres (City of Cape Town in the metro, Western Cape provincial everywhere else) to get its erf number and official address — the CMA search key">Resolve erf numbers</button>
+  <button class="ghost" id="locateallbtn" title="AI photo-locate every property stuck with a candidate list: listing photos vs satellite crops of each parcel. PAID vision calls — one to two per property — so this only ever runs from this button, never with a crawl.">AI locate all (paid)</button>
   <button class="ghost" id="stop">Stop</button>
 
   <div id="phase"></div>
@@ -419,6 +420,10 @@ body.drawer-open #drawer { transform:translateX(0); }
   <div class="stats" id="stats"></div>
   <div class="toolbar">
     <input id="fsearch" type="search" placeholder="Search title, street, erf, agency…">
+    <select id="fdeal">
+      <option value="sale">For sale</option>
+      <option value="rent">To rent</option>
+    </select>
     <select id="fsuburb"><option value="">all suburbs</option></select>
     <select id="ftier"><option value="">any tier</option>
       <option value="hot">hot</option><option value="warm">warm</option>
@@ -581,8 +586,23 @@ $('rescore').onclick = async () => {
 };
 $('stop').onclick = () => post('/api/stop');
 $('showsole').onchange = loadResults;
+$('fdeal').onchange = loadResults;
 $('erfbtn').onclick = async () => {
   if (await post('/api/erf/resolve', {})) erfPoll();
+};
+$('locateallbtn').onclick = async () => {
+  const b = await (await fetch('/api/erf/busy')).json();
+  if (b.locating_all) {
+    if (await post('/api/erf/locate-all/stop', {}))
+      $('locateallbtn').textContent = 'AI locate all (paid)';
+    return;
+  }
+  if (!confirm('Run the AI photo-locator over every candidate property? '
+               + 'This makes paid vision calls (1-2 per property).')) return;
+  if (await post('/api/erf/locate-all', {})) {
+    $('locateallbtn').textContent = 'Stop AI locate';
+    erfPoll();
+  }
 };
 
 function startPolling() {
@@ -649,8 +669,14 @@ async function loadStats() {
 let ALLROWS = [];
 
 async function loadResults() {
-  const sole = $('showsole').checked ? '?sole=1' : '';
-  ALLROWS = await (await fetch('/api/prospects' + sole)).json();
+  /* The deal filter is a different QUERY, not a client-side predicate:
+     rentals are a separate book in the database and are never fetched
+     alongside sale stock. */
+  const params = new URLSearchParams();
+  if ($('showsole').checked) params.set('sole', '1');
+  if ($('fdeal').value === 'rent') params.set('type', 'rent');
+  const qs = params.toString();
+  ALLROWS = await (await fetch('/api/prospects' + (qs ? '?' + qs : ''))).json();
   const sel = $('fsuburb'), was = sel.value;
   sel.innerHTML = '<option value="">all suburbs</option>' +
     [...new Set(ALLROWS.map(r => r.suburb).filter(Boolean))].sort()
@@ -713,8 +739,12 @@ function photoBox(r, cls) {
 const domTxt = r => r.days_on_market != null ? r.days_on_market + 'd' : '—';
 const gvHint = r => (r.gv_value && r.price_zar)
   ? `<div class="meta dim2">${(r.price_zar / r.gv_value).toFixed(2)}× GV</div>` : '';
+/* A rental's price is meaningless without its period: the same R25 000 is a
+   Camps Bay flat for a month or a villa for a night. */
+const rentSuffix = r => r.listing_type === 'rent' && r.rent_period
+  ? `<span class="dim2">/${esc(r.rent_period)}</span>` : '';
 const priceHtml = r => r.price_zar
-  ? `<span class="price">${fmtR(r.price_zar)}</span>`
+  ? `<span class="price">${fmtR(r.price_zar)}${rentSuffix(r)}</span>`
   : '<span class="price poa">POA</span>';
 
 /* Erf number shown right on the row/card once resolved. */
@@ -938,13 +968,23 @@ function sbar(label, val) {
 function drawerHtml(r) {
   const hero = photoBox(r, 'dhero');
   const ppm2 = r.price_per_m2 ? 'R ' + fmtInt(r.price_per_m2)
-    : (r.price_zar && r.floor_size_m2
+    : (r.listing_type !== 'rent' && r.price_zar && r.floor_size_m2
         ? 'R ' + fmtInt(r.price_zar / r.floor_size_m2) : '—');
+  const isRent = r.listing_type === 'rent';
   const facts = [
-    ['Asking', fmtR(r.price_zar)],
-    ['Municipal GV', r.gv_value ? `${fmtR(r.gv_value)} · ${esc(r.gv_roll || '')}` : '—'],
-    ['Asking vs GV', r.gv_value && r.price_zar
-        ? (r.price_zar / r.gv_value).toFixed(2) + '× GV' : '—'],
+    [isRent ? 'Rent' : 'Asking',
+      fmtR(r.price_zar) + (isRent && r.rent_period ? ' / ' + esc(r.rent_period) : '')],
+    /* A rental has no erf resolution and so no GV — and a rent measured
+       against a municipal capital value would be nonsense anyway. Those two
+       rows are replaced by what a rental actually tells you. */
+    ...(isRent ? [
+      ['Available', r.available_from ? esc(String(r.available_from)) : '—'],
+      ['Furnished', r.furnished ? esc(String(r.furnished)) : '—'],
+    ] : [
+      ['Municipal GV', r.gv_value ? `${fmtR(r.gv_value)} · ${esc(r.gv_roll || '')}` : '—'],
+      ['Asking vs GV', r.gv_value && r.price_zar
+          ? (r.price_zar / r.gv_value).toFixed(2) + '× GV' : '—'],
+    ]),
     ['Days on market', r.days_on_market != null ? r.days_on_market + ' days' : '—'],
     ['Price / m²', ppm2],
     ['Floor / erf', `${fmtArea(r.floor_size_m2) || '—'} / ${fmtArea(r.erf_size_m2) || '—'}`],
@@ -1099,8 +1139,10 @@ function erfPoll() {
     lg.textContent = (s.log || []).join('\n');
     lg.scrollTop = lg.scrollHeight;
     loadResults();
-    if (!b.resolving && !b.locating.length && !(b.reevaluating || []).length) {
+    if (!b.resolving && !b.locating_all && !b.locating.length
+        && !(b.reevaluating || []).length) {
       clearInterval(erfPolling); erfPolling = null;
+      $('locateallbtn').textContent = 'AI locate all (paid)';
       loadStats();
     }
   }, 2500);

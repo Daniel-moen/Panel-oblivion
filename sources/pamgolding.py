@@ -35,6 +35,8 @@ WANTED = (
     "isSold", "webListingReference", "propertyType", "erfSize", "buildingSize",
     "bedrooms", "bathrooms", "garages", "parkingBays",
     "fullLocationDescription", "images",
+    # rentals
+    "isFurnished", "availableFrom", "availableDate", "rentalDeposit",
 )
 
 
@@ -77,9 +79,18 @@ def _strip_html(text: str | None) -> str:
 class PamGolding(Source):
     name = "pamgolding"
     label = "Pam Golding"
+    supports_rent = True
 
-    def search_urls(self, slug: str, max_pages: int) -> list[str]:
-        ref = locations.get(self.name, slug)
+    def search_urls(self, slug: str, max_pages: int,
+                    listing_type: str = "sale") -> list[str]:
+        if listing_type not in ("sale", "rent"):
+            return []
+        # Pam Golding's area reference names the book it belongs to and
+        # carries a DIFFERENT id per book ("residential-properties-for-sale-
+        # camps-bay/2113" vs "residential-properties-to-rent-stellenbosch/
+        # 2932"), so the rental path is discovered separately rather than
+        # derived — see locations._discover_pamgolding.
+        ref = locations.get(self.name, slug, listing_type)
         if not ref:
             return []
         urls: list[str] = []
@@ -91,8 +102,11 @@ class PamGolding(Source):
             html = self.fetcher.get(page_url)
             if not html:
                 break
-            found = re.findall(r'href="(/property-details/[^"?#]+/([a-z]{2}\d+))"',
-                               html, re.I)
+            # Rental references run to three letters ("stl1750740") where the
+            # sale book mostly uses two, so the width is deliberately loose.
+            found = re.findall(
+                r'href="(/property-details/[^"?#]+/([a-z]{2,4}\d+))"',
+                html, re.I)
             new = 0
             for href, ref_id in found:
                 key = ref_id.lower()
@@ -104,7 +118,8 @@ class PamGolding(Source):
                 break
         return urls
 
-    def parse_detail(self, url: str, slug: str) -> dict | None:
+    def parse_detail(self, url: str, slug: str,
+                     listing_type: str = "sale") -> dict | None:
         html = self.fetcher.get(url)
         if not html:
             return None
@@ -114,7 +129,7 @@ class PamGolding(Source):
 
         ref = data.get("webListingReference")
         if not ref:
-            m = re.search(r"/([a-z]{2}\d+)(?:[/?#]|$)", url, re.I)
+            m = re.search(r"/([a-z]{2,4}\d+)(?:[/?#]|$)", url, re.I)
             ref = m.group(1).upper() if m else None
         if not ref:
             return None
@@ -123,12 +138,25 @@ class PamGolding(Source):
         if data.get("isSold"):
             return None
 
-        rec = self.blank(url, slug, str(ref).upper())
+        rec = self.blank(url, slug, str(ref).upper(), listing_type)
 
         rec["title"] = (data.get("marketingHeader")
                         or data.get("propertyDescription") or "")
         rec["description"] = _strip_html(data.get("marketingDescription"))
+        # priceZAR is the monthly rent on a rental (verified: a Stellenbosch
+        # student apartment reports 15000). The payload states no period, and
+        # Pam Golding's rental book is long lets, so "month" is recorded
+        # rather than left unknown.
         rec["price_zar"] = None if data.get("poa") else money(data.get("priceZAR"))
+        if listing_type == "rent":
+            rec["rent_period"] = "month" if rec["price_zar"] else None
+            furnished = data.get("isFurnished")
+            rec["furnished"] = (None if furnished is None
+                                else "Yes" if furnished else "No")
+            available = data.get("availableFrom") or data.get("availableDate")
+            rec["available_from"] = (str(available)[:10] or None) if available else None
+            rec["deposit"] = money(data.get("rentalDeposit")) \
+                if data.get("rentalDeposit") else None
         rec["property_type"] = data.get("propertyType")
         rec["bedrooms"] = num(data.get("bedrooms"))
         rec["bathrooms"] = num(data.get("bathrooms"))

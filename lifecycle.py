@@ -166,11 +166,16 @@ def update(conn, exclude_sources=frozenset()) -> dict:
 
     # Cohort freshness: how recently the crawler last covered each
     # (source, suburb_slug), and how many listings that cohort holds.
+    # For-sale stock only. The whole point of this table is the sold proxy —
+    # "vanished while under offer" means a sale went through — and a rental
+    # that disappears simply means a tenant signed. Letting rentals in would
+    # feed cma.py phantom sold comps at rental prices.
     cohorts = {
         (r[0], r[1]): (r[2], r[3])
         for r in conn.execute(
             "SELECT source, suburb_slug, COUNT(*), MAX(last_seen)"
-            " FROM listings GROUP BY source, suburb_slug")
+            " FROM listings WHERE listing_type = 'sale'"
+            " GROUP BY source, suburb_slug")
     }
     prev_rows = {
         r["listing_key"]: dict(r)
@@ -181,7 +186,8 @@ def update(conn, exclude_sources=frozenset()) -> dict:
 
     for lst in conn.execute(
             "SELECT listing_key, source, suburb_slug, first_seen, last_seen,"
-            " price_zar, under_offer FROM listings").fetchall():
+            " price_zar, under_offer FROM listings"
+            " WHERE listing_type = 'sale'").fetchall():
         key = lst["listing_key"]
         prev = prev_rows.get(key)
         size, cohort_max = cohorts[(lst["source"], lst["suburb_slug"])]
@@ -300,7 +306,8 @@ def stats(conn, suburb_slug: str | None = None) -> dict:
     rows = conn.execute(
         "SELECT lc.status, lc.days_on_market, lc.total_cut_pct, lc.likely_sold"
         " FROM listing_lifecycle lc JOIN listings x ON x.listing_key = lc.listing_key"
-        + where, params).fetchall()
+        " WHERE x.listing_type = 'sale'"
+        + where.replace(" WHERE ", " AND ", 1), params).fetchall()
 
     dom_active = [r["days_on_market"] for r in rows
                   if r["status"] in ("active", "relisted")
@@ -338,7 +345,8 @@ def history_comps(conn, suburb_slug: str, limit: int = 20) -> list[dict]:
                   lc.total_cut_pct, lc.under_offer_at_delist, lc.note
            FROM listing_lifecycle lc
            JOIN listings x ON x.listing_key = lc.listing_key
-           WHERE x.suburb_slug = ? AND lc.status = 'delisted'
+           WHERE x.suburb_slug = ? AND x.listing_type = 'sale'
+             AND lc.status = 'delisted'
            ORDER BY lc.likely_sold DESC, lc.delisted_at DESC
            LIMIT ?""",
         (suburb_slug, limit)).fetchall()

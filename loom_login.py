@@ -64,7 +64,15 @@ def mint_token() -> str:
         ctx.on("request", on_request)
 
         log("opening LOOM and signing in via Azure B2C …")
-        page.goto(APP, wait_until="domcontentloaded")
+        page.set_default_navigation_timeout(90000)
+        for attempt in range(3):
+            try:
+                page.goto(APP, wait_until="domcontentloaded", timeout=90000)
+                break
+            except Exception as e:  # noqa: BLE001
+                log(f"goto attempt {attempt+1} slow ({e!r}); retrying")
+        else:
+            sys.exit("pi.loom.co.za did not load after 3 tries — network/site slow.")
         try:
             page.wait_for_selector("#password, input[type=password]", timeout=45000)
             user_sel = next((s for s in ("#signInName", "#email",

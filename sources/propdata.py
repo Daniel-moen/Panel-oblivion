@@ -14,8 +14,9 @@ Dogon Group (the three agencies that between them hold most of the Atlantic
 Seaboard luxury stock Oblivion competes for) come into the crawl.
 
 Discovery is by sitemap rather than by search paging. Each tenant publishes
-`/residential-for-sale/sitemap.txt` — a flat list of every for-sale detail
-URL, with the town and suburb in the path. One request therefore yields the
+`/residential-for-sale/sitemap.txt` — and, for the rental book,
+`/residential-to-let/sitemap.txt` — a flat list of every detail URL, with the
+town and suburb in the path. One request therefore yields the
 agency's entire inventory keyed by suburb, which is both far cheaper than
 paging 84 suburb searches and immune to the fallback-result-set problem that
 `Source.belongs_to` exists to guard against: a URL either sits under the
@@ -39,9 +40,20 @@ from bs4 import BeautifulSoup
 import config
 import locations
 from sources.base import (Source, area_m2, coord, jsonld_blocks, jsonld_by_type, money,
-                          num, make_soup)
+                          num, make_soup, rent_period)
 
-SITEMAP_PATH = "/residential-for-sale/sitemap.txt"
+# One sitemap per book. The rental one is `to-let`, not `to-rent`, in both the
+# sitemap name and the detail-URL path — verified on seeff.com, which publishes
+# 2 122 rental URLs of the shape /results/residential/to-let/<town>/<suburb>/
+# <type>/<id>/. (`/residential-to-rent/sitemap.txt` 307s; `/residential-to-let/`
+# is the real one.)
+SITEMAP_PATHS = {"sale": "/residential-for-sale/sitemap.txt",
+                 "rent": "/residential-to-let/sitemap.txt"}
+# The path segment the platform files each book under.
+_SECTION = {"sale": "for-sale", "rent": "to-let"}
+
+# Back-compat for anything still importing the single-book constant.
+SITEMAP_PATH = SITEMAP_PATHS["sale"]
 
 # The gallery container, across the theme generations in use on the estate:
 # current builds (Greeff, Lew Geffen, Harcourts, …), Seeff's older hero
@@ -66,12 +78,16 @@ def _listing_event(html: str) -> dict:
     return out
 
 
-def _slug_for_path(path: str) -> tuple[str, str] | None:
+def _slug_for_path(path: str, listing_type: str = "sale") -> tuple[str, str] | None:
     """(configured slug, '<town>/<suburb>' search path) for a detail URL.
 
-    The path is `/results/residential/for-sale/<town>/<suburb>/<type>/<id>/`,
-    so both halves of the area are known exactly — no guessing, and no
-    `refine_suburb` heuristics needed.
+    The path is `/results/residential/for-sale/<town>/<suburb>/<type>/<id>/`
+    (or `/to-let/` for the rental book), so both halves of the area are known
+    exactly — no guessing, and no `refine_suburb` heuristics needed.
+
+    The book segment is checked rather than skipped: a rental URL must not
+    satisfy a for-sale membership test, or the rent crawl's guard would let
+    sale stock in and vice versa.
 
     The town segment must agree with the configured town. Suburb names repeat
     all over southern Africa and accepting the suburb segment alone pulls in
@@ -82,7 +98,7 @@ def _slug_for_path(path: str) -> tuple[str, str] | None:
     removes all of those.
     """
     parts = [p for p in path.split("/") if p]
-    if len(parts) < 5 or parts[2] != "for-sale":
+    if len(parts) < 5 or parts[2] != _SECTION.get(listing_type):
         return None
     town_seg, suburb_seg = parts[3], parts[4]
 
@@ -102,38 +118,44 @@ class PropDataSource(Source):
     """Base scraper for one tenant of the Prop Data platform."""
 
     agency: str = ""          # agency name to record against every listing
+    supports_rent = True
 
     def __init__(self, logger=None):
         super().__init__(logger=logger)
-        self._index: dict[str, dict] | None = None
+        # One cached sitemap index per book, so a run that crawls both does
+        # not re-read (or overwrite) the other's.
+        self._index: dict[str, dict[str, dict]] = {}
 
     # ------------------------------------------------------------ discovery
-    def _sitemap_index(self) -> dict[str, dict]:
+    def _sitemap_index(self, listing_type: str = "sale") -> dict[str, dict]:
         """slug -> {"urls": [...], "path": "<town>/<suburb>"} for this tenant.
 
         One fetch per crawl (and cached on disk for 20h by the Fetcher), so
         every suburb after the first is free.
         """
-        if self._index is not None:
-            return self._index
+        cached = self._index.get(listing_type)
+        if cached is not None:
+            return cached
         index: dict[str, dict] = {}
-        body = self.fetcher.get(self.fetcher.base_url + SITEMAP_PATH) or ""
+        path = SITEMAP_PATHS.get(listing_type)
+        body = (self.fetcher.get(self.fetcher.base_url + path) or "") if path else ""
         for line in body.splitlines():
             line = line.strip()
             if not line.startswith("http"):
                 continue
-            hit = _slug_for_path(urlparse(line).path)
+            hit = _slug_for_path(urlparse(line).path, listing_type)
             if not hit:
                 continue
             slug, search = hit
             entry = index.setdefault(slug, {"urls": [], "path": search})
             entry["urls"].append(line)
         if not index:
-            self.log(f"[{self.label}] sitemap returned no usable listings")
-        self._index = index
+            self.log(f"[{self.label}] {listing_type} sitemap returned no "
+                     f"usable listings")
+        self._index[listing_type] = index
         return index
 
-    def belongs_to(self, href: str, slug: str) -> bool:
+    def belongs_to(self, href: str, slug: str, listing_type: str = "sale") -> bool:
         """Exact-position check, replacing the base class's substring test.
 
         The platform puts the area in known path segments, so membership can
@@ -141,11 +163,14 @@ class PropDataSource(Source):
         anywhere in the URL — which would accept Pretoria's Newlands for our
         Cape Town one.
         """
-        hit = _slug_for_path(urlparse(href).path)
+        hit = _slug_for_path(urlparse(href).path, listing_type)
         return bool(hit and hit[0] == slug)
 
-    def search_urls(self, slug: str, max_pages: int) -> list[str]:
-        entry = self._sitemap_index().get(slug) or {}
+    def search_urls(self, slug: str, max_pages: int,
+                    listing_type: str = "sale") -> list[str]:
+        if listing_type not in SITEMAP_PATHS:
+            return []
+        entry = self._sitemap_index(listing_type).get(slug) or {}
         urls: list[str] = list(entry.get("urls") or [])
 
         # The sitemap is capped at 10 000 URLs, so for the larger tenants it
@@ -157,9 +182,9 @@ class PropDataSource(Source):
         # path that merely happened to return something. locations.json is the
         # fallback for an area with no sitemap entry — Seeff still has
         # hand-validated paths there from before this platform was recognised.
-        path = entry.get("path") or locations.get(self.name, slug)
+        path = entry.get("path") or locations.get(self.name, slug, listing_type)
         if path:
-            urls.extend(self._search_pages(path, slug, max_pages))
+            urls.extend(self._search_pages(path, slug, max_pages, listing_type))
 
         seen: set[str] = set()
         out: list[str] = []
@@ -170,11 +195,13 @@ class PropDataSource(Source):
                 out.append(u)
         return out
 
-    def _search_pages(self, path: str, slug: str, max_pages: int) -> list[str]:
+    def _search_pages(self, path: str, slug: str, max_pages: int,
+                      listing_type: str = "sale") -> list[str]:
+        section = _SECTION[listing_type]
         found: list[str] = []
         seen: set[str] = set()
         for page in range(1, max_pages + 1):
-            page_url = f"{self.fetcher.base_url}/results/residential/for-sale/{path}/"
+            page_url = f"{self.fetcher.base_url}/results/residential/{section}/{path}/"
             if page > 1:
                 page_url += f"?page={page}"
             html = self.fetcher.get(page_url)
@@ -182,9 +209,9 @@ class PropDataSource(Source):
                 break
             new = 0
             for href in re.findall(
-                    r'href="(/results/residential/for-sale/[^"]*?/\d{5,}/[^"]*?)"', html):
+                    rf'href="(/results/residential/{section}/[^"]*?/\d{{5,}}/[^"]*?)"', html):
                 ident = self.listing_id(href)
-                if ident and ident not in seen and self.belongs_to(href, slug):
+                if ident and ident not in seen and self.belongs_to(href, slug, listing_type):
                     seen.add(ident)
                     found.append(self.fetcher.base_url + href)
                     new += 1
@@ -202,7 +229,8 @@ class PropDataSource(Source):
         return None
 
     # ------------------------------------------------------------ parsing
-    def parse_detail(self, url: str, slug: str) -> dict | None:
+    def parse_detail(self, url: str, slug: str,
+                     listing_type: str = "sale") -> dict | None:
         html = self.fetcher.get(url)
         if not html:
             return None
@@ -212,7 +240,7 @@ class PropDataSource(Source):
 
         soup = make_soup(html)
         blocks = jsonld_blocks(soup)
-        rec = self.blank(url, slug, ident)
+        rec = self.blank(url, slug, ident, listing_type)
         rec["agency"] = self.agency
 
         prop = jsonld_by_type(blocks, "House", "Apartment", "Residence",
@@ -229,6 +257,11 @@ class PropDataSource(Source):
         ev = _listing_event(html)
         rec["price_zar"] = money(ev.get("price")) or (
             money(offer.get("price")) if offer else None)
+        if listing_type == "rent":
+            # The rental blob states the period outright —
+            # `purchase_type: "To Let"`, `price_term: "Per Month"` — which is
+            # the cleanest period signal of any portal here.
+            rec["rent_period"] = rent_period(ev.get("price_term")) or "month"
         rec["property_type"] = ev.get("property_type") or None
         rec["floor_size_m2"] = area_m2(ev.get("floor_size"))
         rec["erf_size_m2"] = area_m2(ev.get("land_size"))
@@ -258,6 +291,17 @@ class PropDataSource(Source):
             if details.get(key):
                 rec["levies"] = money(details[key])
                 break
+        if listing_type == "rent":
+            for key in ("available from", "available", "occupation date",
+                        "date available"):
+                if details.get(key):
+                    rec["available_from"] = details[key]
+                    break
+            rec["furnished"] = details.get("furnished")
+            for key in ("deposit", "rental deposit"):
+                if details.get(key):
+                    rec["deposit"] = money(details[key])
+                    break
 
         # Room counts. The icon strip writes them as "3 Bedrooms"; the
         # listing-features layout writes "Bedrooms 3". Both orders are tried

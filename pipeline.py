@@ -59,8 +59,17 @@ class Progress:
 
 
 def _crawl_source(name: str, suburbs: list[str], pages: int, conn, write_lock,
-                  log, progress: Progress, stop: threading.Event) -> dict:
-    """Crawl one portal across all requested suburbs."""
+                  log, progress: Progress, stop: threading.Event,
+                  listing_types: tuple[str, ...] = ("sale",)) -> dict:
+    """Crawl one portal across all requested suburbs, for each book asked for.
+
+    Both books go through ONE Source instance on purpose. The Fetcher — and so
+    the adaptive rate limiter, the learned request spacing and the give-up
+    circuit — belongs to the instance, and a second instance for rentals would
+    mean two limiters pacing the same host independently, each believing it
+    owned the whole budget. On Property24 that is precisely how a sticky block
+    is earned. One instance, two sequential passes, one limiter.
+    """
     try:
         src = source_registry.build(name, logger=log)
     except Exception as e:
@@ -69,83 +78,117 @@ def _crawl_source(name: str, suburbs: list[str], pages: int, conn, write_lock,
 
     stored = 0
     skipped_land = 0
-    for slug in suburbs:
-        if stop.is_set() or src.fetcher.circuit_open:
-            break
-        info = config.SUBURBS[slug]
-        label = info["name"]
-        # A whole-town area holds many suburbs' worth of stock, so it gets a
-        # deeper page budget than a single suburb. Sources break out as soon
-        # as a page adds nothing, so the extra allowance costs nothing on the
-        # areas that do not need it.
-        budget = (max(pages, config.MAX_PAGES_TOWN_SCOPE)
-                  if info.get("scope") == "town" else pages)
-        try:
-            urls = src.search_urls(slug, budget)
-        except Exception as e:
-            log(f"[{src.label}] {label}: search failed ({type(e).__name__}: {e})")
-            continue
-        if not urls:
-            log(f"[{src.label}] {label}: no listings found")
-            continue
+    skipped_cheap = 0
 
-        with write_lock:
-            seen = db.recently_seen(conn, name)
-        fresh = [u for u in urls if not _already(u, name, seen)]
-        skipped = len(urls) - len(fresh)
-        log(f"[{src.label}] {label}: {len(fresh)} to fetch"
-            + (f" ({skipped} seen recently, skipped)" if skipped else ""))
-        progress.add_total(name, len(fresh))
-
-        # Detail pages are fetched concurrently. The fetcher's rate limiter
-        # still enforces this host's gap globally, so concurrency does not
-        # raise the request RATE — it only lets the next request's wait
-        # overlap the current one's download and parse, which is most of the
-        # per-request cost once the adaptive gap has tightened.
-        def _fetch_one(u):
+    def _crawl_book(listing_type: str) -> None:
+        """One portal, one book, every requested suburb."""
+        nonlocal stored, skipped_land, skipped_cheap
+        rent = listing_type == "rent"
+        for slug in suburbs:
             if stop.is_set() or src.fetcher.circuit_open:
-                return None
+                break
+            info = config.SUBURBS[slug]
+            label = info["name"] + (" [rent]" if rent else "")
+            # A whole-town area holds many suburbs' worth of stock, so it gets
+            # a deeper page budget than a single suburb. Sources break out as
+            # soon as a page adds nothing, so the extra allowance costs
+            # nothing on the areas that do not need it.
+            budget = (max(pages, config.MAX_PAGES_TOWN_SCOPE)
+                      if info.get("scope") == "town" else pages)
             try:
-                return src.parse_detail(u, slug)
-            except Exception as e:                          # noqa: BLE001
-                log(f"[{src.label}] parse error {type(e).__name__}: {u}")
-                return None
+                urls = src.search_urls(slug, budget, listing_type)
+            except Exception as e:
+                log(f"[{src.label}] {label}: search failed "
+                    f"({type(e).__name__}: {e})")
+                continue
+            if not urls:
+                log(f"[{src.label}] {label}: no listings found")
+                continue
 
-        def _store(listing) -> None:
-            """Runs on the crawl thread only — counters need no lock."""
-            nonlocal stored, skipped_land
-            ok = False
-            if listing and config.EXCLUDE_VACANT_LAND and \
-                    sources_base.is_vacant_land(listing):
-                listing = None
-                skipped_land += 1
-            if listing:
-                with write_lock:
-                    db.upsert_listing(conn, listing)
-                    conn.commit()
-                stored += 1
-                ok = True
-                price = listing.get("price_zar")
-                shown = f"R{price:,}" if price else "POA"
-                title = (listing.get("title") or "")[:52]
-                log(f"[{src.label}] + {title} — {shown}")
-            progress.tick(name, ok)
+            with write_lock:
+                seen = db.recently_seen(conn, name, listing_type=listing_type)
+            fresh = [u for u in urls if not _already(u, name, seen, listing_type)]
+            skipped = len(urls) - len(fresh)
+            log(f"[{src.label}] {label}: {len(fresh)} to fetch"
+                + (f" ({skipped} seen recently, skipped)" if skipped else ""))
+            progress.add_total(name, len(fresh))
 
-        workers = max(1, config.SOURCES.get(name, {}).get("workers", 1))
-        if workers > 1 and len(fresh) > 1:
-            with ThreadPoolExecutor(max_workers=workers,
-                                    thread_name_prefix=f"{name}-detail") as dpool:
-                # map() streams results in submission order, so the log still
-                # reads in page order rather than completion order.
-                for listing in dpool.map(_fetch_one, fresh):
-                    _store(listing)
+            # Detail pages are fetched concurrently. The fetcher's rate limiter
+            # still enforces this host's gap globally, so concurrency does not
+            # raise the request RATE — it only lets the next request's wait
+            # overlap the current one's download and parse, which is most of
+            # the per-request cost once the adaptive gap has tightened.
+            def _fetch_one(u):
+                if stop.is_set() or src.fetcher.circuit_open:
+                    return None
+                try:
+                    return src.parse_detail(u, slug, listing_type)
+                except Exception as e:                      # noqa: BLE001
+                    log(f"[{src.label}] parse error {type(e).__name__}: {u}")
+                    return None
+
+            def _store(listing) -> None:
+                """Runs on the crawl thread only — counters need no lock."""
+                nonlocal stored, skipped_land, skipped_cheap
+                ok = False
+                if listing and config.EXCLUDE_VACANT_LAND and \
+                        sources_base.is_vacant_land(listing):
+                    listing = None
+                    skipped_land += 1
+                # The rent floor is applied here rather than in the scrapers:
+                # only Property24 can pre-filter its own rent search, so every
+                # other portal hands back its whole book and the cheap stock
+                # has to be dropped on the way in. Compared on the MONTHLY
+                # EQUIVALENT — a R2 000/day holiday let is not cheap stock.
+                if listing and listing.get("listing_type") == "rent":
+                    monthly = sources_base.monthly_equivalent(
+                        listing.get("price_zar"), listing.get("rent_period"))
+                    if monthly is not None and monthly < config.MIN_RENT_ZAR:
+                        listing = None
+                        skipped_cheap += 1
+                if listing:
+                    with write_lock:
+                        db.upsert_listing(conn, listing)
+                        conn.commit()
+                    stored += 1
+                    ok = True
+                    price = listing.get("price_zar")
+                    period = listing.get("rent_period")
+                    shown = (f"R{price:,}" + (f"/{period}" if period else "")
+                             if price else "POA")
+                    title = (listing.get("title") or "")[:52]
+                    log(f"[{src.label}] + {title} — {shown}")
+                progress.tick(name, ok)
+
+            workers = max(1, config.SOURCES.get(name, {}).get("workers", 1))
+            if workers > 1 and len(fresh) > 1:
+                with ThreadPoolExecutor(
+                        max_workers=workers,
+                        thread_name_prefix=f"{name}-detail") as dpool:
+                    # map() streams results in submission order, so the log
+                    # still reads in page order rather than completion order.
+                    for listing in dpool.map(_fetch_one, fresh):
+                        _store(listing)
+                        if stop.is_set() or src.fetcher.circuit_open:
+                            break
+            else:
+                for url in fresh:
                     if stop.is_set() or src.fetcher.circuit_open:
                         break
-        else:
-            for url in fresh:
-                if stop.is_set() or src.fetcher.circuit_open:
-                    break
-                _store(_fetch_one(url))
+                    _store(_fetch_one(url))
+
+    for listing_type in listing_types:
+        # A portal whose to-rent URL shape nobody has verified is skipped
+        # rather than probed: these sites answer an unknown path with a
+        # fallback result set, not a 404, so a guess files somebody else's
+        # stock under our suburb.
+        if listing_type != "sale" and not getattr(src, "supports_rent", False):
+            log(f"[{src.label}] no verified {listing_type} URL for this "
+                f"portal — skipped")
+            continue
+        if listing_type == "rent":
+            log(f"[{src.label}] crawling the to-rent book")
+        _crawl_book(listing_type)
 
     src.fetcher.close()          # persist the learned request spacing
     st = src.fetcher.stats
@@ -154,18 +197,28 @@ def _crawl_source(name: str, suburbs: list[str], pages: int, conn, write_lock,
             f"before giving up")
     log(f"[{src.label}] done — {stored} stored "
         f"({st['fetched']} fetched, {st['cached']} cached, {st['failed']} failed"
-        + (f", {skipped_land} vacant plots dropped" if skipped_land else "") + ")")
+        + (f", {skipped_land} vacant plots dropped" if skipped_land else "")
+        + (f", {skipped_cheap} rentals below the floor" if skipped_cheap else "")
+        + ")")
     return {"source": name, "stored": stored, **st}
 
 
-def _already(url: str, source: str, seen: set[str]) -> bool:
-    """Cheap check of whether this URL's listing id was scraped recently."""
+def _already(url: str, source: str, seen: set[str],
+             listing_type: str = "sale") -> bool:
+    """Cheap check of whether this URL's listing id was scraped recently.
+
+    `seen` is already scoped to one book by db.recently_seen(), so this only
+    has to extract the id. Two portals shape their rental ids differently from
+    their sale ones — Private Property prefixes rentals RR rather than T, and
+    Pam Golding's rental references run to three letters — so the pattern is
+    per (source, book) where it differs.
+    """
     import re
     import sources as source_registry
     patterns = {
         "property24": r"/(\d+)(?:\?|$)",
         "privateproperty": r"/(T\d+)(?:[/?#]|$)",
-        "pamgolding": r"/([a-z]{2}\d+)(?:[/?#]|$)",
+        "pamgolding": r"/([a-z]{2,4}\d+)(?:[/?#]|$)",
         "remax": r"-(\d{5,})(?:[/?#]|$)",
         "rawson": r"/(\d{5,})(?:[/?#]|$)",
         "immoafrica": r"/(IA\d+)(?:[/?#]|$)",
@@ -173,6 +226,8 @@ def _already(url: str, source: str, seen: set[str]) -> bool:
         # ("rl61722") on others, and both sit in the last path segment.
         "myproperty": r"/([a-z]{0,4}\d{4,})(?:[/?#]|$)",
     }
+    if listing_type == "rent":
+        patterns["privateproperty"] = r"/(RR\d+)(?:[/?#]|$)"
     # Every Prop Data tenant shares the platform's URL shape.
     for name in source_registry.propdata_names():
         patterns.setdefault(name, r"/(\d{5,})(?:/|$)")
@@ -187,11 +242,25 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
         pages: int = 3, use_ai: bool = True, log=print,
         progress: Progress | None = None,
         stop: threading.Event | None = None,
-        do_score: bool = True, only_stale: bool = False) -> dict:
-    """Scrape the selected portals, group duplicates, then score."""
+        do_score: bool = True, only_stale: bool = False,
+        listing_types: tuple[str, ...] = ("sale",)) -> dict:
+    """Scrape the selected portals, group duplicates, then score.
+
+    listing_types defaults to ("sale",) — the crawl this engine has always
+    done, unchanged. Add "rent" to crawl each portal's to-rent book in the
+    same pass (same source objects, same rate limiters).
+
+    Everything after the crawl — dedupe, the sold-proxy lifecycle, scoring,
+    verification, erf resolution and the GV roll — is for-sale work and is
+    skipped entirely on a rent-only run. Rentals are not mandates to win, not
+    comps, and must never reach the paid scorer.
+    """
     source_names = [s for s in (source_names or config.enabled_sources())
                     if s in source_registry.REGISTRY]
     suburbs = [s for s in suburbs if s in config.SUBURBS]
+    listing_types = tuple(t for t in listing_types
+                          if t in sources_base.LISTING_TYPES) or ("sale",)
+    crawling_sales = "sale" in listing_types
     progress = progress or Progress()
     stop = stop or threading.Event()
 
@@ -207,7 +276,8 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
     except Exception as e:                              # noqa: BLE001
         log(f"cache prune skipped ({type(e).__name__}: {e})")
 
-    log(f"crawling {len(suburbs)} suburb(s) across {len(source_names)} portal(s): "
+    log(f"crawling {'+'.join(listing_types)} in {len(suburbs)} suburb(s) "
+        f"across {len(source_names)} portal(s): "
         f"{', '.join(config.SOURCES[s]['label'] for s in source_names)}")
 
     write_lock = threading.Lock()
@@ -216,7 +286,8 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
         with ThreadPoolExecutor(max_workers=len(source_names)) as pool:
             futures = {
                 pool.submit(_crawl_source, name, suburbs, pages, conn,
-                            write_lock, log, progress, stop): name
+                            write_lock, log, progress, stop,
+                            listing_types): name
                 for name in source_names
             }
             for fut in as_completed(futures):
@@ -225,6 +296,24 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
                     results.append(fut.result())
                 except Exception as e:
                     log(f"[{name}] crawl crashed: {type(e).__name__}: {e}")
+
+        if not crawling_sales:
+            # Rent-only run. Everything below this point is for-sale work:
+            # dedupe builds the multi-agency open-mandate proof, the lifecycle
+            # sweep turns disappearances into sold comps, and the scorer costs
+            # real money per property. None of it means anything for a rental,
+            # so a rent crawl ends here rather than running them over stock
+            # they would all have to filter back out again.
+            rentals = conn.execute(
+                "SELECT COUNT(*) FROM listings WHERE listing_type = 'rent'"
+            ).fetchone()[0]
+            fresh = conn.execute(
+                "SELECT COUNT(*) FROM listings WHERE listing_type = 'rent'"
+                " AND last_seen > datetime('now', '-1 hour')").fetchone()[0]
+            log(f"complete — {fresh} rentals confirmed this run, "
+                f"{rentals} in the rental book overall")
+            return {"sources": results, "listing_types": list(listing_types),
+                    "rentals": rentals, "rentals_this_run": fresh}
 
         log("matching listings across portals...")
         stats = dedupe.rebuild_groups(conn)
@@ -245,10 +334,14 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
             name = res.get("source")
             if not name or name not in config.SOURCES:
                 continue
+            # For-sale rows only. The canary guards the delisting sweep, which
+            # is itself for-sale only, and on a `--type both` run the rental
+            # rows would dilute the coverage ratio of a portal whose sale
+            # parser had in fact just broken.
             total, fresh = conn.execute(
                 f"""SELECT COUNT(*),
                            COALESCE(SUM(last_seen > datetime('now', '-24 hours')), 0)
-                    FROM listings WHERE source = ?
+                    FROM listings WHERE source = ? AND listing_type = 'sale'
                     AND suburb_slug IN ({marks})""",
                 (name, *suburbs)).fetchone()
             if total >= 10 and fresh < total * config.LIFECYCLE_MIN_COVERAGE:
@@ -307,14 +400,17 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
                 log(f"erf skipped ({type(e).__name__}: {e})")
             # Photo-location closes the gap the cadastre can't: a candidate
             # list narrows to one erf by matching listing photos against
-            # satellite crops of each parcel.
-            try:
-                als = erf.ai_locate_all(log=log, stop=stop)
-                if als["groups"]:
-                    log(f"AI locate: {als['located']} located from photos, "
-                        f"{als['errors']} failed")
-            except Exception as e:                      # noqa: BLE001
-                log(f"AI locate skipped ({type(e).__name__}: {e})")
+            # satellite crops of each parcel. Vision calls cost real money
+            # per property, so it never piggybacks on a crawl unless
+            # explicitly enabled — run it on demand instead.
+            if config.AI_LOCATE_AUTO:
+                try:
+                    als = erf.ai_locate_all(log=log, stop=stop)
+                    if als["groups"]:
+                        log(f"AI locate: {als['located']} located from "
+                            f"photos, {als['errors']} failed")
+                except Exception as e:                  # noqa: BLE001
+                    log(f"AI locate skipped ({type(e).__name__}: {e})")
         if not stop.is_set():
             import valuations
             try:

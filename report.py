@@ -28,9 +28,11 @@ FROM listings l
 JOIN scores s ON s.listing_key = l.listing_key
 JOIN property_groups g ON g.listing_key = l.listing_key
 LEFT JOIN listing_lifecycle lc ON lc.listing_key = l.listing_key
+-- rentals are a separate book: not mandates to win, never scored, never here
+WHERE l.listing_type = 'sale'
 -- already-prospected properties (per the team's tracker) are out, including
 -- sibling listings of the same physical property on other portals
-WHERE NOT EXISTS (
+  AND NOT EXISTS (
         SELECT 1 FROM property_groups g2
         JOIN listings l2 ON l2.listing_key = g2.listing_key
         JOIN tracker t2 ON t2.listing_number = l2.source_id

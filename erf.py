@@ -604,6 +604,13 @@ SELECT l.listing_key, l.source, l.url, l.suburb, l.suburb_slug, l.title,
 FROM listings l
 LEFT JOIN scores s ON s.listing_key = l.listing_key
 LEFT JOIN property_groups g ON g.listing_key = l.listing_key
+-- Rentals never need an erf: the erf is the key to the deeds record and the
+-- GV valuation, both of which are about the OWNER of a property we might win
+-- a sale mandate on. A tenant-facing listing has no such question to answer,
+-- and resolving one would burn cadastre lookups (and, with AI locate on,
+-- real money) for nothing. The LEFT JOIN above means the property_groups
+-- filter that excludes rentals elsewhere does not apply here.
+WHERE l.listing_type = 'sale'
 """
 
 
@@ -621,12 +628,19 @@ def _groups(conn: sqlite3.Connection, sellable_only: bool = False) -> dict:
 
 def resolve_all(conn: sqlite3.Connection | None = None, *,
                 sellable_only: bool = False, force: bool = False,
+                retry_failed: bool = False,
                 log=print, stop: threading.Event | None = None) -> dict:
     """Resolve every property group we can; write erf_lookup rows.
 
     Every group by default — the erf is the key to GV values, CMA comps and
     the deeds tool, so it is wanted whether or not the AI thinks the mandate
     is winnable. Pass sellable_only=True for the old, narrower sweep.
+
+    retry_failed=True re-attempts no_data/no_match groups too. Off by
+    default: those only resolve if the source data improves, and retrying
+    all of them cost every sweep ~45 minutes of cadastre queries for a
+    handful of flips (measured 2026-08-25: 5,578 retried, 12 resolved).
+    The dashboard's manual "Resolve erf numbers" button retries them.
     """
     ctx = None
     if conn is None:
@@ -642,9 +656,10 @@ def resolve_all(conn: sqlite3.Connection | None = None, *,
             if stop is not None and stop.is_set():
                 break
             keys = [m["listing_key"] for m in members]
-            if not force and all(done.get(k) in
-                                 ("ok", "check", "candidates", "confirmed")
-                                 for k in keys):
+            settled = {"ok", "check", "candidates", "confirmed"}
+            if not retry_failed:
+                settled |= {"no_data", "no_match"}
+            if not force and all(done.get(k) in settled for k in keys):
                 stats["skipped"] += 1
                 continue
             label = members[0].get("title") or keys[0]

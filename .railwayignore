@@ -23,3 +23,7 @@ prospects.html
 
 # Git history — not needed in the image, and new since the repo was initialised.
 .git/
+
+# Front-end tooling: only ui/build is served; the rest is local-only.
+ui/node_modules/
+ui/.svelte-kit/
