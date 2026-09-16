@@ -405,11 +405,12 @@ SEARCH_PRICE_FLOOR = MIN_PRICE_ZAR
 # see. A rental also names the managing agency, which is often a different
 # brand to the one holding the sale mandate.
 #
-# MIN_RENT_ZAR mirrors MIN_PRICE_ZAR: Oblivion's book is luxury, so sub-R20k
-# stock is noise. It is compared against the MONTHLY EQUIVALENT of the rent
+# MIN_RENT_ZAR mirrors MIN_PRICE_ZAR. The user wants the lower end of the
+# rental market too (2026-09-16: "below 40k"), so the floor only drops
+# student rooms and parking bays. It is compared against the MONTHLY EQUIVALENT of the rent
 # (see sources.base.monthly_equivalent) — Atlantic Seaboard holiday lets are
 # advertised per day, and R25 000/day is not a cheap rental.
-MIN_RENT_ZAR = int(os.environ.get("MIN_RENT_ZAR", "20000"))
+MIN_RENT_ZAR = int(os.environ.get("MIN_RENT_ZAR", "5000"))
 
 # Pre-filter the portal's own rent search where it supports a price floor
 # (Property24's ?sp=pf=N works identically on /to-rent/).
