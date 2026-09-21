@@ -4,7 +4,7 @@ import adapter from '@sveltejs/adapter-static';
 const config = {
   kit: {
     adapter: adapter({ fallback: '200.html' }),
-    prerender: { entries: ['/', '/map', '/prospects', '/leads', '/leads/pipeline', '/leads/properties', '/leads/contacts'] }
+    prerender: { entries: ['/', '/map', '/prospects', '/agent', '/leads', '/leads/pipeline', '/leads/properties', '/leads/contacts'] }
   }
 };
 

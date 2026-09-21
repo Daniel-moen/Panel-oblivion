@@ -159,6 +159,21 @@ CREATE TABLE IF NOT EXISTS erf_lookup (
     looked_up_at     TEXT DEFAULT (datetime('now'))
 );
 
+-- Team chat: the agents talking to each OTHER, not to Agent Z. One row per
+-- message, oldest first by id, which is also the client's polling cursor
+-- ("everything after 417").
+--
+-- There are no accounts on this dashboard — one shared password for the whole
+-- team — so `sender` is simply the display name the person typed into the
+-- widget and their browser remembers. It is a courtesy label, not an identity
+-- claim, and nothing anywhere trusts it.
+CREATE TABLE IF NOT EXISTS team_chat (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender     TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    created_at TEXT NOT NULL       -- ISO-8601 UTC: '2026-09-22T09:14:07Z'
+);
+
 CREATE TABLE IF NOT EXISTS scores (
     listing_key             TEXT PRIMARY KEY,
     scored_by               TEXT,   -- 'ai:<model>' or 'heuristic'

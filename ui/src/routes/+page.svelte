@@ -80,6 +80,12 @@
         </span>
         <span class="go">Open →</span>
       </a>
+      <!-- same tier as the two books: Z is a way into the stock, not a footnote -->
+      <a class="door z" href="/agent">
+        <span class="k"><span class="zm" aria-hidden="true">Z</span>Agent Z</span>
+        <span class="v">Describe the buyer — it finds the property</span>
+        <span class="go">Start a search →</span>
+      </a>
     </div>
   </main>
 
@@ -117,7 +123,7 @@
           min-width: 260px; padding: 1.1rem 1.3rem; text-align: left; color: #fff;
           background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.28);
           border-radius: 16px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-          transition: background 0.2s, transform 0.2s, border-color 0.2s; }
+          transition: background 0.2s, transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
   .door:hover { background: rgba(255,255,255,0.24); transform: translateY(-2px); border-color: rgba(255,255,255,0.5); }
   .k { font-size: 1.05rem; font-weight: 700; }
   .v { font-size: 0.84rem; opacity: 0.9; display: flex; gap: 0.3rem; align-items: center; }
@@ -129,6 +135,26 @@
   @keyframes pulse { 50% { opacity: 0.3; } }
   .go { margin-top: 0.5rem; font-size: 0.8rem; font-weight: 600; opacity: 0.8; }
 
+  /* ——— the Agent Z door: the same monogram the app uses, on glass ——— */
+  .door.z { background: linear-gradient(140deg, rgba(59, 130, 246, 0.34), rgba(29, 78, 216, 0.22));
+            border-color: rgba(191, 219, 254, 0.45);
+            box-shadow: 0 6px 22px rgba(29, 78, 216, 0.22); }
+  .door.z:hover { background: linear-gradient(140deg, rgba(59, 130, 246, 0.46), rgba(29, 78, 216, 0.3));
+                  border-color: rgba(219, 234, 254, 0.7);
+                  box-shadow: 0 10px 30px rgba(29, 78, 216, 0.34); }
+  .door.z .k { display: flex; align-items: center; gap: 0.5rem; }
+  .zm { display: inline-flex; align-items: center; justify-content: center;
+        width: 24px; height: 24px; border-radius: 8px; flex: none;
+        font-size: 0.86rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1;
+        color: #fff;
+        background: linear-gradient(140deg, #60a5fa 0%, #1d4ed8 55%, #60a5fa 100%);
+        background-size: 220% 220%;
+        box-shadow: 0 2px 10px rgba(29, 78, 216, 0.45);
+        animation: drift 9s ease-in-out infinite; }
+  @keyframes drift { 50% { background-position: 100% 50%; } }
+  .door.z:hover .zm { transform: scale(1.06); }
+  .zm { transition: transform 0.2s; }
+
   footer { display: flex; gap: 0.6rem; justify-content: center; padding: 1.6rem; font-size: 0.82rem; opacity: 0.75; }
   footer a { color: #fff; }
   footer a:hover { text-decoration: underline; }
@@ -136,5 +162,11 @@
   @media (max-width: 640px) {
     header { padding: 1.4rem 1.4rem; }
     .door { min-width: 0; width: 100%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .home, .zm, .live { animation: none; }
+    .door:hover { transform: none; }
+    .door.z:hover .zm { transform: none; }
   }
 </style>

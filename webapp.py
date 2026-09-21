@@ -15,10 +15,11 @@ import json
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Flask, Response, jsonify, redirect, request, send_from_directory
 
+import agent_z
 import config
 import db
 import dedupe
@@ -981,6 +982,113 @@ def api_find():
                         "message": f"{type(e).__name__}: {e}"}), 500
 
 
+@app.post("/api/agent")
+def api_agent():
+    """Agent Z — the finder as a conversation (agent_z.py).
+
+    Body: {messages: [{role, content}, …], sole, type}. Stateless: the client
+    posts the whole thread each turn and the server keeps none of it. `type`
+    pins the book when the caller knows it; left off, Z reads the thread and
+    decides sale or rent itself — which is why the payload is built lazily,
+    one book only, through the same cached helper /api/prospects uses.
+    Synchronous: two model calls, ~10-30s with AI, instant on the keyword
+    fallback."""
+    body = request.get_json(silent=True) or {}
+    sole = bool(body.get("sole"))
+    pinned = body.get("type") if body.get("type") in ("sale", "rent") else None
+    try:
+        return jsonify(agent_z.respond(
+            body.get("messages") or [],
+            lambda t: _prospects_payload(sole, t),
+            listing_type=pinned))
+    except ValueError as e:
+        return jsonify({"error": "bad_message", "message": str(e)}), 400
+    except Exception as e:      # noqa: BLE001 — surface it in the chat, not a 500 page
+        return jsonify({"error": "agent_failed",
+                        "message": f"{type(e).__name__}: {e}"}), 500
+
+
+# ------------------------------------------------------------- team chat
+#
+# The floating widget on every page is the agents talking to each other —
+# Agent Z is /api/agent and a different thing entirely. Deliberately plain:
+# no sockets, no read receipts, no accounts. The client polls with the id of
+# the last message it holds and gets whatever landed since.
+
+_CHAT_TAIL = 100          # how far back a cold open reads
+_CHAT_MAX = 200           # cap on one catch-up, so a long absence is not a flood
+_CHAT_BODY_MAX = 2000
+_CHAT_SENDER_MAX = 40
+
+# C0 controls and DEL, minus tab and newline: a message may be several lines,
+# but nothing in it should be able to move a cursor or ring a terminal bell.
+_CHAT_CTRL = {c: None for c in list(range(32)) + [127] if c not in (9, 10)}
+
+
+def _chat_body(value: str) -> str:
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    return text.translate(_CHAT_CTRL).strip()[:_CHAT_BODY_MAX]
+
+
+def _chat_sender(value: str) -> str:
+    """One line, whitespace collapsed — a name, not a paragraph."""
+    text = str(value or "").translate(_CHAT_CTRL)
+    return " ".join(text.split())[:_CHAT_SENDER_MAX]
+
+
+def _chat_row(r) -> dict:
+    return {"id": r["id"], "sender": r["sender"], "body": r["body"],
+            "at": r["created_at"]}
+
+
+@app.get("/api/chat")
+def api_chat():
+    """Team chat: messages after `after`, or the tail of the book without it.
+
+    Always ascending, so the client can append. `latest` is the newest id in
+    the table — the cursor to send back next time, and what tells a client
+    holding nothing that there is nothing to hold.
+    """
+    raw = request.args.get("after")
+    try:
+        after = int(raw) if raw not in (None, "") else None
+    except (TypeError, ValueError):
+        after = None
+    with db.connect() as conn:
+        if after is None:
+            rows = conn.execute(
+                "SELECT * FROM team_chat ORDER BY id DESC LIMIT ?",
+                (_CHAT_TAIL,)).fetchall()[::-1]
+        else:
+            rows = conn.execute(
+                "SELECT * FROM team_chat WHERE id > ? ORDER BY id ASC LIMIT ?",
+                (after, _CHAT_MAX)).fetchall()
+        latest = conn.execute(
+            "SELECT COALESCE(MAX(id), 0) FROM team_chat").fetchone()[0]
+    return jsonify({"messages": [_chat_row(r) for r in rows], "latest": latest})
+
+
+@app.post("/api/chat")
+def api_chat_say():
+    """Post one message. Body: {sender, body}. Returns the stored row, so the
+    sender's own message appears with the id and timestamp everyone else will
+    see rather than an optimistic local copy."""
+    payload = request.get_json(silent=True) or {}
+    body = _chat_body(payload.get("body"))
+    if not body:
+        return jsonify({"error": "empty_message",
+                        "message": "Nothing to send."}), 400
+    sender = _chat_sender(payload.get("sender")) or "Someone"
+    at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with db.connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO team_chat (sender, body, created_at) VALUES (?, ?, ?)",
+            (sender, body, at))
+        mid = cur.lastrowid
+    return jsonify({"message": {"id": mid, "sender": sender,
+                                "body": body, "at": at}})
+
+
 @app.get("/api/stats")
 def api_stats():
     with db.connect() as conn:
@@ -1044,6 +1152,12 @@ def index():
 @app.get("/prospects")
 def prospects_page():
     return send_from_directory(_UI_BUILD, "prospects.html")
+
+
+@app.get("/agent")
+def agent_page():
+    """Agent Z — the conversational finder. Prerendered like /prospects."""
+    return send_from_directory(_UI_BUILD, "agent.html")
 
 
 @app.get("/leads")

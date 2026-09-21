@@ -22,6 +22,9 @@
 
   <nav>
     <a href="/prospects" class:on={path.startsWith('/prospects')}>Prospects</a>
+    <a href="/agent" class="z" class:on={path.startsWith('/agent')}>
+      <span class="zm" aria-hidden="true">Z</span>Agent Z
+    </a>
     <a href="/map" class:on={path.startsWith('/map')}>Map</a>
     <a href="/leads" class="sw">Lead management →</a>
     <a href="/cma">CMA reports</a>
@@ -77,6 +80,13 @@
   nav a:hover { color: var(--ink); background: var(--bg-3); }
   nav a.sw { margin-left: auto; color: var(--ink-3); }
   nav a.on { color: var(--accent-2); background: var(--accent-soft); font-weight: 600; }
+
+  /* the same monogram the chat uses, shrunk to a nav mark */
+  nav a.z { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .zm { display: inline-flex; align-items: center; justify-content: center;
+        width: 17px; height: 17px; border-radius: 5px; color: #fff;
+        font-size: 0.66rem; font-weight: 800; line-height: 1;
+        background: linear-gradient(140deg, var(--accent) 0%, var(--accent-2) 100%); }
 
   .right { display: flex; align-items: center; gap: 0.8rem; }
 

@@ -51,6 +51,15 @@ export const api = {
      else is the for-sale one. */
   find: (brief, sole, type) =>
     post('/api/find', { brief, sole: !!sole, type: type === 'rent' ? 'rent' : 'sale' }),
+  /* Agent Z: the whole thread every turn — the server holds no state. No
+     type is sent: Z reads the conversation and picks the book itself. */
+  agent: (messages, sole) => post('/api/agent', { messages, sole: !!sole }),
+
+  /* Team chat — the agents talking to each other, nothing to do with Z.
+     `after` is the id of the newest message the client already holds; left
+     off, the server hands back the tail of the book. */
+  chat: (after) => get('/api/chat' + (after ? '?after=' + after : '')),
+  say: (sender, body) => post('/api/chat', { sender, body }),
 
   scrape: (payload) => post('/api/scrape', payload),
   stop: () => post('/api/stop'),

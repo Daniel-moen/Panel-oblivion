@@ -7,6 +7,8 @@
   import JobStrip from '$lib/components/JobStrip.svelte';
   import RunPanel from '$lib/components/RunPanel.svelte';
   import Toast from '$lib/components/Toast.svelte';
+  import ChatWidget from '$lib/components/ChatWidget.svelte';
+  import { startChat } from '$lib/chat.svelte.js';
 
   let { children } = $props();
 
@@ -17,7 +19,11 @@
 
   onMount(() => {
     startPolling();
-    return stopPolling;
+    const stopChat = startChat();
+    return () => {
+      stopPolling();
+      stopChat();
+    };
   });
 
   function onKey(e) {
@@ -42,6 +48,9 @@
 
 <RunPanel />
 <Toast />
+<!-- The team's own line — agents talking to each other, not to Agent Z.
+     Outside the shell so the bare screens (landing, map, leads) get it too. -->
+<ChatWidget />
 
 <style>
   .shell { min-height: 100vh; display: flex; flex-direction: column; }
