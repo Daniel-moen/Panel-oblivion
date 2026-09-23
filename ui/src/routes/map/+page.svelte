@@ -309,12 +309,7 @@
 <!-- ————————————————————————————————————————————————— top-left chrome — -->
 <div class="chrome">
   <div class="bar sheet">
-    <a class="back" href="/prospects">← Prospects</a>
-    <div class="mark">
-      <span class="dot"></span>
-      <span class="word">Oblivion</span>
-      <span class="kicker">Map</span>
-    </div>
+    <div class="title">Map</div>
     <div class="count">
       {#if loading}
         <span class="spin"></span>
@@ -441,15 +436,18 @@
 </div>
 
 <style>
+  /* The pane the app's layout hands /map is edge to edge and full height, so
+     the map and its floating chrome are absolute INSIDE it rather than fixed
+     to the viewport — otherwise they would sit under the clock and the dock. */
   .map {
-    position: fixed;
+    position: absolute;
     inset: 0;
-    background: var(--bg-4);
+    background: var(--mg-bg);
   }
 
   /* thin accent sweep while /api/map is in flight */
   .sweep {
-    position: fixed;
+    position: absolute;
     top: 0; left: 0; right: 0;
     height: 2px;
     z-index: 1300;
@@ -468,7 +466,7 @@
 
   /* ————————————————————————————————————————————————— floating chrome — */
   .chrome {
-    position: fixed;
+    position: absolute;
     top: 1rem;
     left: 1rem;
     z-index: 1000;
@@ -481,46 +479,32 @@
   }
   .chrome > * { pointer-events: auto; }
 
-  /* a white card floating over the map */
+  /* a pane of glass floating over the map
+     TODO(map agent): the filters, the result cards and the popups inside are
+     still on the old vocabulary — this pass only re-homed the page. */
   .sheet {
-    background: var(--bg-2);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    box-shadow: var(--shadow-2);
+    background: var(--mg-glass);
+    border: 1px solid var(--mg-line);
+    border-radius: var(--mg-r-card);
+    box-shadow: var(--mg-sh);
+    -webkit-backdrop-filter: blur(var(--mg-blur)) saturate(150%);
+    backdrop-filter: blur(var(--mg-blur)) saturate(150%);
   }
 
   .bar {
     display: grid;
     grid-template-columns: auto 1fr auto;
-    grid-template-areas: 'back mark collapse' 'count count count';
+    grid-template-areas: 'title collapse' 'count count';
+    grid-template-columns: 1fr auto;
     align-items: center;
     gap: 0.3rem 0.7rem;
     padding: 0.7rem 0.8rem 0.65rem;
   }
-  .back {
-    grid-area: back;
-    font: 600 0.8rem/1.2 var(--font-ui);
-    color: var(--ink-2);
-    white-space: nowrap;
-    transition: color 0.15s;
-  }
-  .back:hover { color: var(--accent); }
-
-  .mark { grid-area: mark; display: flex; align-items: center; gap: 0.45rem; min-width: 0; }
-  .dot {
-    width: 10px; height: 10px; border-radius: 3px;
-    background: var(--accent); flex: none;
-  }
-  .word {
-    font-family: var(--font-ui);
-    font-weight: 800;
-    font-size: 0.95rem;
+  .title {
+    grid-area: title;
+    font: 600 0.95rem/1.2 var(--mg-font);
     letter-spacing: -0.01em;
-    color: var(--ink);
-  }
-  .kicker {
-    font: 500 0.78rem/1.2 var(--font-ui);
-    color: var(--ink-3);
+    color: var(--mg-i);
   }
 
   .collapse {
@@ -556,7 +540,9 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    max-height: calc(100vh - 2rem - 84px);
+    /* the chrome is inside the pane now: leave room for the top bar above
+       it and the floating dock below it */
+    max-height: calc(100svh - 16rem);
     overflow: hidden;
     animation: fadeup 0.18s ease both;
   }

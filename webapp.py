@@ -10,21 +10,23 @@ default because Oblivion cannot win business on them.
 
 from __future__ import annotations
 
-import hmac
 import json
 import os
 import threading
 import time
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from flask import Flask, Response, jsonify, redirect, request, send_from_directory
 
 import agent_z
+import auth
 import config
 import db
 import dedupe
 import erf
 import finder
+import media
 import photos
 import pipeline
 import scorer
@@ -41,9 +43,54 @@ app = Flask(__name__)
 # With no password set the app binds to localhost only when run directly, so
 # local use stays friction-free; a hosted deploy without the variable refuses
 # to serve rather than silently publishing the data.
-_DASH_USER = os.environ.get("DASHBOARD_USER", "oblivion")
-_DASH_PASS = os.environ.get("DASHBOARD_PASSWORD", "")
-_IS_HOSTED = bool(os.environ.get("PORT") or os.environ.get("RAILWAY_ENVIRONMENT"))
+#
+# A browser signs in once and keeps a session cookie instead (auth.py), and
+# can register a passkey so the next sign-in is Touch ID rather than a typed
+# password. Basic auth is still accepted on every route, unchanged, so curl
+# and scripts keep working.
+_DASH_USER = auth.DASH_USER
+_DASH_PASS = auth.DASH_PASS
+_IS_HOSTED = auth.IS_HOSTED
+
+# The share-link surface, kept to one short list so it can be audited at a
+# glance. `/media/s/<token>` is the screening-room page a client opens; the
+# two API prefixes under it are what that page fetches. Nothing else — no
+# asset directory, no prefix wildcard — is exempt.
+_PUBLIC_SHARE_PAGE = "/media/s/"
+
+
+def _is_public_share_path(path: str) -> bool:
+    if path.startswith(_PUBLIC_SHARE_PAGE) and path.count("/") == 3 \
+            and len(path) > len(_PUBLIC_SHARE_PAGE):
+        return True                      # /media/s/<token>, not /media/s/ or /media/s/a/b
+    return media.is_public_path(path)
+
+
+#: The one place the dashboard password is compared — now in auth.py, which
+#: also owns the session cookie that is the second way through the same door.
+_credentials_ok = auth.credentials_ok
+
+
+def _wsgi_authorised(environ) -> bool:
+    """The same check again, for a raw WSGI environ (the /zerko mount).
+
+    Cookie as well as basic: DispatcherMiddleware puts this outside Flask, so
+    this function is the *only* authentication /zerko gets, and a browser
+    signed in with a passkey has no password to send. Without the cookie arm
+    the whole media library would 401 for exactly the people who are signed
+    in most securely.
+    """
+    if not _DASH_PASS:
+        # Matches _require_auth: with no password set the app is local-only.
+        return not _IS_HOSTED
+    if auth.basic_ok(environ):
+        return True                      # basic auth is the owner
+    # A signed-in browser, and only if the account holds `media`. The whole
+    # library — including Zerko's own unauthenticated /thumbnails mount —
+    # hangs off this one function, so the privilege has to be checked on this
+    # side of the dispatcher as well as on /api/media/token.
+    user = auth.current_user(environ)
+    return bool(user and "media" in auth.privileges_for(user))
 
 
 @app.before_request
@@ -51,6 +98,23 @@ def _require_auth():
     # Vapi's end-of-call webhook can't do basic auth; caller.py authenticates
     # it with its own shared-secret header instead.
     if request.path == "/api/caller/webhook":
+        return None
+    # The sign-in surface itself. A login page that needed a login would be a
+    # closed loop; /logout has to work for a session that is already stale;
+    # the passkey *login* endpoints are the ceremony that produces the
+    # session, and are safe unauthenticated because a passkey assertion is
+    # proof on its own (and is rate-limited per IP in auth.py). Registration
+    # is NOT in this list — adding a device requires being signed in already.
+    if request.path in auth.PUBLIC_PATHS:
+        return None
+    # Client share links. A client is handed a URL and nothing else — they
+    # have no dashboard password and must not need one — so these routes
+    # authenticate on the share token itself, which Zerko checks for expiry,
+    # revocation, an optional password and a per-IP failure limit on every
+    # call. The exemption is three explicit prefixes and no wildcard: the
+    # share *page* below is a self-contained document, so not even the
+    # dashboard's JavaScript bundle has to be opened up to serve it.
+    if _is_public_share_path(request.path):
         return None
     if not _DASH_PASS:
         if _IS_HOSTED:
@@ -60,12 +124,19 @@ def _require_auth():
                 "Set it with:  railway variables --set DASHBOARD_PASSWORD=...",
                 503, {"Content-Type": "text/plain"})
         return None                      # local, unauthenticated is fine
-    auth = request.authorization
-    if auth and auth.username == _DASH_USER and \
-            hmac.compare_digest(auth.password or "", _DASH_PASS):
+    if _credentials_ok(request.authorization):
         return None
-    return Response("Authentication required.", 401,
-                    {"WWW-Authenticate": 'Basic realm="Oblivion Prospect Engine"'})
+    if auth.current_user(request):
+        return None
+    # A browser that typed a URL gets the login page; anything else gets the
+    # old 401, WWW-Authenticate included, so curl -u and every script that
+    # already talks to this API carry on unchanged. The Accept test is what
+    # separates them: fetch() and curl do not ask for text/html.
+    if request.method == "GET" and "text/html" in (request.headers.get("Accept") or ""):
+        return redirect("/login?next=" + quote(request.full_path.rstrip("?"), safe="/?=&"))
+    return Response(json.dumps({"error": "auth_required"}), 401,
+                    {"Content-Type": "application/json",
+                     "WWW-Authenticate": 'Basic realm="Oblivion Prospect Engine"'})
 
 job = {
     "running": False,
@@ -162,6 +233,7 @@ def _clean_types(listing_types) -> tuple[str, ...]:
 
 
 @app.post("/api/scrape")
+@auth.require_priv("crawl")
 def api_scrape():
     if job["running"]:
         return jsonify({"error": "a job is already running"}), 409
@@ -273,6 +345,7 @@ threading.Thread(target=_prune_cache_on_boot, daemon=True).start()
 
 
 @app.post("/api/stop")
+@auth.require_priv("crawl")
 def api_stop():
     _stop.set()
     log("stop requested — finishing current requests")
@@ -280,6 +353,7 @@ def api_stop():
 
 
 @app.post("/api/rescore")
+@auth.require_priv("crawl")
 def api_rescore():
     if job["running"]:
         return jsonify({"error": "a job is already running"}), 409
@@ -704,6 +778,7 @@ _reeval_jobs: dict[str, dict] = {}
 
 
 @app.post("/api/erf/resolve")
+@auth.require_priv("crawl")
 def api_erf_resolve():
     if _erf_job["running"]:
         return jsonify({"error": "erf resolution already running"}), 409
@@ -731,6 +806,7 @@ def api_erf_resolve():
 
 
 @app.post("/api/erf/locate")
+@auth.require_priv("crawl")
 def api_erf_locate():
     key = (request.get_json(silent=True) or {}).get("listing_key")
     if not key:
@@ -757,6 +833,7 @@ _locate_all_job = {"running": False, "stop": threading.Event()}
 
 
 @app.post("/api/erf/locate-all")
+@auth.require_priv("crawl")
 def api_erf_locate_all():
     """Run the AI photo-locator over every candidate property — on demand.
 
@@ -783,6 +860,7 @@ def api_erf_locate_all():
 
 
 @app.post("/api/erf/locate-all/stop")
+@auth.require_priv("crawl")
 def api_erf_locate_all_stop():
     _locate_all_job["stop"].set()
     log("ai-locate: bulk stop requested — finishing current property")
@@ -800,6 +878,7 @@ def api_erf_busy():
 
 
 @app.post("/api/listing/reevaluate")
+@auth.require_priv("crawl")
 def api_listing_reevaluate():
     """Refetch one property from its portal(s), then re-score and re-resolve.
 
@@ -887,6 +966,7 @@ def api_listing_reevaluate():
 
 
 @app.post("/api/erf/confirm")
+@auth.require_priv("crawl")
 def api_erf_confirm():
     body = request.get_json(silent=True) or {}
     try:
@@ -1160,6 +1240,12 @@ def agent_page():
     return send_from_directory(_UI_BUILD, "agent.html")
 
 
+@app.get("/account")
+def account_page():
+    """Passkeys and signed-in sessions. Prerendered like /prospects."""
+    return send_from_directory(_UI_BUILD, "account.html")
+
+
 @app.get("/leads")
 def leads_page():
     return send_from_directory(_UI_BUILD, "leads.html")
@@ -1178,6 +1264,57 @@ def leads_subpage(_rest):
 @app.get("/properties/<path:_rest>")
 def properties_redirect(_rest=""):
     return redirect("/leads/properties" + ("/" + _rest if _rest else ""))
+
+
+# ------------------------------------------------------------------- media
+#
+# The Media section is the vendored Zerko library (zerko/, mounted at /zerko
+# by media.py). These routes are only the front end: the SvelteKit pages, the
+# token the client needs to talk to the mounted API, and the standalone
+# share page a client opens with no password at all.
+
+@app.get("/media")
+def media_page():
+    return send_from_directory(_UI_BUILD, "media.html")
+
+
+@app.get("/media/<path:_rest>")
+def media_subpage(_rest):
+    # /media/s/<token> is Flask-rendered (below) and never reaches here.
+    f = os.path.join(_UI_BUILD, "media", _rest + ".html")
+    if os.path.exists(f):
+        return send_from_directory(_UI_BUILD, os.path.join("media", _rest + ".html"))
+    return send_from_directory(_UI_BUILD, "200.html")
+
+
+@app.get("/api/media/token")
+@auth.require_priv("media")
+def api_media_token():
+    """Mint a Zerko bearer token for whoever is already signed in here.
+
+    There is no second login: the dashboard's own sign-in is the
+    authentication event, and this turns it into the JWT the mounted FastAPI
+    app expects. The Zerko account is created on first use and is always an
+    admin — the panel is single-role, so anyone who can open it can do
+    everything, which is exactly why holding the `media` privilege is what it
+    takes to get a token at all. A GET, but not a read: it hands out a
+    credential.
+    """
+    basic = request.authorization
+    user = ((basic.username if basic else None)
+            or auth.current_user(request) or _DASH_USER)
+    payload, err = media.mint_token(user)
+    if err:
+        return jsonify({"error": err, **media.status()}), 503
+    return jsonify(payload)
+
+
+@app.get("/api/media/status")
+def api_media_status():
+    """Whether the backend imported and whether there is a footage drive —
+    what the Media pages need to explain themselves instead of looking
+    broken."""
+    return jsonify(media.status())
 
 
 @app.get("/hero-<name>.jpg")
@@ -1207,16 +1344,40 @@ def ui_favicon():
 # The CMA feature lives at its own URLs (/cma, /cma/<group_id>) — the main
 # dashboard above is untouched. All HTML for these pages is rendered by
 # cma_web.py; auth is covered by the app-wide _require_auth before_request.
+import brief          # noqa: E402
 import caller         # noqa: E402
 import cma            # noqa: E402  (kept below the dashboard on purpose)
 import cma_web        # noqa: E402
 import owners         # noqa: E402
 import panel          # noqa: E402
+import share_page     # noqa: E402
 import valuations     # noqa: E402
 
+app.register_blueprint(auth.bp)
 app.register_blueprint(panel.bp)
 app.register_blueprint(caller.bp)
+app.register_blueprint(share_page.bp)
 caller.start_autopilot()   # no-op unless CALLER_AUTOPILOT=1
+
+# The call-brief cache, created once at boot rather than per request: unlike
+# the panel's tables nothing writes to it outside the brief endpoints, so one
+# CREATE IF NOT EXISTS here covers every reader.
+with db.connect() as _boot_conn:
+    brief.ensure_schema(_boot_conn)
+    # Accounts, invites and the passkeys/sessions migrations. At boot rather
+    # than on the first sign-in so an upgrade of a running single-account
+    # deployment adopts its existing passkeys and sessions before anyone
+    # knocks — including a browser that is already holding a cookie.
+    auth.ensure_schema(_boot_conn)
+
+# The media library, adapted from ASGI and hung off this same WSGI stack at
+# /zerko. Last, because DispatcherMiddleware wraps whatever wsgi_app is at the
+# time — every Flask route above must already be registered. Importing the
+# backend itself is deferred to the first /zerko request, so a checkout
+# without the media dependencies (or a deploy without a footage drive) starts
+# and serves the prospecting dashboard exactly as before.
+media.set_guard(_wsgi_authorised)
+media.mount(app)
 
 
 @app.get("/cma")
@@ -1264,6 +1425,10 @@ def api_cma(group_id: int):
 
 @app.route("/api/owner/<group_id>", methods=["GET", "POST", "DELETE"])
 def api_owner(group_id):
+    # One route, three verbs: reading an owner's details is open to everyone
+    # signed in (the whole dashboard is), writing or purging them is `leads`.
+    if request.method != "GET" and not auth.has_priv("leads"):
+        return auth.forbidden("leads")
     with db.connect() as conn:
         owners.ensure_table(conn)
         if request.method == "GET":
@@ -1283,6 +1448,7 @@ def api_owner(group_id):
 
 
 @app.post("/api/deed/<group_id>")
+@auth.require_priv("leads")
 def api_deed(group_id):
     """Fetch registered-owner + deed info from LOOM for one property group.
 
@@ -1333,6 +1499,61 @@ def api_deed(group_id):
                         "town_name": data.get("town_name")})
 
 
+# ------------------------------------------------------------- call briefs
+#
+# The sheet an agent reads before phoning an owner. Everything deterministic
+# is free and instant; the AI rewrite is a separate POST so nothing spends a
+# model call just because a drawer was opened.
+
+@app.get("/api/brief/<gid>")
+def api_brief(gid: str):
+    with db.connect() as conn:
+        body = brief.build(conn, gid, refresh=request.args.get("refresh") == "1")
+    if body is None:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify(body)
+
+
+@app.post("/api/brief/<gid>/ai")
+def api_brief_ai(gid: str):
+    ok, reason = scorer.ai_status()
+    if not ok:
+        return jsonify({"error": "ai_unavailable", "message": reason}), 503
+    # Synchronous: finder's calls are capped well inside gunicorn's 120s, and
+    # a job + poll would be more machinery than one round-trip deserves.
+    with db.connect() as conn:
+        body = brief.build(conn, gid, want_ai=True, refresh=True)
+    if body is None:
+        return jsonify({"error": "not_found"}), 404
+    if not body.get("ai"):
+        ok, reason = scorer.ai_status()
+        return jsonify({"error": "ai_unavailable",
+                        "message": reason or "no provider answered"}), 503
+    return jsonify(body)
+
+
+@app.get("/api/brief/<gid>/text")
+def api_brief_text(gid: str):
+    with db.connect() as conn:
+        body = brief.build(conn, gid)
+    if body is None:
+        return jsonify({"error": "not_found"}), 404
+    return Response(brief.to_text(body), 200,
+                    {"Content-Type": "text/plain; charset=utf-8"})
+
+
+@app.get("/brief/<gid>")
+def brief_page(gid: str):
+    """Standalone page for the phone in the agent's other hand."""
+    with db.connect() as conn:
+        body = brief.build(conn, gid)
+    if body is None:
+        return Response("No such property.", 404,
+                        {"Content-Type": "text/plain; charset=utf-8"})
+    return Response(brief.render_page(body), 200,
+                    {"Content-Type": "text/html; charset=utf-8"})
+
+
 @app.get("/api/deed/status")
 def api_deed_status():
     import loom
@@ -1340,6 +1561,7 @@ def api_deed_status():
 
 
 @app.post("/api/gv/refresh")
+@auth.require_priv("crawl")
 def api_gv_refresh():
     # Runs synchronously on purpose: after the first crawl every lookup is
     # served from the 90-day disk cache (~22 cached hits, no network), so a

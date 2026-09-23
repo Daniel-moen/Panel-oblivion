@@ -1,4 +1,5 @@
 flask==3.1.3
+webauthn==2.8.0                   # passkey sign-in (auth.py); itsdangerous for the cookie ships with flask
 gunicorn==23.0.0
 requests==2.34.2
 beautifulsoup4==4.15.0
@@ -9,3 +10,33 @@ anthropic==0.118.0
 pdfplumber
 lxml==6.1.1
 brotli==1.2.0
+
+# ---------------------------------------------------------------- media library
+#
+# The vendored Zerko backend (zerko/), mounted at /zerko by media.py. Its
+# versions come from upstream's own requirements.txt — see zerko/VENDORED.md.
+#
+# webapp.py imports media.py unconditionally but loads the backend lazily, so
+# a checkout without these still starts and serves the prospecting dashboard;
+# the Media pages simply report that the backend is not installed.
+#
+# ffmpeg/ffprobe are system binaries, not pip packages: thumbnails, proxies
+# and duration probing shell out to them. nixpacks.toml installs them on
+# Railway; on a workstation, `brew install ffmpeg`.
+a2wsgi==1.10.7                    # runs the ASGI app on this WSGI stack
+fastapi==0.136.3
+python-multipart==0.0.20
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
+bcrypt>=4.0.1,<5
+sqlalchemy==2.0.50
+Pillow==12.2.0                    # thumbnails, photo previews
+numpy==2.4.6
+opencv-python-headless==4.13.0.92  # frame grabs for video thumbnails
+psutil==5.9.8                     # /api/server-stats
+filelock==3.16.1                  # upload assembly lock
+python-magic==0.4.27
+# uvicorn is NOT needed: the app is mounted in-process, never self-served.
+# openai-whisper (transcription) is deliberately omitted — it pulls torch,
+# which has no wheel for this Python and would not fit the build image.
+# Transcription jobs report as unavailable; everything else works.

@@ -1,9 +1,22 @@
 <script>
+  /* Lead management — the header row of the pane, and nothing else.
+
+     The sidebar is gone: the dock is the navigation now, and the app's one
+     pane holds the page. What survives is what was actually Leads' own —
+     the jump-to search (properties and people, one box) and the four
+     sub-sections as a segmented row.
+
+     TODO(leads agent): this is the foundation pass — the search results
+     dropdown, the badge on Today and the page headers underneath still want
+     the full glass treatment. */
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { api } from '$lib/api.js';
   import { leads, loadToday } from '$lib/leads.svelte.js';
+  import Icon from '$lib/components/glass/Icon.svelte';
+  import Seg from '$lib/components/glass/Seg.svelte';
 
   let { children } = $props();
   const path = $derived(page.url.pathname);
@@ -21,93 +34,73 @@
     const props = all.filter((r) => [r.street_address_raw, r.title, r.suburb, r.contact_name, r.contact_phone]
       .some((v) => v && String(v).toLowerCase().includes(n))).slice(0, 6)
       .map((r) => ({ key: 'p' + r.group_id, href: '/leads/properties/' + r.group_id, b: r.street_address_raw || r.title,
-                     s: [r.suburb, r.contact_name].filter(Boolean).join(' · '), ico: '🏠' }));
+                     s: [r.suburb, r.contact_name].filter(Boolean).join(' · '), ico: 'building' }));
     const ppl = people.filter((c) => [c.name, c.phone, c.email, c.company].some((v) => v && String(v).toLowerCase().includes(n))).slice(0, 5)
       .map((c) => ({ key: 'c' + c.id, href: '/leads/contacts/' + c.id, b: c.name || c.phone,
-                     s: [c.phone, c.properties.length + ' propert' + (c.properties.length === 1 ? 'y' : 'ies')].filter(Boolean).join(' · '), ico: '👤' }));
+                     s: [c.phone, c.properties.length + ' propert' + (c.properties.length === 1 ? 'y' : 'ies')].filter(Boolean).join(' · '), ico: 'user' }));
     results = [...ppl, ...props];
   });
 
   const due = $derived(leads.today ? leads.today.overdue.length + leads.today.due_today.length : 0);
   const nav = $derived([
-    ['/leads', 'Today', due || null],
-    ['/leads/pipeline', 'Pipeline', null],
-    ['/leads/properties', 'Properties', null],
-    ['/leads/contacts', 'Contacts', null]
+    { value: '/leads', label: 'Today', icon: 'clock', count: due || null },
+    { value: '/leads/pipeline', label: 'Pipeline', icon: 'layers' },
+    { value: '/leads/properties', label: 'Properties', icon: 'building' },
+    { value: '/leads/contacts', label: 'Contacts', icon: 'users' }
   ]);
-  const on = (href) => (href === '/leads' ? path === '/leads' : path.startsWith(href));
+  const here = $derived(
+    nav.reduce(
+      (best, n) => ((n.value === '/leads' ? path === '/leads' : path.startsWith(n.value)) ? n.value : best),
+      '/leads'
+    )
+  );
 </script>
 
-<div class="app">
-  <aside>
-    <a class="home" href="/"><span class="mark"></span><span>Oblivion</span><small>Leads</small></a>
+<div class="mg-controls">
+  <label class="mg-search">
+    <span class="ic"><Icon name="search" size={16} /></span>
+    <input class="mg-input" type="search" placeholder="Find a property or person…" bind:value={q} />
+    {#if q}
+      <button class="clear" onclick={() => (q = '')} aria-label="Clear the search">
+        <Icon name="close" size={14} />
+      </button>
+    {/if}
+    {#if results.length}
+      <ul class="hits mg-glass-strong">
+        {#each results as r (r.key)}
+          <li><button onclick={() => { q = ''; goto(r.href); }}>
+            <Icon name={r.ico} size={15} />
+            <span class="t"><b>{r.b}</b><span>{r.s}</span></span>
+          </button></li>
+        {/each}
+      </ul>
+    {/if}
+  </label>
 
-    <div class="search">
-      <input type="search" placeholder="Find a property or person…" bind:value={q} />
-      {#if results.length}
-        <ul class="hits">
-          {#each results as r (r.key)}
-            <li><button onclick={() => { q = ''; goto(r.href); }}>
-              <b>{r.ico} {r.b}</b>
-              <span>{r.s}</span>
-            </button></li>
-          {/each}
-        </ul>
-      {/if}
-    </div>
-
-    <nav>
-      {#each nav as [href, label, badge] (href)}
-        <a {href} class:on={on(href)}>{label}{#if badge}<i>{badge}</i>{/if}</a>
-      {/each}
-    </nav>
-
-    <div class="foot">
-      <a href="/prospects">Prospect engine →</a>
-      <a href="/map">Map</a>
-    </div>
-  </aside>
-
-  <main>{@render children()}</main>
+  <Seg options={nav} value={here} onchange={(v) => goto(v)} label="Lead sections" />
 </div>
 
+{#key path}
+  <div in:fade={{ duration: 180, delay: 60 }}>{@render children()}</div>
+{/key}
+
 <style>
-  .app { min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; background: var(--bg); }
-  aside { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 1.2rem;
-          padding: 1.2rem 0.9rem; border-right: 1px solid var(--line); background: var(--bg-2); }
-  .home { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.2rem 0.5rem; font-weight: 800; color: var(--ink); }
-  .mark { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); align-self: center; }
-  .home small { font-weight: 500; color: var(--ink-3); font-size: 0.74rem; }
+  .mg-controls { position: relative; z-index: 20; }
 
-  .search { position: relative; }
-  .search input { width: 100%; font-size: 0.84rem; }
-  .hits { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; margin-top: 0.3rem; list-style: none; padding: 0.3rem;
-          background: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--r-sm); box-shadow: var(--shadow-2); }
-  .hits button { width: 100%; text-align: left; background: none; border: 0; padding: 0.45rem 0.6rem; border-radius: 6px;
-                 display: flex; flex-direction: column; cursor: pointer; color: var(--ink); }
-  .hits button:hover { background: var(--bg-3); }
-  .hits b { font-size: 0.84rem; font-weight: 600; }
-  .hits span { font-size: 0.72rem; color: var(--ink-3); }
-
-  nav { display: flex; flex-direction: column; gap: 0.15rem; }
-  nav a { display: flex; align-items: center; justify-content: space-between; padding: 0.55rem 0.75rem;
-          border-radius: var(--r-sm); color: var(--ink-2); font-size: 0.9rem; font-weight: 500; }
-  nav a:hover { background: var(--bg-3); color: var(--ink); }
-  nav a.on { background: var(--accent-soft); color: var(--accent-2); font-weight: 600; }
-  nav i { font-style: normal; font-size: 0.7rem; font-weight: 700; background: var(--bad); color: #fff;
-          padding: 0.1rem 0.45rem; border-radius: 999px; }
-
-  .foot { margin-top: auto; display: flex; flex-direction: column; gap: 0.3rem; padding: 0 0.75rem; }
-  .foot a { font-size: 0.8rem; color: var(--ink-3); }
-  .foot a:hover { color: var(--ink); }
-
-  main { padding: 1.6rem clamp(1rem, 3vw, 2.4rem) 4rem; max-width: 1280px; width: 100%; }
-
-  @media (max-width: 820px) {
-    .app { grid-template-columns: 1fr; }
-    aside { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; }
-    nav { flex-direction: row; }
-    .foot { margin-top: 0; flex-direction: row; }
-    .search { flex: 1; min-width: 180px; }
+  .hits {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30;
+    list-style: none; margin: 0; padding: 6px;
+    max-height: 60vh; overflow-y: auto;
   }
+  .hits button {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+    background: none; border: 0; border-radius: 12px; padding: 8px 10px;
+    text-align: left; color: var(--mg-i2); cursor: pointer;
+    transition: background 0.15s;
+  }
+  .hits button:hover { background: var(--mg-glass-soft); color: var(--mg-i); }
+  .t { min-width: 0; display: flex; flex-direction: column; }
+  .t b { font: 500 13px/1.4 var(--mg-font); color: var(--mg-i);
+         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .t span { font: 400 11.5px/1.4 var(--mg-font); color: var(--mg-i3); }
 </style>

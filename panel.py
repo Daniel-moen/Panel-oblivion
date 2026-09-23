@@ -6,7 +6,10 @@ mandate outcomes, notes and tasks. Everything keys on the property group id
 (``property_groups.group_id`` as TEXT, or ``solo-<listing_key>`` for an
 ungrouped listing — the same ids /api/prospects hands out).
 
-Flask routes live on the ``bp`` blueprint; webapp.py registers it.
+Flask routes live on the ``bp`` blueprint; webapp.py registers it. Reading is
+open to everyone signed in (the dashboard has no per-record ownership); every
+route that WRITES carries ``@auth.require_priv("leads")`` — the one privilege
+this module cares about — including the generated child-resource routes below.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, request
 
+import auth
 import db
 
 bp = Blueprint("panel", __name__)
@@ -445,6 +449,7 @@ def api_tracked_ids():
 
 
 @bp.post("/api/tracked")
+@auth.require_priv("leads")
 def api_track():
     data = _body()
     gid = str(data.get("group_id") or "").strip()
@@ -518,6 +523,7 @@ def api_tracked_get(gid):
 
 
 @bp.patch("/api/tracked/<gid>")
+@auth.require_priv("leads")
 def api_tracked_patch(gid):
     data = _body()
     try:
@@ -543,6 +549,7 @@ def api_tracked_patch(gid):
 
 
 @bp.delete("/api/tracked/<gid>")
+@auth.require_priv("leads")
 def api_tracked_delete(gid):
     """Hard delete (POPIA purge): the tracked row and everything hanging off it."""
     with db.connect() as conn:
@@ -589,7 +596,7 @@ def _child_routes(name: str, fields: tuple, enums: dict, on_create=None, order="
                     on_create(conn, gid, row, data)
                 return jsonify(row), 201
         fn.__name__ = f"{name}_create"
-        return fn
+        return auth.require_priv("leads")(fn)
 
     def patch():
         def fn(gid, rid):
@@ -609,7 +616,7 @@ def _child_routes(name: str, fields: tuple, enums: dict, on_create=None, order="
                     return _bad("not found", 404)
                 return jsonify(_one(conn.execute(f"SELECT * FROM {name} WHERE id=?", (rid,))))
         fn.__name__ = f"{name}_patch"
-        return fn
+        return auth.require_priv("leads")(fn)
 
     def delete():
         def fn(gid, rid):
@@ -621,7 +628,7 @@ def _child_routes(name: str, fields: tuple, enums: dict, on_create=None, order="
                 _log(conn, gid, f"{name}_deleted", {"id": rid})
                 return jsonify({"deleted": rid})
         fn.__name__ = f"{name}_delete"
-        return fn
+        return auth.require_priv("leads")(fn)
 
     base = f"/api/tracked/<gid>/{name}"
     bp.add_url_rule(base, view_func=list_(), methods=["GET"])
@@ -867,6 +874,7 @@ def api_today():
 
 
 @bp.post("/api/tasks/<int:tid>/snooze")
+@auth.require_priv("leads")
 def api_snooze(tid):
     days = int((_body().get("days") or 1))
     with db.connect() as conn:
@@ -880,6 +888,7 @@ def api_snooze(tid):
 
 
 @bp.post("/api/tasks/<int:tid>/done")
+@auth.require_priv("leads")
 def api_task_done(tid):
     with db.connect() as conn:
         ensure_schema(conn)
@@ -997,6 +1006,7 @@ def api_contact(cid):
 
 
 @bp.patch("/api/contacts/<int:cid>")
+@auth.require_priv("leads")
 def api_contact_patch(cid):
     data = _body()
     try:

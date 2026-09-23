@@ -6,6 +6,7 @@
   import AiFinder from '$lib/components/AiFinder.svelte';
   import ProspectCard from '$lib/components/ProspectCard.svelte';
   import ProspectList from '$lib/components/ProspectList.svelte';
+  import JobStrip from '$lib/components/JobStrip.svelte';
   import Drawer from '$lib/components/Drawer.svelte';
   import { fmtR, monthlyRent } from '$lib/format.js';
 
@@ -27,56 +28,90 @@
   /* The sale tiles all count scored, deduped, erf-resolved work — none of
      which a rental has. The rent book gets tiles it can actually fill: how
      much stock, where it is, and what the middle of the market asks. */
-  const rentStat = $derived.by(() => {
+  const rentInfo = $derived.by(() => {
     const list = app.prospects;
     const rents = list.map(monthlyRent).filter(Boolean).sort((a, b) => a - b);
-    const median = rents.length ? rents[Math.floor(rents.length / 2)] : null;
-    const suburbs = new Set(list.map((r) => r.suburb).filter(Boolean));
-    const furnished = list.filter((r) => /^y/i.test(r.furnished || '')).length;
-    return [
-      ['Rentals crawled', app.stats?.rentals, 'accent'],
-      ['In this view', list.length, ''],
-      ['Suburbs', suburbs.size, ''],
-      ['Median rent / month', median ? fmtR(Math.round(median)) : null, ''],
-      ['Furnished', furnished, 'dim']
-    ];
+    return {
+      count: app.stats?.rentals ?? list.length,
+      suburbs: new Set(list.map((r) => r.suburb).filter(Boolean)).size,
+      median: rents.length ? Math.round(rents[Math.floor(rents.length / 2)]) : null,
+      furnished: list.filter((r) => /^y/i.test(r.furnished || '')).length
+    };
   });
 
-  const saleStat = $derived.by(() => {
+  const saleInfo = $derived.by(() => {
     const s = app.stats || {};
-    const hot = app.prospects.filter((r) => r.tier === 'hot').length;
-    return [
-      ['Sellable prospects', s.sellable, 'accent'],
-      ['Hot right now', hot, hot ? 'hot' : ''],
-      ['Multi-agency proof', s.multi_agency, ''],
-      ['Erf resolved', s.erf_ready, ''],
-      ['Properties', s.properties, 'dim'],
-      ['Listings', s.listings, 'dim']
-    ];
+    return {
+      hot: app.prospects.filter((r) => r.tier === 'hot').length,
+      sellable: s.sellable, multi: s.multi_agency, erf: s.erf_ready
+    };
   });
 
-  const stat = $derived(rent ? rentStat : saleStat);
+  const tiles = $derived(rent
+    ? [['Rentals', rentInfo.count, ''],
+       ['Suburbs', rentInfo.suburbs, ''],
+       ['Median rent', rentInfo.median ? fmtR(rentInfo.median) : null, ''],
+       ['Furnished', rentInfo.furnished, '']]
+    : [['Hot right now', saleInfo.hot, 'hot'],
+       ['Sellable', saleInfo.sellable, ''],
+       ['Multi-agency proof', saleInfo.multi, ''],
+       ['Erf resolved', saleInfo.erf, '']]);
+
+  const crawling = $derived(app.status.running);
+
+  /* One plain sentence about the book, the way the landing screen talks. */
+  const line = $derived.by(() => {
+    const s = app.status;
+    if (s.running)
+      return `Crawling · ${s.phase}${s.total ? ` · ${s.done}/${s.total} pages` : ''}`;
+    if (!app.loaded) return `Loading the ${rent ? 'rent' : 'sale'} book…`;
+    if (rent) {
+      if (!rentInfo.count) return 'No rentals yet — crawl with “include rentals” ticked.';
+      const where = rentInfo.suburbs ? ` across ${rentInfo.suburbs} suburb${rentInfo.suburbs === 1 ? '' : 's'}` : '';
+      const mid = rentInfo.median ? `, median ${fmtR(rentInfo.median)} a month` : '';
+      return `${rentInfo.count} rental${rentInfo.count === 1 ? '' : 's'}${where}${mid}.`;
+    }
+    const parts = [];
+    if (saleInfo.hot) parts.push(`${saleInfo.hot} hot prospect${saleInfo.hot === 1 ? '' : 's'}`);
+    if (saleInfo.sellable) parts.push(`${saleInfo.sellable} sellable`);
+    if (saleInfo.multi) parts.push(`${saleInfo.multi} proven open by two agencies`);
+    if (!parts.length) return 'Nothing crawled yet — pick portals and areas to start.';
+    return parts.join(', ') + '.';
+  });
 </script>
 
 <svelte:head><title>Oblivion — {rent ? 'Rentals' : 'Prospect Engine'}</title></svelte:head>
 
-<div class="stats">
-  {#each stat as [label, v, cls] (label)}
-    <div class="stat panel {cls}">
-      <span class="slabel">{label}</span>
-      <b>{v ?? '—'}</b>
-    </div>
-  {/each}
+<div class="mg-row">
+  <div class="titles">
+    <h1 class="mg-h2">{rent ? 'Rentals' : 'Prospect engine'}</h1>
+    <p class="line">
+      {#if crawling}<span class="mg-dot ok"><i class="mg-ping"></i></span>{/if}{line}
+    </p>
+  </div>
+
+  <div class="mg-actions">
+    {#each tiles as [label, v, cls] (label)}
+      <span class="mg-stat pill">
+        <b class="v mg-tnum {cls}">{v ?? '—'}</b>
+        <span class="k">{label}</span>
+      </span>
+    {/each}
+  </div>
 </div>
+
+<!-- the engine's own progress strip; TODO(prospects agent): restyle as
+     `.mg-strip` + `.mg-bar` -->
+<JobStrip inline />
 
 <AiFinder />
 
-<FilterBar shown={rows.length} total={app.prospects.length} />
+<div class="gap"><FilterBar shown={rows.length} total={app.prospects.length} /></div>
 
 {#if !app.loaded}
-  <div class="empty panel"><span class="spin"></span>&nbsp; Loading {rent ? 'rentals' : 'prospects'}…</div>
+  <div class="empty mg-glass-soft"><span class="mg-spin"></span>&nbsp; Loading {rent ? 'rentals' : 'prospects'}…</div>
 {:else if !app.prospects.length}
-  <div class="empty panel">
+  <div class="empty mg-glass-soft">
     {#if rent}
       <p class="big">No rentals yet</p>
       <p>The to-rent book is crawled on request — start a crawl with
@@ -85,12 +120,12 @@
       <p class="big">No prospects yet</p>
       <p>Run your first crawl — pick portals and areas, the engine does the rest.</p>
     {/if}
-    <button class="btn primary" onclick={() => (app.runOpen = true)}>+ New crawl</button>
+    <button class="mg-btn primary" onclick={() => (app.runOpen = true)}>New crawl</button>
   </div>
 {:else if !rows.length}
-  <div class="empty panel">
+  <div class="empty mg-glass-soft">
     <p>{rent ? 'No rentals match these filters.' : 'Nothing matches these filters.'}</p>
-    {#if isFiltering()}<button class="btn" onclick={clearFilters}>Clear filters</button>{/if}
+    {#if isFiltering()}<button class="mg-btn secondary" onclick={clearFilters}>Clear filters</button>{/if}
   </div>
 {:else if filters.view === 'cards'}
   <div class="grid">
@@ -104,7 +139,7 @@
 
 {#if rows.length > limit}
   <div class="more">
-    <button class="btn" onclick={() => (limit += 120)}>
+    <button class="mg-btn secondary" onclick={() => (limit += 120)}>
       Show more · {rows.length - limit} remaining
     </button>
   </div>
@@ -113,29 +148,32 @@
 <Drawer />
 
 <style>
-  .stats {
-    display: grid; gap: 0.8rem; margin-top: 1.2rem;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  }
-  .stat { padding: 0.85rem 1.1rem; }
-  .slabel { display: block; font-size: 0.74rem; font-weight: 500; color: var(--ink-3); }
-  .stat b { display: block; margin-top: 0.2rem; font-size: 1.55rem; font-weight: 700;
-            letter-spacing: -0.02em; line-height: 1.2; color: var(--ink);
-            font-variant-numeric: tabular-nums; }
-  .stat.accent b { color: var(--accent-2); }
-  .stat.hot b { color: var(--hot); }
-  .stat.dim b { font-size: 1.2rem; font-weight: 600; color: var(--ink-2); }
+  /* The page header lives inside the app's pane: title, one sentence, and
+     the figures on the right. The photograph behind it belongs to the scene.
 
-  .grid { display: grid; gap: 1rem;
-          grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); }
+     TODO(prospects agent): FilterBar, AiFinder, ProspectCard/List, Drawer,
+     JobStrip and RunPanel are all still on the old vocabulary. */
+  .titles { min-width: 0; }
+  .line {
+    margin: 4px 0 0; display: flex; align-items: center; gap: 7px;
+    font: 400 13px/1.5 var(--mg-font); color: var(--mg-i2);
+  }
+  .line .mg-dot { margin-top: 1px; }
+
+  .mg-actions .v { color: var(--mg-i); }
+  .mg-actions .v.hot { color: var(--mg-crit); }
+
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); }
 
   .empty {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 0.8rem; text-align: center; color: var(--ink-2);
-    padding: 4.5rem 1rem;
+    gap: 12px; text-align: center; color: var(--mg-i2);
+    padding: 64px 16px; border-radius: var(--mg-r-card);
   }
-  .empty .big { font-size: 1.2rem; font-weight: 700; color: var(--ink); margin: 0; }
-  .empty p { margin: 0; font-size: 0.88rem; }
+  .empty .big { font: 600 17px/1.3 var(--mg-font); color: var(--mg-i); margin: 0; }
+  .empty p { margin: 0; font-size: 13px; }
 
-  .more { display: flex; justify-content: center; margin-top: 1.4rem; }
+  .more { display: flex; justify-content: center; margin-top: 20px; }
+
+  .gap { padding-top: 0.3rem; }
 </style>

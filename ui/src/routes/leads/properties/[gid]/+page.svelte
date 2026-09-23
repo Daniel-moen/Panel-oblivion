@@ -5,6 +5,7 @@
   import { toast, app } from '$lib/state.svelte.js';
   import { loadToday, waNumber, addrOf } from '$lib/leads.svelte.js';
   import QuickLog from '$lib/components/QuickLog.svelte';
+  import CallBrief from '$lib/components/CallBrief.svelte';
   import { fmtR, fmtM } from '$lib/format.js';
   import { STAGE_LABEL, MANDATE_LABEL, ago, isPast, shortDate, label } from '$lib/panel.js';
 
@@ -17,6 +18,14 @@
   let showContact = $state(false);
   let showMandate = $state(false);
   let newTask = $state('');
+  /* Collapsed by default: the brief costs a round-trip and this page is
+     opened far more often to log a call than to prepare one. */
+  let showBrief = $state(false);
+  let briefEl = $state(null);
+  function openBrief() {
+    showBrief = true;
+    setTimeout(() => briefEl?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  }
 
   const FLOW = ['new', 'researching', 'contact_found', 'contacted', 'meeting', 'valuation_sent', 'mandate_signed', 'listed', 'sold'];
   const ENDS = ['lost', 'parked'];
@@ -126,6 +135,7 @@
       <div class="acts">
         {#if primary?.phone}<a class="btn sm" href="tel:{primary.phone}">📞 Call {primary.name?.split(' ')[0] || ''}</a>{/if}
         {#if wa}<a class="btn sm" href="https://wa.me/{wa}" target="_blank" rel="noopener">💬 WhatsApp</a>{/if}
+        <button class="btn sm" onclick={openBrief} title="What to say when you phone the owner">Call brief</button>
         {#if d.url}<a class="btn sm" href={d.url} target="_blank" rel="noopener">Listing ↗</a>{/if}
         {#if d.cma_url}<a class="btn sm" href={d.cma_url}>CMA report</a>{/if}
         <a class="btn sm" href="/prospects?open={encodeURIComponent(d.listing_key)}" title="Open in the prospect engine: score, signals, erf tools">Engine view</a>
@@ -148,6 +158,18 @@
 
   <div class="cols">
     <div class="col main">
+      <section class="panel pad brief" bind:this={briefEl}>
+        {#if showBrief}
+          <CallBrief gid={gid} />
+        {:else}
+          <div class="row">
+            <h2>Call brief</h2>
+            <span class="grow"></span>
+            <button class="btn sm" onclick={openBrief}>Show call brief</button>
+          </div>
+        {/if}
+      </section>
+
       <section class="panel composer">
         <div class="ctabs">
           <button class:on={compose === 'log'} onclick={() => (compose = 'log')}>Log contact attempt</button>
@@ -318,6 +340,8 @@
   .col { display: flex; flex-direction: column; gap: 1rem; }
   @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } }
 
+  .brief h2 { margin: 0; }
+  .brief .grow { flex: 1; }
   .composer { padding: 0.9rem 1rem 1rem; }
   .ctabs { display: flex; gap: 0.2rem; margin-bottom: 0.7rem; align-items: center; }
   .ctabs button { background: none; border: 0; padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; color: var(--ink-3); cursor: pointer; }

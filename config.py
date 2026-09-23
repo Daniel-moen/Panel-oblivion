@@ -208,6 +208,19 @@ CACHE_ENABLED = True
 # prune_cache() also evicts oldest-first down to this budget.
 CACHE_MAX_MB = int(os.environ.get("CACHE_MAX_MB", "1024"))
 
+# ------------------------------------------------------------ media library
+#
+# The footage drive behind the Media section (the vendored Zerko backend in
+# zerko/). Unlike DATA_DIR this is *not* something the app can invent: it is a
+# real external volume on the editing workstation, holding terabytes that will
+# never live on a hosted dyno. Left unset — which is the normal state on
+# Railway — the media API answers "no media root configured" and the Media
+# pages say so, rather than showing an empty library as though the footage had
+# been lost. Everything Zerko derives from it (catalogue, thumbnails, proxies,
+# previews) is redirected under DATA_DIR by zerko/__init__.py.
+MEDIA_ROOT = os.environ.get("MEDIA_ROOT", "")
+MEDIA_ENABLED = bool(MEDIA_ROOT and os.path.isdir(MEDIA_ROOT))
+
 # ---------------------------------------------------------------- areas
 #
 # Areas Oblivion Estates targets, grouped by region.

@@ -27,3 +27,16 @@ prospects.db.bak*
 # Front-end tooling: only ui/build is served; the rest is local-only.
 ui/node_modules/
 ui/.svelte-kit/
+
+# The media library: zerko/ MUST ship (media.py imports it), but the state it
+# writes locally must not — the deployed copy keeps its own on the volume.
+/media-data/
+/files/
+/zerko/.env
+/zerko/_scratch/
+/zerko/Zerko Files/
+/zerko/*.db
+/zerko/*.db-wal
+/zerko/*.db-shm
+/zerko/zerko.config.json
+/mediamanager.db*

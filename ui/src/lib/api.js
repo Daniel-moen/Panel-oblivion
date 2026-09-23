@@ -1,11 +1,33 @@
 /* Thin JSON client for the Flask API. Same-origin in production; the Vite
    dev server proxies /api to :5051. */
 
+/* Set once we have started leaving for /login, so a page full of pollers all
+   401-ing at the same moment navigates once instead of fighting each other. */
+let leaving = false;
+
 async function handle(res) {
   let body = null;
   try { body = await res.json(); } catch { /* non-JSON error body */ }
   if (!res.ok) {
-    const msg = (body && (body.message || body.error)) || `HTTP ${res.status}`;
+    /* The session expired or was revoked while the app was open: every poller
+       would otherwise just toast forever. Send the browser to sign in, once,
+       and come back to where it was. */
+    if (res.status === 401 && body?.error === 'auth_required'
+        && typeof location !== 'undefined' && !leaving
+        && !location.pathname.startsWith('/login')) {
+      leaving = true;
+      location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
+    }
+    /* The server is the only thing that decides what you may do, so a 403
+       reaches the UI as a normal outcome, not a crash. Say which privilege
+       is missing in words a person can repeat to whoever hands them out. */
+    const NEED = {
+      crawl: 'run crawls', leads: 'change leads', media: 'use the media library',
+      admin: 'manage people'
+    };
+    const msg = (body?.error === 'forbidden' && body?.need)
+      ? `Your account cannot ${NEED[body.need] || body.need}. Ask the owner.`
+      : (body && (body.message || body.error)) || `HTTP ${res.status}`;
     const err = new Error(msg);
     err.code = body && body.error;
     err.status = res.status;
@@ -69,6 +91,11 @@ export const api = {
   erfConfirm: (key, erf) => post('/api/erf/confirm', { listing_key: key, erf }),
   reevaluate: (key) => post('/api/listing/reevaluate', { listing_key: key }),
   deed: (gid) => post('/api/deed/' + encodeURIComponent(gid)),
+
+  /* Call brief. The GET is deterministic and cached server-side; briefAi
+     spends a model call, so it is only ever fired by a button. */
+  brief: (gid) => get('/api/brief/' + encodeURIComponent(gid)),
+  briefAi: (gid) => post('/api/brief/' + encodeURIComponent(gid) + '/ai'),
   owner: (gid) => get('/api/owner/' + encodeURIComponent(gid)),
 
   /* ---- management panel */
@@ -92,5 +119,35 @@ export const api = {
   contact: (id) => get('/api/contacts/' + id),
   updateContact: (id, body) => patch('/api/contacts/' + id, body),
   snooze: (id, days) => post(`/api/tasks/${id}/snooze`, { days }),
-  taskDone: (id, done = true) => post(`/api/tasks/${id}/done`, { done })
+  taskDone: (id, done = true) => post(`/api/tasks/${id}/done`, { done }),
+
+  /* ---- sign-in (auth.py)
+     Same-origin fetch, so the session cookie rides along on its own; nothing
+     here ever sends the password. The two register calls are the halves of
+     one WebAuthn ceremony — options, then the browser, then verify. */
+  me: () => get('/api/me'),
+  /* Your own display name. Role and privileges are an admin's to set — even
+     on your own row — so this takes one field and one field only. */
+  updateMe: (body) => patch('/api/me', body),
+  passkeys: () => get('/api/passkeys'),
+  passkeyRegisterOptions: () => post('/api/passkeys/register/options'),
+  passkeyRegisterVerify: (token, name, credential) =>
+    post('/api/passkeys/register/verify', { token, name, credential }),
+  passkeyDelete: (id) => del('/api/passkeys/' + id),
+  sessionRevoke: (id) => post('/api/sessions/' + encodeURIComponent(id) + '/revoke'),
+  logout: () => post('/logout'),
+
+  /* ---- people and invites (auth.py, all behind the `admin` privilege)
+     There is no create-a-user call and there never will be: an account comes
+     into existence only when someone opens an invite and registers a passkey,
+     so the admin surface is invites in and people out. `createInvite` is the
+     one response that ever carries a raw token — show it once, then it is
+     gone for good. */
+  users: () => get('/api/users'),
+  updateUser: (id, body) => patch('/api/users/' + id, body),
+  deleteUser: (id) => del('/api/users/' + id),
+  reinvite: (id, days) => post(`/api/users/${id}/reinvite`, { days }),
+  invites: () => get('/api/invites'),
+  createInvite: (body) => post('/api/invites', body),
+  revokeInvite: (id) => del('/api/invites/' + id)
 };

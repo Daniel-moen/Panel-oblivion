@@ -190,6 +190,52 @@ CREATE TABLE IF NOT EXISTS scores (
     mandate_expiry_note     TEXT,   -- when a sole mandate likely comes up
     scored_at               TEXT DEFAULT (datetime('now'))
 );
+
+-- ------------------------------------------------------------------ sign-in
+--
+-- Three small tables that belong to auth.py (see its header). They live here
+-- because everything else in this app opens the database through connect(),
+-- and a second store would be a second thing to back up and mount on Railway.
+
+-- Process-independent secrets, currently only the cookie signing key. It is
+-- kept in the database rather than minted per boot on purpose: the DB sits on
+-- the Railway volume, so a redeploy keeps every browser signed in, whereas a
+-- fresh random key would sign everyone out on every push.
+CREATE TABLE IF NOT EXISTS app_secrets (
+    name       TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+-- One row per signed-in browser. Rows, not self-contained signed tokens, so
+-- "sign out that other laptop" is a real revocation rather than a wait for an
+-- expiry, and so the account page can show what is currently signed in.
+-- There is only one account, so `user` is always DASHBOARD_USER; it is stored
+-- anyway to keep the table honest about what it is recording.
+CREATE TABLE IF NOT EXISTS sessions (
+    id           TEXT PRIMARY KEY,   -- random; the cookie carries it, signed
+    user         TEXT NOT NULL,
+    created_at   TEXT NOT NULL,      -- ISO-8601 UTC
+    last_seen_at TEXT NOT NULL,      -- written at most every 5 minutes
+    expires_at   TEXT NOT NULL,
+    user_agent   TEXT,               -- to label the row as a device
+    revoked      INTEGER NOT NULL DEFAULT 0
+);
+
+-- Registered WebAuthn credentials. public_key is the COSE key the
+-- authenticator handed over at registration — a public key, so a leak of this
+-- table cannot sign anything; nothing biometric ever reaches the server.
+CREATE TABLE IF NOT EXISTS passkeys (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    credential_id TEXT NOT NULL UNIQUE,   -- base64url, as the browser sends it
+    public_key    BLOB NOT NULL,
+    sign_count    INTEGER NOT NULL DEFAULT 0,  -- clone detection; 0 on Apple
+    transports    TEXT,                   -- JSON list: ['internal'], ['hybrid']
+    aaguid        TEXT,
+    name          TEXT,                   -- 'Mac / Safari', editable
+    created_at    TEXT NOT NULL,
+    last_used_at  TEXT
+);
 """
 
 INSERT_COLUMNS = (

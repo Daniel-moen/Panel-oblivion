@@ -51,6 +51,120 @@ fall back to regex parsing and keyword matching, and the reply says so
 (`ranked_by: "heuristic"`). The endpoint is `POST /api/find` with
 `{brief, sole}`; the logic lives in `finder.py`.
 
+### Call brief
+
+Every property carries a one-screen sheet for the minute before you phone the
+owner: the hard numbers (asking, R/m², municipal GV, days on market, price
+cuts, erf), talking points computed from them ("listed with 2 agencies on 3
+portals — the mandate is open"), cool facts lifted from the advert plus a
+hand-written line about the suburb, five discovery questions, the objection
+answers, and what *not* to say. It is built from the database alone, so it
+works with no API key; **Write with AI** re-reads the same facts and rewrites
+them in spoken language with an opener (`brief.py`, `finder._ask`, same
+credentials as scoring). Briefs are cached per property and rebuilt whenever
+the price, the agencies, the score or the crawl move.
+
+`GET /api/brief/<gid>` (JSON), `POST /api/brief/<gid>/ai` (the rewrite, 503
+when no provider works), `GET /api/brief/<gid>/text` (plain text to paste),
+and `GET /brief/<gid>` — a standalone, printable page for the phone in your
+other hand. In the UI it is a tab in the prospect drawer and a panel on the
+lead-management property page.
+
+---
+
+## Sign-in and passkeys
+
+One account for the whole team, set by two environment variables:
+
+| variable | meaning |
+| --- | --- |
+| `DASHBOARD_PASSWORD` | the password. **Required on a hosted deploy** — without it the app refuses to serve rather than publishing the prospect list. Unset and running locally, the dashboard is open and binds to loopback only. |
+| `DASHBOARD_USER` | the username, default `oblivion`. |
+| `DASHBOARD_SECRET` | optional. Signs the session cookie. Left unset, a 32-byte secret is generated once and kept in the `app_secrets` table, which lives on the Railway volume — so a redeploy does not sign everyone out. Set it if you ever run more than one replica without a shared volume. |
+| `PASSKEY_RP_ID` | optional. The WebAuthn relying-party id, default: the request host with the port stripped. Only needed if the app is reached on a domain other than the one the browser sees (a custom domain in front of Railway). |
+
+**In a browser** `/login` is the door: one button for a passkey, and the
+password below it. A successful sign-in sets `oblivion_session` — signed,
+HttpOnly, SameSite=Lax, Secure when hosted, 30 days — so the password is typed
+once per device and never again once a passkey is on it.
+
+**Adding a device.** Sign in with the password, then **Account** (the person
+icon, top right) → *Add this device*. That runs the WebAuthn registration
+ceremony: Touch ID, Windows Hello, a phone over QR, or a hardware key, all
+offered. The credential is discoverable, so signing in afterwards needs no
+username typed. The private half never leaves the device (or iCloud Keychain /
+Windows Hello); the server stores only a public key, so a leak of the database
+cannot sign anything. The same page lists every signed-in browser and can
+revoke any of them, including the one you are sitting at.
+
+**Scripts are untouched.** HTTP basic auth is still accepted on every route —
+`curl -u oblivion:$DASHBOARD_PASSWORD https://…/api/status` works exactly as
+before. Only *browser navigations* (a GET that asks for `text/html`) are
+redirected to `/login`; everything else still gets `401` with a
+`WWW-Authenticate: Basic` header. Passkey login and the password form share a
+per-IP failure limit of 10 attempts per 15 minutes.
+
+---
+
+## Media
+
+The cinematic pitch needs the films, so the footage library lives in the same
+panel as the leads. `zerko/` is a vendored copy of the **Zerko File Manager**
+backend (see `zerko/VENDORED.md` for the upstream commit and the handful of
+changes); `media.py` adapts its FastAPI app to WSGI with `a2wsgi` and hangs it
+off `webapp.app` under `/zerko` via werkzeug's `DispatcherMiddleware`. One
+process, one port, one worker — Zerko's job progress lives in memory the same
+way `webapp.job` does, so a second gunicorn worker would break both.
+
+The pages are SvelteKit, at `/media`: a dashboard whose hero plays a montage of
+the library's own proxies, a browse grid that scrubs on hover, transcript
+search with play-from-here, tags, duplicates, share links, the general file
+store and a settings/jobs screen.
+
+```bash
+export MEDIA_ROOT=/Volumes/Footage      # the drive holding the masters
+python webapp.py                        # /media alongside everything else
+```
+
+`MEDIA_ROOT` is the only thing you set. Everything Zerko derives from it — the
+catalogue, thumbnails, proxies, the file store — is redirected under
+`DATA_DIR` by `zerko/__init__.py`, so it survives a redeploy on the mounted
+volume. Leave `MEDIA_ROOT` unset and the Media pages say there is no footage
+drive on this deployment rather than showing an empty library; the file store
+and share links still work. **ffmpeg and ffprobe are required** for thumbnails,
+proxies and duration probing (`brew install ffmpeg`; `nixpacks.toml` installs
+them on Railway). Transcription is deliberately not installed — openai-whisper
+pulls in torch, which will not fit the build image.
+
+### Signing in, once
+
+The dashboard's own sign-in — basic auth or the session cookie — is the only
+login. `GET /api/media/token` turns it into the JWT the mounted app expects,
+auto-provisioning a Zerko admin named after the signed-in user; the client sends it as a bearer token, and as
+`?token=` on `<img>`/`<video>` URLs. Zerko's own login and first-run wizard are
+never shown — the wizard is refused at the mount, along with the SSE endpoint
+(it would pin a worker thread per open tab), the self-updater and the
+"reveal in Finder" route.
+
+`DispatcherMiddleware` sits *outside* Flask, so `_require_auth` never sees
+`/zerko/*`; `media.py` re-checks the same credentials itself — basic auth
+*and* the session cookie, because someone signed in with a passkey has no
+password to send. Without that the
+whole media API — including the `/thumbnails` static mount, which has no auth
+of its own upstream — would be open to anyone who guessed the prefix.
+
+### Client share links
+
+`/media/s/<token>` is a screening room: dark, big player, hearts, inline notes,
+keyboard navigation. Clients open it with no account and no password, so it and
+the two `/zerko/api/public/...` prefixes are the only routes exempt from basic
+auth — the share token is the credential, and Zerko checks its expiry,
+revocation, optional password and per-IP failure limit on every call. The page
+is rendered by `share_page.py` as one self-contained document rather than a
+SvelteKit route, precisely so that serving it does not require publishing the
+dashboard's JavaScript bundle. Picks and notes come back on the Shares page,
+with FCPXML and CSV exports for the edit.
+
 ---
 
 ## Why multiple portals
@@ -261,6 +375,9 @@ ui/             SvelteKit dashboard SPA (src/ = source, build/ = what Flask serv
 tracker.py      import of the team's xlsx + revealed-preference profile
 panel.py        management panel: stages, contacts, interactions, mandates
 caller.py       AI voice agent: phones owners, pitches the meeting (docs/CALLER.md)
+media.py        mounts the vendored media library at /zerko (ASGI -> WSGI)
+share_page.py   the client screening room at /media/s/<token>, no login
+zerko/          vendored Zerko media backend (see zerko/VENDORED.md)
 ```
 
 ### Areas

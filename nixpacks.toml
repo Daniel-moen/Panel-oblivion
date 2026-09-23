@@ -1,0 +1,21 @@
+# Railway build configuration.
+#
+# The only reason this file exists: the vendored media backend (zerko/) shells
+# out to ffmpeg and ffprobe for thumbnails, proxy transcodes and duration
+# probing. Those are system binaries, not pip packages, so Nixpacks' Python
+# provider will not bring them in on its own — without this, the library
+# indexes but every clip comes back with no thumbnail and no duration, which
+# looks like a bug in the app rather than a missing dependency.
+#
+# libmagic backs python-magic (media type sniffing); libGL and glib are what
+# opencv-python-headless still dynamically links against.
+
+[phases.setup]
+nixPkgs = ["...", "ffmpeg-full", "file", "libGL", "glib"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+# The Procfile already pins one worker and several threads, deliberately:
+# both the crawl jobs and the media job manager report progress through
+# in-memory dicts, so a second worker would poll a different process's state.

@@ -1,6 +1,9 @@
 <script>
   import { app, actions } from '$lib/state.svelte.js';
 
+  /* `inline` — already inside a page's own column, so drop the shell gutters */
+  let { inline = false } = $props();
+
   const s = $derived(app.status);
   const busyNote = $derived.by(() => {
     const parts = [];
@@ -20,14 +23,14 @@
 </script>
 
 {#if !s.ai_ok && s.ai_reason}
-  <div class="aiwarn">
+  <div class="aiwarn" class:inline>
     AI scoring is off — {s.ai_reason}. Scores fall back to the heuristic; mandate
     verdicts still use hard evidence (multi-agency listings, portal mandate flags).
   </div>
 {/if}
 
 {#if show}
-  <section class="strip" class:idle={!s.running}>
+  <section class="strip" class:idle={!s.running} class:inline>
     <div class="row">
       <div class="phase">
         {#if s.running}<span class="spin"></span>{/if}
@@ -72,6 +75,7 @@
     margin-right: clamp(1rem, 3vw, 2rem);
   }
   @media (min-width: 1544px) { .aiwarn, .strip { margin-left: auto; margin-right: auto; } }
+  .aiwarn.inline, .strip.inline { max-width: none; margin-left: 0; margin-right: 0; }
 
   /* —————————————————————————————————————————— soft amber notice ——— */
   .aiwarn {
@@ -105,18 +109,18 @@
 
   .sources { display: flex; gap: 1.1rem; flex: 1; flex-wrap: wrap; }
   .src {
-    position: relative; min-width: 108px; padding-bottom: 8px;
+    position: relative; min-width: 108px; padding-bottom: 9px;
     display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem;
     font: 500 0.74rem/1.3 var(--font-ui); color: var(--ink-2);
   }
   .src::after {
-    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
     background: var(--bg-3); border-radius: 999px;
   }
   .src .sname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .src .scount { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
   .src i {
-    position: absolute; left: 0; bottom: 0; height: 3px; z-index: 1;
+    position: absolute; left: 0; bottom: 0; height: 4px; z-index: 1;
     background: var(--accent); border-radius: 999px; transition: width 0.4s;
   }
 
@@ -124,8 +128,8 @@
   .stop:hover { background: var(--red-soft); border-color: var(--red-line); color: var(--red); }
 
   .bar {
-    height: 5px; background: var(--bg-3); border-radius: 999px;
-    overflow: hidden; margin-top: 0.65rem;
+    height: 6px; background: var(--bg-3); border: 1px solid var(--line);
+    border-radius: 999px; overflow: hidden; margin-top: 0.65rem;
   }
   .bar i { display: block; height: 100%; border-radius: 999px;
            background: var(--accent); transition: width 0.4s; }

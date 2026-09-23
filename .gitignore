@@ -23,3 +23,33 @@ webapp.log
 # Front-end tooling (ui/build is committed; it is what webapp.py serves)
 ui/node_modules/
 ui/.svelte-kit/
+
+# ---------------------------------------------------------------- media library
+#
+# zerko/ is NOT committed here: it is the user's own Zerko File Manager,
+# which lives in its own repository. The deploy still needs it — `railway up`
+# ships the working tree, and .railwayignore keeps it in — but git does not.
+/zerko/
+# The state it writes must never be committed either. Every rule below is
+# anchored to zerko/ on purpose: an unanchored `*.db` or `.env` here would
+# also match things elsewhere in the tree, and an unanchored directory name
+# would match inside ui/build. (Same class of mistake as the /prospects.html
+# rule that once stopped ui/build/prospects.html from shipping — see 6f89faf.)
+# With DATA_DIR unset (a normal workstation) all of this lands in the repo
+# root, so it is ignored here as well as on the volume.
+/media-data/
+/files/
+# Belt and braces: state upstream would write beside its own source, plus
+# stray catalogues from a run that missed the env bootstrap.
+/zerko/.env
+/zerko/_scratch/
+/zerko/Zerko Files/
+/zerko/*.db
+/zerko/*.db-wal
+/zerko/*.db-shm
+/zerko/zerko.config.json
+/zerko/.update-staged/
+/mediamanager.db
+/mediamanager.db-wal
+/mediamanager.db-shm
+/zerko.config.json

@@ -1,5 +1,13 @@
+<script module>
+  /* Which tab the drawer opens on, remembered for the session but not the
+     browser: an agent working a call list wants every property to open on the
+     brief, and tomorrow they are back to reading details. */
+  let lastTab = 'details';
+</script>
+
 <script>
   import Photo from './Photo.svelte';
+  import CallBrief from './CallBrief.svelte';
   import Signals from './Signals.svelte';
   import ErfPanel from './ErfPanel.svelte';
   import { app, selected, actions, gidOf, trackProspect } from '$lib/state.svelte.js';
@@ -50,6 +58,12 @@
       : `Multi-brand proof is ${Math.round(h / 24)} days stale — worth re-verifying.`;
   });
 
+  let tab = $state(lastTab);
+  $effect(() => { lastTab = tab; });
+  /* Rentals have no score, no mandate and no group, so there is nothing to
+     brief a call on — the toggle simply isn't there for them. */
+  const brief = $derived(!rent && tab === 'brief');
+
   const close = () => (app.selectedKey = null);
   const stage = $derived(r ? app.tracked[gidOf(r)] : null);
 </script>
@@ -99,6 +113,8 @@
               <button class="act" onclick={() => actions.reevaluate(r.listing_key)}
                 title="Refetch this listing live from the portal(s), re-score it and re-run the erf match">↻ Re-evaluate</button>
             {/if}
+            <button class="act" class:cma={brief} onclick={() => (tab = 'brief')}
+              title="What to say when you phone the owner">Call brief</button>
             <button class="act" onclick={() => actions.copyRow(String(r.group_id ?? r.listing_key))}
               title="Copy as a spreadsheet row — paste into Excel or Google Sheets">Copy for sheet</button>
             {#if r.cma_url}
@@ -111,7 +127,20 @@
         {#if r.reeval_error}<p class="note bad">Re-eval failed — {r.reeval_error}</p>{/if}
         {#if r.mandate_expiry_note}<p class="note">{r.mandate_expiry_note}</p>{/if}
         {#if proofNote}<p class="note" class:ok={r.proof_age_hours < 72}>{proofNote}</p>{/if}
+
+        {#if !rent}
+          <div class="tabs" role="tablist">
+            <button role="tab" aria-selected={!brief} class:on={!brief}
+              onclick={() => (tab = 'details')}>Details</button>
+            <button role="tab" aria-selected={brief} class:on={brief}
+              onclick={() => (tab = 'brief')}>Call brief</button>
+          </div>
+        {/if}
       </div>
+
+      {#if brief}
+        <section class="pad last"><CallBrief gid={gidOf(r)} /></section>
+      {:else}
 
       {#if bars.length}
         <section class="pad">
@@ -177,6 +206,7 @@
           <ErfPanel {r} />
         </section>
       {/if}
+      {/if}
     </div>
   </aside>
 {/if}
@@ -218,6 +248,14 @@
   .act.busy { color: var(--accent-2); border-color: transparent; background: none; }
   .act.cma { color: var(--accent-2); border-color: var(--accent-line); background: var(--accent-soft); }
   .act.cma:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .tabs { display: flex; gap: 0.2rem; margin-top: 0.9rem;
+          border-bottom: 1px solid var(--line); }
+  .tabs button { background: none; border: 0; border-bottom: 2px solid transparent;
+                 padding: 0.4rem 0.7rem; margin-bottom: -1px; cursor: pointer;
+                 font: 600 0.8rem/1.3 var(--font-ui); color: var(--ink-3); }
+  .tabs button:hover { color: var(--ink); }
+  .tabs button.on { color: var(--accent-2); border-bottom-color: var(--accent); }
 
   .note { margin: 0.6rem 0 0; font-size: 0.79rem; font-weight: 500; color: var(--psole); }
   .note.ok { color: var(--open); }

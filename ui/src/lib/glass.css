@@ -1,0 +1,542 @@
+/* ————————————————————————————— Oblivion · "Studio Glass" —————————————————
+   The shared vocabulary for the WHOLE app — every route, not just Media.
+
+   Every class is prefixed `mg-` and every token is `--mg-*`. "mg" no longer
+   means "media glass"; it just means "the glass vocabulary". The tokens are
+   declared on `:root` so any element anywhere can read them, and repeated on
+   `.mg-scene` — the scene root the app layout puts around everything — which
+   also carries the typography, the dark colour scheme and the scrollbars.
+
+   The app is always dark: it floats over a photograph, and a light pane over
+   a photograph is unreadable. There is no light theme and no `data-theme`.
+
+   Imported ONCE, by `routes/+layout.svelte`.
+
+   The rules in short: panels are frosted glass, never opaque planes; colour is
+   reserved for state (one accent — live green); buttons are pills; numbers are
+   tabular; motion only on enter, press and glide.
+   ———————————————————————————————————————————————————————————————————————— */
+
+:root,
+.mg-scene {
+  /* — neutral planes ——————————————————————————————————————————————— */
+  --mg-bg: #111113;                          /* deep graphite behind the photo */
+  --mg-glass: rgba(18, 18, 22, 0.52);        /* panes                          */
+  --mg-glass-strong: rgba(14, 14, 18, 0.74); /* sheets, dialogs, the lightbox  */
+  --mg-glass-soft: rgba(255, 255, 255, 0.06);/* chips, inputs, cards in a pane */
+  --mg-glass-hover: rgba(255, 255, 255, 0.1);/* the same, under the pointer    */
+  --mg-line: rgba(255, 255, 255, 0.12);      /* hairline on glass              */
+  --mg-line2: rgba(255, 255, 255, 0.22);     /* hairline, lit                  */
+  --mg-term: rgba(8, 8, 10, 0.86);           /* near-opaque: paths, video      */
+
+  /* — ink ——————————————————————————————————————————————————————————— */
+  --mg-i: #f3f3f4;                           /* body + headings                */
+  --mg-i2: #a7a7b0;                          /* secondary                      */
+  --mg-i3: #6d6d78;                          /* labels, hints, timecodes       */
+
+  /* — state (the only colour in the section) ———————————————————————— */
+  --mg-ok: #3ecf8e;                          /* live / working / linked        */
+  --mg-ok-bright: #5fe3a8;
+  --mg-ok-ink: #06281a;                      /* text on a green fill           */
+  --mg-warn: #f0b429;                        /* needs you                      */
+  --mg-crit: #f26d64;                        /* failed                         */
+  --mg-mgr: #a78bfa;                         /* agent / AI / transcript        */
+
+  --mg-scrim: rgba(6, 6, 8, 0.6);            /* behind dialogs                 */
+
+  /* — type ————————————————————————————————————————————————————————— */
+  --mg-font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
+  --mg-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* — shape and depth —————————————————————————————————————————————— */
+  --mg-r: 22px;                              /* panes                          */
+  --mg-r-card: 18px;                         /* cards                          */
+  --mg-r-in: 14px;                           /* inputs, small tiles            */
+  --mg-blur: 28px;
+  --mg-sh: 0 24px 64px -16px rgba(0, 0, 0, 0.65);
+  --mg-sh-2: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  --mg-lit: inset 0 1px 0 rgba(255, 255, 255, 0.07); /* the lit top edge       */
+
+  /* — safe areas (phone) ——————————————————————————————————————————— */
+  --mg-sat: env(safe-area-inset-top, 0px);
+  --mg-sab: env(safe-area-inset-bottom, 0px);
+}
+
+/* The scene root: the element the app layout wraps everything in. It carries
+   the typography and the dark colour scheme; the tokens above are on :root so
+   anything portalled out of the scene (dialogs on <body>) still reads them. */
+.mg-scene {
+  color-scheme: dark;
+  color: var(--mg-i);
+  font-family: var(--mg-font);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  background: var(--mg-bg);
+  min-height: 100vh;
+  min-height: 100svh;
+  position: relative;
+}
+
+/* .mg-portal — the root a dialog uses when it is mounted at the end of <body>
+   (see components/glass/Sheet.svelte). It sits OUTSIDE `.mg-scene`, so it has
+   to restate the few inherited things the scene would have given it. */
+.mg-portal {
+  color-scheme: dark;
+  color: var(--mg-i);
+  font-family: var(--mg-font);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+.mg-portal a { color: inherit; text-decoration: none; }
+.mg-portal :focus-visible { outline: 2px solid rgba(62, 207, 142, 0.75); outline-offset: 2px; }
+.mg-portal * { -webkit-tap-highlight-color: transparent; }
+.mg-portal * { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.16) transparent; }
+.mg-portal ::-webkit-scrollbar { width: 8px; height: 8px; }
+.mg-portal ::-webkit-scrollbar-track { background: transparent; }
+.mg-portal ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 9999px; }
+
+/* Links inside the scene never take the prospect side's blue. */
+.mg-scene a { color: inherit; text-decoration: none; }
+.mg-scene :focus-visible {
+  outline: 2px solid rgba(62, 207, 142, 0.75);
+  outline-offset: 2px;
+}
+.mg-scene * { -webkit-tap-highlight-color: transparent; }
+
+/* ——————————————————————————————————————————————————————— scrollbars ——— */
+/* Thin and dark inside the scene; fully hidden on anything that scrolls
+   sideways (chip rows, strips), where a bar would sit on top of content. */
+.mg-scene ::-webkit-scrollbar { width: 8px; height: 8px; }
+.mg-scene ::-webkit-scrollbar-track { background: transparent; }
+.mg-scene ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 9999px; }
+.mg-scene ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); }
+.mg-scene * { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.16) transparent; }
+
+/* .mg-noscroll — scrolls, shows no bar. */
+.mg-noscroll { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.mg-noscroll::-webkit-scrollbar { display: none; }
+
+
+/* ——————————————————————————————————————————————————————— surfaces ——— */
+
+/* .mg-glass — a pane of frosted glass: the main content surface. */
+.mg-glass {
+  background: var(--mg-glass);
+  border: 1px solid var(--mg-line);
+  border-radius: var(--mg-r);
+  box-shadow: var(--mg-sh), var(--mg-lit);
+  -webkit-backdrop-filter: blur(var(--mg-blur)) saturate(150%);
+  backdrop-filter: blur(var(--mg-blur)) saturate(150%);
+}
+
+/* .mg-glass-strong — denser glass for anything that sits ON a pane: dialogs,
+   sheets, the lightbox, toasts. */
+.mg-glass-strong {
+  background: var(--mg-glass-strong);
+  border: 1px solid var(--mg-line);
+  border-radius: var(--mg-r);
+  box-shadow: var(--mg-sh), var(--mg-lit);
+  -webkit-backdrop-filter: blur(var(--mg-blur)) saturate(150%);
+  backdrop-filter: blur(var(--mg-blur)) saturate(150%);
+}
+
+/* .mg-glass-soft — a lift, not a plane: chips, inputs, tiles and cards INSIDE
+   a pane. No blur (blur is expensive; never stack more than ~4 large ones). */
+.mg-glass-soft {
+  background: var(--mg-glass-soft);
+  border: 1px solid var(--mg-line);
+}
+
+/* .mg-hover — add to a soft surface that responds to the pointer. */
+.mg-hover { transition: background 0.18s, border-color 0.18s, transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.mg-hover:hover { background: var(--mg-glass-hover); border-color: var(--mg-line2); }
+.mg-hover:active { transform: scale(0.985); }
+
+/* .mg-pill — the section's button shape: fully round. */
+.mg-pill { border-radius: 9999px; }
+
+/* ———————————————————————————————————————————————————————— buttons ——— */
+
+/* .mg-btn — a pill button, 40px tall by default. Works on <button> and <a>. */
+.mg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: none;
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  background: none;
+  color: var(--mg-i);
+  font: 500 13.5px/1 var(--mg-font);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.18s, border-color 0.18s, color 0.18s, transform 0.12s;
+}
+.mg-btn:active:not(:disabled) { transform: scale(0.97); }
+.mg-btn:disabled, .mg-btn[aria-disabled='true'] { opacity: 0.4; pointer-events: none; }
+
+/* .mg-btn.primary — white fill, dark text: the one signature action per view. */
+.mg-btn.primary { background: var(--mg-i); color: #111113; font-weight: 600; }
+.mg-btn.primary:hover { background: #ffffff; }
+
+/* .mg-btn.accent — green fill: go / live / confirm. */
+.mg-btn.accent { background: var(--mg-ok); color: var(--mg-ok-ink); font-weight: 600; }
+.mg-btn.accent:hover { background: var(--mg-ok-bright); }
+
+/* .mg-btn.secondary — frosted glass: the everyday button. */
+.mg-btn.secondary { background: var(--mg-glass-soft); border-color: var(--mg-line); color: var(--mg-i); }
+.mg-btn.secondary:hover { background: var(--mg-glass-hover); border-color: var(--mg-line2); }
+
+/* .mg-btn.ghost — text only until hovered. */
+.mg-btn.ghost { color: var(--mg-i2); }
+.mg-btn.ghost:hover { background: rgba(255, 255, 255, 0.08); color: var(--mg-i); }
+
+/* .mg-btn.danger — destructive: a red tint, never a red fill. */
+.mg-btn.danger { background: rgba(242, 109, 100, 0.15); border-color: rgba(242, 109, 100, 0.3); color: var(--mg-crit); }
+.mg-btn.danger:hover { background: rgba(242, 109, 100, 0.22); }
+
+/* .mg-btn.sm / .mg-btn.lg — 32px and 48px. */
+.mg-btn.sm { height: 32px; padding: 0 14px; font-size: 12.5px; gap: 6px; }
+.mg-btn.lg { height: 48px; padding: 0 24px; font-size: 15px; gap: 10px; }
+
+/* .mg-btn.icon — round icon-only button, square by size (40 / 32 / 48). */
+.mg-btn.icon { width: 40px; padding: 0; }
+.mg-btn.icon.sm { width: 32px; }
+.mg-btn.icon.lg { width: 48px; }
+
+/* ————————————————————————————————————————————————————————— inputs ——— */
+
+/* .mg-input — a glass-soft text field, 40px tall. */
+.mg-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 14px;
+  background: var(--mg-glass-soft);
+  border: 1px solid var(--mg-line);
+  border-radius: var(--mg-r-in);
+  color: var(--mg-i);
+  font: 400 14px/1 var(--mg-font);
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+}
+.mg-input::placeholder { color: var(--mg-i3); }
+.mg-input:hover { border-color: var(--mg-line2); }
+.mg-input:focus {
+  border-color: rgba(62, 207, 142, 0.6);
+  box-shadow: 0 0 0 1px rgba(62, 207, 142, 0.4);
+  outline: none;
+}
+textarea.mg-input { height: auto; min-height: 84px; padding: 10px 14px; line-height: 1.55; resize: vertical; }
+
+/* .mg-search — wrapper turning an .mg-input into a full search pill with a
+   magnifier on the left and a round clear button on the right. */
+.mg-search { position: relative; display: block; min-width: 0; }
+.mg-search .mg-input { border-radius: 9999px; padding-left: 38px; padding-right: 40px; }
+.mg-search > .ic {
+  position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+  color: var(--mg-i3); pointer-events: none; display: flex;
+}
+.mg-search > .clear {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; border: 0; border-radius: 9999px; padding: 0;
+  display: grid; place-items: center; background: none; color: var(--mg-i3);
+  cursor: pointer; transition: background 0.18s, color 0.18s;
+}
+.mg-search > .clear:hover { background: rgba(255, 255, 255, 0.08); color: var(--mg-i); }
+
+/* .mg-select — wrapper for a native <select> (native is faster and accessible
+   on iOS) dressed as glass-soft, with a chevron drawn on the right. */
+.mg-select { position: relative; display: inline-block; min-width: 0; }
+.mg-select > select {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 40px; padding: 0 34px 0 14px;
+  background: var(--mg-glass-soft);
+  border: 1px solid var(--mg-line);
+  border-radius: var(--mg-r-in);
+  color: var(--mg-i);
+  font: 400 13.5px/1 var(--mg-font);
+  cursor: pointer; outline: none;
+  transition: border-color 0.18s, background 0.18s;
+}
+.mg-select > select:hover { border-color: var(--mg-line2); background: var(--mg-glass-hover); }
+.mg-select > select:focus { border-color: rgba(62, 207, 142, 0.6); box-shadow: 0 0 0 1px rgba(62, 207, 142, 0.4); }
+.mg-select > select option { background: #18181b; color: var(--mg-i); }
+.mg-select > .ic {
+  position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+  color: var(--mg-i3); pointer-events: none; display: flex;
+}
+
+/* ———————————————————————————————————————————————— chips and cards ——— */
+
+/* .mg-chip — a small round tag/filter. Neutral unless it carries state. */
+.mg-chip {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  padding: 6px 12px; border-radius: 9999px;
+  background: var(--mg-glass-soft); border: 1px solid var(--mg-line);
+  color: var(--mg-i2); font: 500 12px/1 var(--mg-font); white-space: nowrap;
+  cursor: default; transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+button.mg-chip, a.mg-chip { cursor: pointer; }
+button.mg-chip:hover, a.mg-chip:hover { background: var(--mg-glass-hover); border-color: var(--mg-line2); color: var(--mg-i); }
+
+/* .mg-chip.on — the chip is active (a filter that is applied): green. */
+.mg-chip.on {
+  background: rgba(62, 207, 142, 0.12);
+  border-color: rgba(62, 207, 142, 0.4);
+  color: var(--mg-ok);
+}
+/* .mg-chip.ok / .warn / .crit / .mgr — state tones, always beside a word. */
+.mg-chip.ok   { background: rgba(62, 207, 142, 0.12); border-color: rgba(62, 207, 142, 0.25); color: var(--mg-ok); }
+.mg-chip.warn { background: rgba(240, 180, 41, 0.14); border-color: rgba(240, 180, 41, 0.3);  color: var(--mg-warn); }
+.mg-chip.crit { background: rgba(242, 109, 100, 0.14); border-color: rgba(242, 109, 100, 0.3); color: var(--mg-crit); }
+.mg-chip.mgr  { background: rgba(167, 139, 250, 0.14); border-color: rgba(167, 139, 250, 0.3); color: var(--mg-mgr); }
+
+/* .mg-chip .dot — the 6px status dot a chip can carry; it inherits the tone. */
+.mg-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+
+/* .mg-card — a glass-soft card inside a pane. */
+.mg-card {
+  display: block;
+  background: var(--mg-glass-soft);
+  border: 1px solid var(--mg-line);
+  border-radius: var(--mg-r-card);
+  padding: 16px;
+  color: inherit;
+  transition: background 0.18s, border-color 0.18s, transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+a.mg-card:hover, button.mg-card:hover { background: var(--mg-glass-hover); border-color: var(--mg-line2); }
+a.mg-card:active, button.mg-card:active { transform: scale(0.98); }
+button.mg-card { width: 100%; text-align: left; cursor: pointer; font: inherit; }
+button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
+
+/* ——————————————————————————————————————————————————————— typography ——— */
+
+/* .mg-label — the micro label above a number or field. Sentence case, quiet. */
+.mg-label { display: block; font: 500 11px/1.4 var(--mg-font); letter-spacing: 0.01em; color: var(--mg-i3); }
+
+/* .mg-h2 — the header of a view inside the pane. */
+.mg-h2 { margin: 0; font: 600 20px/1.2 var(--mg-font); letter-spacing: -0.01em; color: var(--mg-i); }
+
+/* .mg-count — the light count that sits beside an .mg-h2. */
+.mg-count { font: 400 13px/1 var(--mg-font); color: var(--mg-i3); font-variant-numeric: tabular-nums; }
+
+/* .mg-tnum — figures that must not jitter as they tick. */
+.mg-tnum { font-variant-numeric: tabular-nums; }
+
+/* .mg-kv — a <dl> of details: label left, value right, one row each. */
+.mg-kv { margin: 0; display: flex; flex-direction: column; gap: 7px; }
+.mg-kv > div { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.mg-kv dt { font: 400 12.5px/1.4 var(--mg-font); color: var(--mg-i3); }
+.mg-kv dd { margin: 0; font: 500 13px/1.45 var(--mg-font); color: var(--mg-i); overflow-wrap: anywhere; }
+
+/* ——————————————————————————————————————————————————————— structures ——— */
+
+/* .mg-page — the padding a view takes inside the pane; the bottom clears the
+   floating dock so the last card is never trapped under it. */
+.mg-page { padding: clamp(16px, 2.2vw, 26px) clamp(16px, 2.4vw, 28px) 112px; }
+
+/* .mg-row — a view's header row: title left, actions right, wraps on a phone. */
+.mg-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.mg-row > .mg-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* .mg-controls — the ONE control row under the header: search · segmented ·
+   select. The search pill takes the slack up to ~20rem. */
+.mg-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.mg-controls > .mg-search { flex: 1 1 200px; max-width: 20rem; }
+
+/* .mg-chips — a horizontally scrolling row of chips (tags, folders). */
+.mg-chips {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 14px;
+  overflow-x: auto; padding-bottom: 2px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.mg-chips::-webkit-scrollbar { display: none; }
+
+/* .mg-grid — the card grid. `.c2/.c3/.c4` set how tight the auto-fit gets. */
+.mg-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.mg-grid.c2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.mg-grid.c3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.mg-grid.c4 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+
+/* .mg-empty — the centred nothing-here state. Holds .ic / h3 / p / an action. */
+.mg-empty { display: grid; place-items: center; text-align: center; padding: 56px 24px; }
+.mg-empty > .ic {
+  width: 44px; height: 44px; border-radius: var(--mg-r-in);
+  display: grid; place-items: center; color: var(--mg-i2);
+  background: var(--mg-glass-soft); border: 1px solid var(--mg-line);
+}
+.mg-empty > h3 { margin: 14px 0 0; font: 500 14px/1.3 var(--mg-font); letter-spacing: -0.01em; color: var(--mg-i); }
+.mg-empty > p { margin: 5px 0 0; max-width: 42ch; font: 400 12.5px/1.6 var(--mg-font); color: var(--mg-i3); }
+.mg-empty > .act { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+/* .mg-strip — a slim notice inside the top of a pane, never a boxed alert.
+   `.warn` = amber (needs you), `.crit` = red (broken). */
+.mg-strip {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 14px; margin-bottom: 14px;
+  border-radius: var(--mg-r-in);
+  background: var(--mg-glass-soft); border: 1px solid var(--mg-line);
+  font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i2);
+}
+.mg-strip b { color: var(--mg-i); font-weight: 600; }
+.mg-strip code { font: 11.5px/1.5 var(--mg-mono); color: var(--mg-i3); overflow-wrap: anywhere; }
+.mg-strip.warn { background: rgba(240, 180, 41, 0.1); border-color: rgba(240, 180, 41, 0.28); }
+.mg-strip.warn > .ic { color: var(--mg-warn); }
+.mg-strip.crit { background: rgba(242, 109, 100, 0.1); border-color: rgba(242, 109, 100, 0.28); }
+.mg-strip.crit > .ic { color: var(--mg-crit); }
+.mg-strip > .ic { flex: none; display: flex; padding-top: 1px; }
+
+/* .mg-bar — a progress bar; `.indeterminate` sweeps when there is no number. */
+.mg-bar { height: 6px; border-radius: 9999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.mg-bar > i {
+  display: block; height: 100%; width: 0; border-radius: 9999px; background: var(--mg-ok);
+  transition: width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); will-change: width;
+}
+.mg-bar.indeterminate > i { width: 36%; animation: mg-slide 1.5s ease-in-out infinite; }
+
+/* .mg-stat — a figure with its label above it: the quiet numbers a header or
+   a home screen reports. `.mg-stat.pill` wraps it in a glass-soft pill with
+   the value and unit side by side instead of stacked. */
+.mg-stat { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mg-stat > .v {
+  font: 600 24px/1 var(--mg-font); letter-spacing: -0.02em; color: var(--mg-i);
+  font-variant-numeric: tabular-nums;
+}
+.mg-stat > .v.lg { font-size: 32px; }
+.mg-stat > .k { font: 500 11px/1.4 var(--mg-font); letter-spacing: 0.01em; color: var(--mg-i3); }
+.mg-stat > .v.ok { color: var(--mg-ok); }
+.mg-stat > .v.warn { color: var(--mg-warn); }
+.mg-stat > .v.crit { color: var(--mg-crit); }
+
+/* .mg-stat.pill — the home screen's row of figures: value + unit on one line. */
+.mg-stat.pill {
+  flex-direction: row; align-items: baseline; gap: 7px; flex: none;
+  padding: 7px 14px; border-radius: 9999px;
+  background: var(--mg-glass-soft); border: 1px solid var(--mg-line);
+}
+.mg-stat.pill > .v { font-size: 13px; font-weight: 600; }
+.mg-stat.pill > .k { font-size: 11.5px; color: var(--mg-i3); }
+
+/* .mg-dot — the smallest carrier of state: a 8px dot that takes its colour
+   from `.ok / .warn / .crit / .mgr`, neutral otherwise. Add `.mg-ping` to the
+   ring inside it (`<span class="mg-dot ok"><i class="mg-ping"></i></span>`)
+   and only while something is genuinely happening — a pulse that never stops
+   is a lie. */
+.mg-dot {
+  position: relative; display: inline-flex; flex: none;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--mg-i3); color: var(--mg-i3);
+}
+.mg-dot.sm { width: 6px; height: 6px; }
+.mg-dot.ok   { background: var(--mg-ok);   color: var(--mg-ok); }
+.mg-dot.warn { background: var(--mg-warn); color: var(--mg-warn); }
+.mg-dot.crit { background: var(--mg-crit); color: var(--mg-crit); }
+.mg-dot.mgr  { background: var(--mg-mgr);  color: var(--mg-mgr); }
+.mg-dot > i { position: absolute; inset: 0; border-radius: 50%; background: currentColor; opacity: 0.6; }
+
+/* .mg-table — a row list, not a spreadsheet: hairline dividers, a hover fill,
+   NO zebra striping (stripes fight the glass behind them). Works on a real
+   <table class="mg-table"> and on a stack of `.mg-table > .tr` divs. */
+.mg-table { width: 100%; border-collapse: collapse; font: 400 13.5px/1.5 var(--mg-font); }
+.mg-table th {
+  position: sticky; top: 0; z-index: 1; text-align: left; white-space: nowrap;
+  padding: 8px 12px; font: 500 11px/1.4 var(--mg-font); letter-spacing: 0.01em;
+  color: var(--mg-i3); background: var(--mg-glass-strong);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--mg-line);
+}
+.mg-table td { padding: 11px 12px; border-bottom: 1px solid var(--mg-line); color: var(--mg-i2); vertical-align: middle; }
+.mg-table tbody tr { transition: background 0.16s; }
+.mg-table tbody tr:hover { background: var(--mg-glass-soft); }
+.mg-table tbody tr:last-child td { border-bottom: 0; }
+.mg-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mg-table td.b { color: var(--mg-i); font-weight: 500; }
+
+/* the same list built from divs / links, for rows that need to be clickable */
+.mg-table > .tr {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 11px 12px; border: 0; border-bottom: 1px solid var(--mg-line);
+  background: none; color: var(--mg-i2); font: 400 13.5px/1.5 var(--mg-font);
+  text-align: left; transition: background 0.16s;
+}
+a.tr, button.tr { cursor: pointer; }
+.mg-table > .tr:hover { background: var(--mg-glass-soft); }
+.mg-table > .tr:last-child { border-bottom: 0; }
+
+/* .mg-dialog — the inside of a Sheet (components/glass/Sheet.svelte): a grab
+   handle on a phone, a title row, one scrolling body, an optional footer.
+   Kept here rather than scoped to the component so a page can build the same
+   shape inside its own overlay. */
+.mg-dialog { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.mg-dialog > .grab { flex: none; display: grid; place-items: center; padding: 10px 0 4px; cursor: grab; touch-action: none; }
+.mg-dialog > .grab > i { display: block; width: 36px; height: 4px; border-radius: 9999px; background: rgba(255, 255, 255, 0.25); }
+.mg-dialog > .head {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 16px 20px 12px;
+}
+.mg-dialog > .head > h2 {
+  flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 16px/1.3 var(--mg-font); letter-spacing: -0.015em; color: var(--mg-i);
+}
+.mg-dialog > .body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 20px 20px; }
+.mg-dialog > .foot {
+  flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 14px 20px; border-top: 1px solid var(--mg-line);
+}
+.mg-dialog > .foot > .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+/* .mg-scrim — the blurred veil a dialog sits on. It blurs rather than only
+   dims, or the big Home headline stays legible straight through the glass. */
+.mg-scrim {
+  position: fixed; inset: 0; z-index: 90;
+  display: flex; justify-content: center;
+  background: var(--mg-scrim);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+}
+
+/* A segmented control is a COMPONENT, not a class: components/glass/Seg.svelte
+   owns the measured glide that makes it worth having. There is deliberately no
+   `.mg-seg` — a hand-rolled row of chips is `.mg-chips`, and anything that
+   should glide uses <Seg>. */
+
+/* ——————————————————————————————————————————————————————————— motion ——— */
+
+/* .mg-fadeup — cards arrive: 10px up and in, ~320ms, once. */
+.mg-fadeup { animation: mg-fadeup 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* .mg-ping — the expanding ring behind a live dot. Put it under the dot. */
+.mg-ping { animation: mg-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite; }
+
+/* .mg-spin — a 1em ring spinner; set font-size or width/height to resize. */
+.mg-spin {
+  display: inline-block; width: 14px; height: 14px; flex: none;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 50%; opacity: 0.85;
+  animation: mg-spin 0.7s linear infinite;
+}
+
+@keyframes mg-fadeup { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes mg-ping { 0% { transform: scale(1); opacity: 0.45; } 80%, 100% { transform: scale(2.2); opacity: 0; } }
+@keyframes mg-spin { to { transform: rotate(360deg); } }
+@keyframes mg-slide { 0% { transform: translateX(-120%); } 100% { transform: translateX(340%); } }
+/* The backdrop photograph breathes over 90s — not a slideshow. */
+@keyframes mg-drift { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+/* ————————————————————————————————————————————————— reduced motion ——— */
+@media (prefers-reduced-motion: reduce) {
+  .mg-scene *, .mg-portal *,
+  .mg-scene *::before, .mg-portal *::before,
+  .mg-scene *::after, .mg-portal *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.06s !important;
+  }
+  .mg-fadeup { animation: none; opacity: 1; transform: none; }
+  .mg-ping { display: none; }
+  .mg-hover:active, a.mg-card:active, button.mg-card:active, .mg-btn:active:not(:disabled) { transform: none; }
+}

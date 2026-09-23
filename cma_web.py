@@ -1,13 +1,15 @@
 """HTML for the Oblivion CMA pages — /cma (index) and /cma/<group_id> (report).
 
-All new markup lives here so webapp.py only gains thin routes; the main
-dashboard page is untouched. Styling mirrors the SvelteKit dashboard's token
-sheet (ui/src/app.css) — same palette, same light/dark themes keyed off the
-same 'oblivion-theme' localStorage entry — so the two surfaces read as one
-app. @media print flips to an ink-friendly A4 layout and hides everything
-marked internal-only (pitch angle, owner details, nav), so "print to PDF"
-yields a client-ready document; render_report(client=True) bakes the same
-omissions into the HTML itself for the standalone download.
+All new markup lives here so webapp.py only gains thin routes; the panel is
+untouched. The styling is the panel's own "Studio Glass" vocabulary — the
+`.mg-*` classes and `--mg-*` tokens of ui/src/lib/glass.css, inlined — so the
+two surfaces read as one app: always dark, frosted panes over graphite, pill
+buttons, colour for state only. There is no light theme and no data-theme
+plumbing. @media print drops the glass for plain ink on paper and hides
+everything marked internal-only (pitch angle, owner details, nav), so "print
+to PDF" yields a client-ready document; render_report(client=True) bakes the
+same omissions into the HTML itself for the standalone download, which also
+drops the web-font link so the file renders with no network at all.
 """
 
 from __future__ import annotations
@@ -144,7 +146,7 @@ def _chip(text: str, cls: str = "") -> str:
 
 
 def _sparkline(points: list[tuple[datetime, float]], width: int = 300,
-               height: int = 58, color: str = "var(--accent)") -> str:
+               height: int = 58, color: str = "var(--mg-ok)") -> str:
     """Inline SVG price line — no libraries, prints fine, scales to the card.
 
     points: chronological [(datetime, value)]. Fewer than two distinct
@@ -189,282 +191,463 @@ def _sparkline(points: list[tuple[datetime, float]], width: int = 300,
 # ---------------------------------------------------------------- shared CSS
 
 _CSS = """
- /* Token sheet mirrored from ui/src/app.css — keep the two in step. */
- :root, :root[data-theme='light'] {
-   color-scheme: light;
-   --bg:#f5f6f8; --bg-2:#ffffff; --bg-3:#f3f4f6; --bg-4:#e9eaee;
-   --line:#eceef1; --line-2:#dcdfe4; --line-3:#b9bec7;
-   --ink:#111827; --ink-2:#4b5563; --ink-3:#9aa1ac;
-   --accent:#2563eb; --accent-2:#1d4ed8; --accent-soft:#eff4ff;
-   --accent-line:#bfd3fe; --accent-ink:#1e3a8a;
-   --bar:rgba(255,255,255,0.88); --hover:#fafbfc;
-   --red:#dc2626; --red-soft:#fef2f2; --red-line:#fecaca;
-   --hot-ink:#b91c1c; --hot-soft:#fee2e2;
-   --warm-ink:#92400e; --warm-soft:#fef3c7;
-   --cold-ink:#4b5563; --cold-soft:#f3f4f6;
-   --open:#047857; --open-soft:#ecfdf5;
-   --popen:#0f766e; --popen-soft:#f0fdfa;
-   --unk:#6b7280; --psole:#c2410c; --psole-soft:#fff7ed; --sole:#b91c1c;
-   --good:#047857; --bad:#dc2626; --bad-ink:#991b1b; --blue:#0369a1;
-   --warn-bg:#fffbeb; --warn-line:#fde68a; --warn-ink:#92400e;
-   --sig-uo-ink:#075985; --sig-uo-bg:#e0f2fe;
-   --sig-dev-ink:#5b21b6; --sig-dev-bg:#f3e8ff;
-   --r-lg:14px; --r:10px; --r-sm:8px;
-   --shadow-1:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.08);
-   --shadow-2:0 4px 10px rgba(16,24,40,.06),0 12px 32px rgba(16,24,40,.12);
-   --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif;
+/* ———————————————————— Oblivion · Studio Glass (server-rendered) ————————
+   The same vocabulary as the panel's ui/src/lib/media-glass.css: `.mg-*`
+   classes, `--mg-*` tokens. It is inlined here rather than imported so the
+   Flask pages need no build step and the downloadable report still renders
+   with no network at all.
+
+   Always dark. Panes are frosted glass over graphite, colour is state only
+   (green live/open, amber needs-you, red hot/sole, violet AI), buttons are
+   pills, figures are tabular. There is no light theme and no data-theme
+   plumbing — @media print is the only other appearance, and it is plain ink
+   on paper so a saved report prints legibly.
+
+   The older class names this page's markup still uses (.card, .chip, .mv,
+   .tier, .badge …) are declared BESIDE their `.mg-*` twin rather than
+   duplicated, so the two names are one rule — one system, read either way. */
+
+ :root, .mg-scene {
+   /* planes */
+   --mg-bg:#111113;
+   --mg-glass:rgba(18,18,22,.52);
+   --mg-glass-strong:rgba(14,14,18,.74);
+   --mg-glass-soft:rgba(255,255,255,.06);
+   --mg-glass-hover:rgba(255,255,255,.1);
+   --mg-line:rgba(255,255,255,.12);
+   --mg-line2:rgba(255,255,255,.22);
+   /* ink */
+   --mg-i:#f3f3f4; --mg-i2:#a7a7b0; --mg-i3:#6d6d78;
+   /* state — the only colour */
+   --mg-ok:#3ecf8e; --mg-ok-bright:#5fe3a8; --mg-ok-ink:#06281a;
+   --mg-warn:#f0b429; --mg-crit:#f26d64; --mg-mgr:#a78bfa;
+   --mg-scrim:rgba(6,6,8,.6);
+   /* type */
+   --mg-font:'Inter',-apple-system,BlinkMacSystemFont,system-ui,'Segoe UI',Helvetica,sans-serif;
+   --mg-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+   /* shape and depth */
+   --mg-r:22px; --mg-r-card:18px; --mg-r-in:14px; --mg-blur:28px;
+   --mg-sh:0 24px 64px -16px rgba(0,0,0,.65);
+   --mg-sh-2:0 8px 24px -8px rgba(0,0,0,.5);
+   --mg-lit:inset 0 1px 0 rgba(255,255,255,.07);
+   --mg-sat:env(safe-area-inset-top,0px);
+   --mg-sab:env(safe-area-inset-bottom,0px);
+   color-scheme:dark;
  }
- :root[data-theme='dark'] {
-   color-scheme: dark;
-   --bg:#0e1013; --bg-2:#16181d; --bg-3:#1d2026; --bg-4:#262a32;
-   --line:#23262d; --line-2:#2f333c; --line-3:#4a505c;
-   --ink:#e8eaee; --ink-2:#a9b0bc; --ink-3:#6f7686;
-   --accent:#3b82f6; --accent-2:#7aa8fa; --accent-soft:rgba(59,130,246,0.14);
-   --accent-line:rgba(96,165,250,0.42); --accent-ink:#b9cdfa;
-   --bar:rgba(14,16,19,0.86); --hover:#1a1d23;
-   --red:#f87171; --red-soft:rgba(248,113,113,0.12); --red-line:rgba(248,113,113,0.35);
-   --hot-ink:#fca5a5; --hot-soft:rgba(248,113,113,0.14);
-   --warm-ink:#fbbf24; --warm-soft:rgba(251,191,36,0.13);
-   --cold-ink:#aab2bf; --cold-soft:rgba(154,163,176,0.12);
-   --open:#34d399; --open-soft:rgba(52,211,153,0.12);
-   --popen:#2dd4bf; --popen-soft:rgba(45,212,191,0.12);
-   --unk:#9aa3b0; --psole:#fb923c; --psole-soft:rgba(251,146,60,0.12); --sole:#f87171;
-   --good:#34d399; --bad:#f87171; --bad-ink:#fca5a5; --blue:#38bdf8;
-   --warn-bg:rgba(251,191,36,0.08); --warn-line:rgba(251,191,36,0.28); --warn-ink:#fbd26a;
-   --sig-uo-ink:#7dd3fc; --sig-uo-bg:rgba(14,165,233,0.15);
-   --sig-dev-ink:#c4b5fd; --sig-dev-bg:rgba(139,92,246,0.16);
-   --shadow-1:0 1px 2px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.3);
-   --shadow-2:0 4px 10px rgba(0,0,0,.35),0 12px 32px rgba(0,0,0,.5);
+ * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+ html { background:var(--mg-bg); }
+ body {
+   margin:0; min-height:100vh; min-height:100svh; position:relative;
+   font:400 14px/1.55 var(--mg-font); color:var(--mg-i);
+   background:var(--mg-bg);
+   background-image:radial-gradient(120% 90% at 50% 0%,#1b1b21 0%,#111113 45%,#0a0a0c 100%);
+   background-attachment:fixed;
+   -webkit-font-smoothing:antialiased; overflow-x:clip;
  }
- * { box-sizing:border-box; }
- body { font:400 14px/1.55 var(--font-ui); margin:0;
-        background:var(--bg); color:var(--ink);
-        -webkit-font-smoothing:antialiased; }
- header.bar { position:sticky; top:0; z-index:30; display:flex; align-items:center;
-        gap:1.6rem; height:60px; padding:0 clamp(1rem,3vw,2rem);
-        background:var(--bar); backdrop-filter:blur(10px);
-        border-bottom:1px solid var(--line); }
- header.bar .logo { display:flex; align-items:baseline; gap:.55rem;
-        white-space:nowrap; color:inherit; }
- header.bar .logo:hover { text-decoration:none; }
- header.bar .mark { width:10px; height:10px; border-radius:3px;
-        background:var(--accent); align-self:center; }
- header.bar h1 { font-size:1.02rem; font-weight:800; letter-spacing:-.01em;
-        margin:0; color:var(--ink); }
- header.bar .sub { color:var(--ink-3); font-size:.72rem; font-weight:500; }
- header.bar nav { display:flex; gap:.25rem; flex:1; }
- header.bar nav a { color:var(--ink-2); font-size:.86rem; font-weight:500;
-        padding:.4rem .85rem; border-radius:var(--r-sm); }
- header.bar nav a:hover { color:var(--ink); background:var(--bg-3); text-decoration:none; }
- header.bar nav a.on { color:var(--accent-2); background:var(--accent-soft); font-weight:600; }
- .themebtn { width:32px; height:32px; border-radius:var(--r-sm);
-        border:1px solid var(--line-2); background:var(--bg-2); color:var(--ink-2);
-        font-size:.95rem; line-height:1; padding:0; }
- .themebtn:hover { color:var(--ink); border-color:var(--line-3); }
- nav.crumbs { padding:.6rem clamp(1rem,3vw,2rem); font-size:.78rem; color:var(--ink-3);
-        border-bottom:1px solid var(--line); display:flex; align-items:center; gap:.35rem; }
- nav.crumbs .grow { flex:1; }
- main { padding:1.2rem clamp(1rem,3vw,2rem) 4rem; max-width:1180px; margin:0 auto; }
- a { color:var(--accent); text-decoration:none; }
- a:hover { color:var(--accent-2); text-decoration:underline; }
- h2 { font-weight:700; letter-spacing:.03em; font-size:.82rem; text-transform:uppercase;
-      color:var(--ink-2); margin:2rem 0 .7rem; border-bottom:1px solid var(--line-2);
-      padding-bottom:.35rem; }
- table { border-collapse:collapse; width:100%; }
- th,td { text-align:left; padding:.5rem .6rem; border-bottom:1px solid var(--line);
-         vertical-align:top; font-size:.82rem; }
- th { color:var(--ink-3); font-size:.63rem; text-transform:uppercase; letter-spacing:.1em; }
- tr:hover td { background:var(--hover); }
- tr:first-child:hover th { background:none; }
- .tier { display:inline-flex; align-items:center; font-weight:700; font-size:.66rem;
-        letter-spacing:.02em; text-transform:uppercase; padding:.14rem .55rem;
-        border-radius:6px; }
- .tier.hot{color:var(--hot-ink);background:var(--hot-soft)}
- .tier.warm{color:var(--warm-ink);background:var(--warm-soft)}
- .tier.cold{color:var(--cold-ink);background:var(--cold-soft)}
- .price { white-space:nowrap; font-weight:700; letter-spacing:-.01em;
-        font-variant-numeric:tabular-nums; color:var(--ink); }
- .meta { color:var(--ink-3); font-size:.7rem; margin-top:.15rem; }
- .badge { color:var(--good); background:var(--open-soft); padding:2px 8px;
-        border-radius:999px; font-size:.66rem; font-weight:600; white-space:nowrap; }
- .badge.gray { color:var(--ink-2); background:var(--bg-3); }
- .badge.blue { color:var(--sig-uo-ink); background:var(--sig-uo-bg); }
- .disclaimer { color:var(--warn-ink); font-size:.72rem; border:1px solid var(--warn-line);
-        background:var(--warn-bg); border-radius:var(--r); padding:.55rem .8rem;
-        margin:.8rem 0; line-height:1.5; }
- .stats { display:flex; gap:1.4rem; flex-wrap:wrap; margin:.6rem 0 .4rem; }
- .stat b { display:block; font-size:1.15rem; font-weight:700; color:var(--ink); }
- .stat span { font-size:.62rem; color:var(--ink-3); text-transform:uppercase;
-        letter-spacing:.1em; }
- .internal { border:1px dashed var(--red-line); border-radius:var(--r);
-        padding:.9rem 1.1rem; margin-top:1.6rem; background:var(--red-soft); }
- .internal .tag { color:var(--bad-ink); font-size:.64rem; font-weight:600;
-        text-transform:uppercase; letter-spacing:.12em; margin-bottom:.5rem; display:block; }
- input, select, textarea { background:var(--bg-2); color:var(--ink);
-        border:1px solid var(--line-2); border-radius:var(--r-sm);
-        padding:.45rem .65rem; font:400 .82rem/1.3 var(--font-ui); width:100%;
-        outline:none; }
- input:focus, select:focus, textarea:focus { border-color:var(--accent); }
- select { width:auto; }
- button { background:var(--bg-2); color:var(--ink-2); border:1px solid var(--line-2);
-        border-radius:var(--r-sm); padding:.45rem .9rem;
-        font:600 .8rem/1.3 var(--font-ui); cursor:pointer;
-        transition:color .15s,border-color .15s,background .15s; }
- button:hover { color:var(--accent); border-color:var(--accent-line);
-        background:var(--accent-soft); }
- button:disabled { opacity:.5; cursor:default; }
- button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
- button.primary:hover { background:var(--accent-2); border-color:var(--accent-2); color:#fff; }
- button.danger { color:var(--bad); }
- button.danger:hover { background:var(--red-soft); border-color:var(--red-line);
-        color:var(--bad); }
- select option:disabled { color:var(--ink-3); }
- a.btnlink { display:inline-flex; align-items:center; gap:.3rem;
-        background:var(--bg-2); color:var(--ink-2); border:1px solid var(--line-2);
-        border-radius:var(--r-sm); padding:.45rem .9rem;
-        font:600 .8rem/1.3 var(--font-ui); }
- a.btnlink:hover { color:var(--accent); border-color:var(--accent-line);
-        background:var(--accent-soft); text-decoration:none; }
- /* ---- report cards, chips, meters ---- */
- .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr));
-        gap:.85rem; margin:.55rem 0 .2rem; align-items:start; }
- .cards.wide { grid-template-columns:repeat(auto-fit,minmax(400px,1fr)); }
- .card { background:var(--bg-2); border:1px solid var(--line); border-radius:var(--r-lg);
-        padding:.85rem 1rem; box-shadow:var(--shadow-1); }
- .card h3 { margin:0 0 .6rem; font-size:.64rem; letter-spacing:.12em; font-weight:600;
-        text-transform:uppercase; color:var(--ink-3); }
- .chips { display:flex; gap:.35rem; flex-wrap:wrap; align-items:center; }
- .chip { font:500 .68rem/1.3 var(--font-ui); background:var(--bg-2);
-        border:1px solid var(--line-2); color:var(--ink-2);
-        padding:2px 9px; border-radius:999px; white-space:nowrap; display:inline-block; }
- .chip b { color:var(--ink); font-weight:700; }
- .chip.gold  { border-color:var(--accent-line); color:var(--accent-2); background:var(--accent-soft); }
- .chip.red   { border-color:var(--red-line); color:var(--hot-ink); background:var(--hot-soft); }
- .chip.amber { border-color:var(--warn-line); color:var(--warm-ink); background:var(--warm-soft); }
- .chip.green { border-color:transparent; color:var(--good); background:var(--open-soft); }
- .chip.violet{ border-color:transparent; color:var(--sig-dev-ink); background:var(--sig-dev-bg); }
- .mv { display:inline-flex; align-items:center; gap:.35rem; font:600 .7rem/1.3 var(--font-ui);
-        white-space:nowrap; text-transform:capitalize; padding:.16rem .6rem;
-        border-radius:999px; color:var(--mvc,var(--unk)); background:var(--mvbg,var(--cold-soft)); }
- .mv::before { content:''; width:6px; height:6px; border-radius:50%;
-        background:var(--mvc,var(--unk)); flex:none; }
- .mv.open          { --mvc:var(--open);  --mvbg:var(--open-soft); }
- .mv.probably_open { --mvc:var(--popen); --mvbg:var(--popen-soft); }
- .mv.unknown       { --mvc:var(--unk);   --mvbg:var(--cold-soft); }
- .mv.probably_sole { --mvc:var(--psole); --mvbg:var(--psole-soft); }
- .mv.sole          { --mvc:var(--sole);  --mvbg:var(--red-soft); }
- .kv { display:grid; grid-template-columns:auto 1fr; gap:.3rem .9rem; font-size:.78rem;
-        margin:0; }
- .kv dt { color:var(--ink-3); font-size:.62rem; text-transform:uppercase; letter-spacing:.08em;
-        white-space:nowrap; padding-top:.12rem; }
- .kv dd { margin:0; }
- .bignum { font-size:2.7rem; font-weight:700; color:var(--ink); line-height:.95;
-        letter-spacing:-.02em; }
- .sub { font-size:.72rem; color:var(--ink-2); }
- .meter { height:5px; background:var(--bg-3); border-radius:3px; overflow:hidden; margin-top:4px; }
- .meter i { display:block; height:100%; background:var(--accent); border-radius:3px; }
- .wrapx { overflow-x:auto; margin-top:.3rem; }
- .wrapx table { min-width:900px; }
- /* eleven columns of portal detail have to fit the page, not scroll off it */
- table.portaltbl { min-width:1080px; }
- table.portaltbl th, table.portaltbl td { padding:.45rem .35rem; font-size:.76rem; }
- table.portaltbl th { font-size:.57rem; letter-spacing:.08em; }
- table.portaltbl .meta { font-size:.63rem; }
+ a { color:inherit; text-decoration:none; }
+ a:hover { color:var(--mg-i); }
+ main a:not(.mg-btn):not(.mg-chip):not(.chip):not(.mg-card) { color:var(--mg-i);
+   border-bottom:1px solid var(--mg-line2); }
+ main a:not(.mg-btn):not(.mg-chip):not(.chip):not(.mg-card):hover { border-bottom-color:var(--mg-ok); }
+ :focus-visible { outline:2px solid rgba(62,207,142,.75); outline-offset:2px; }
+ ::-webkit-scrollbar { width:8px; height:8px; }
+ ::-webkit-scrollbar-track { background:transparent; }
+ ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.14); border-radius:9999px; }
+ ::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.24); }
+ * { scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.16) transparent; }
+
+ /* ——————————————————————————————————————————————————— the backdrop ——— */
+ /* One scene: the hour-picked photograph, dimmed, under two scrims. Only the
+    index wears it — a report is a document and keeps to plain graphite. */
+ .mg-bd { position:fixed; inset:0; z-index:-1; overflow:hidden; background:var(--mg-bg); }
+ .mg-bd > i { position:absolute; inset:0; display:block; background-size:cover;
+   background-position:center; animation:mg-drift 90s ease-out forwards; }
+ .mg-bd > .dim { position:absolute; inset:0; background:rgba(6,6,8,.2); animation:none; }
+ .mg-bd > .top { position:absolute; left:0; right:0; top:0; height:32%;
+   background:linear-gradient(to bottom,rgba(0,0,0,.55),transparent); animation:none; }
+ .mg-bd > .bot { position:absolute; left:0; right:0; bottom:0; height:42%;
+   background:linear-gradient(to top,rgba(0,0,0,.7),transparent); animation:none; }
+
+ /* ————————————————————————————————————————————————————— the chrome ——— */
+ /* A slim row inside the scene, not a bar across it: wordmark, one pill back
+    to the panel, then what this page is. No nav, no theme toggle. */
+ .topbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+   padding:calc(16px + var(--mg-sat)) clamp(16px,2.4vw,28px) 10px;
+   max-width:1400px; margin:0 auto; }
+ .topbar .wordmark { display:inline-flex; align-items:center; gap:8px;
+   font:700 15px/1 var(--mg-font); letter-spacing:-.02em; color:var(--mg-i); }
+ .topbar .wordmark i { width:9px; height:9px; border-radius:3px;
+   background:var(--mg-ok); display:block; flex:none; }
+ .topbar .ttl { font:400 13px/1 var(--mg-font); color:var(--mg-i3);
+   margin-left:auto; text-align:right; }
+
+ /* ————————————————————————————————————————————————————— structures ——— */
+ main, .mg-wrap { max-width:1400px; margin:0 auto; padding:0 clamp(16px,2.4vw,28px) 64px; }
+ .mg-page { padding:clamp(16px,2.2vw,26px) clamp(16px,2.4vw,28px) 28px; }
+ .pane { display:block; margin:0 0 14px; }
+ .pane > .mg-page > h2:first-child,
+ .pane > .mg-page > .mg-h2:first-child { margin-top:0; }
+
+ /* .mg-glass — the pane. .mg-glass-strong — anything sitting ON a pane. */
+ .mg-glass {
+   background:var(--mg-glass); border:1px solid var(--mg-line);
+   border-radius:var(--mg-r); box-shadow:var(--mg-sh),var(--mg-lit);
+   -webkit-backdrop-filter:blur(var(--mg-blur)) saturate(150%);
+   backdrop-filter:blur(var(--mg-blur)) saturate(150%);
+ }
+ .mg-glass-strong {
+   background:var(--mg-glass-strong); border:1px solid var(--mg-line);
+   border-radius:var(--mg-r); box-shadow:var(--mg-sh),var(--mg-lit);
+   -webkit-backdrop-filter:blur(var(--mg-blur)) saturate(150%);
+   backdrop-filter:blur(var(--mg-blur)) saturate(150%);
+ }
+ .mg-glass-soft { background:var(--mg-glass-soft); border:1px solid var(--mg-line); }
+ .mg-pill { border-radius:9999px; }
+
+ /* .mg-row — header row: title left, actions right. .mg-controls — the one
+    control row under it: search · select. */
+ .mg-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+ .mg-row > .mg-actions { margin-left:auto; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+ .mg-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+ .mg-controls > .mg-search { flex:1 1 200px; max-width:20rem; }
+ .mg-chips, .chips { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+ .mg-grid, .cards { display:grid; gap:12px;
+   grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); align-items:start; }
+ .mg-grid.c2, .cards.wide { grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); }
+
+ /* ———————————————————————————————————————————————————————— buttons ——— */
+ .mg-btn, button, a.btnlink {
+   display:inline-flex; align-items:center; justify-content:center; gap:8px; flex:none;
+   height:40px; padding:0 18px; border:1px solid transparent; border-radius:9999px;
+   background:none; color:var(--mg-i); font:500 13.5px/1 var(--mg-font);
+   letter-spacing:-.01em; white-space:nowrap; cursor:pointer; user-select:none;
+   transition:background .18s,border-color .18s,color .18s,transform .12s;
+ }
+ button, a.btnlink, .mg-btn.secondary {
+   background:var(--mg-glass-soft); border-color:var(--mg-line); color:var(--mg-i);
+ }
+ button:hover, a.btnlink:hover, .mg-btn.secondary:hover {
+   background:var(--mg-glass-hover); border-color:var(--mg-line2); color:var(--mg-i);
+ }
+ .mg-btn:active:not(:disabled), button:active:not(:disabled) { transform:scale(.97); }
+ .mg-btn:disabled, button:disabled, .mg-btn[aria-disabled='true'] { opacity:.4; pointer-events:none; }
+ .mg-btn.primary, button.primary { background:var(--mg-i); color:#111113;
+   border-color:transparent; font-weight:600; }
+ .mg-btn.primary:hover, button.primary:hover { background:#fff; color:#111113; }
+ .mg-btn.accent { background:var(--mg-ok); color:var(--mg-ok-ink);
+   border-color:transparent; font-weight:600; }
+ .mg-btn.accent:hover { background:var(--mg-ok-bright); }
+ .mg-btn.ghost { background:none; border-color:transparent; color:var(--mg-i2); }
+ .mg-btn.ghost:hover { background:rgba(255,255,255,.08); color:var(--mg-i); }
+ .mg-btn.danger, button.danger { background:rgba(242,109,100,.15);
+   border-color:rgba(242,109,100,.3); color:var(--mg-crit); }
+ .mg-btn.danger:hover, button.danger:hover { background:rgba(242,109,100,.22);
+   border-color:rgba(242,109,100,.42); color:var(--mg-crit); }
+ .mg-btn.sm, button.sm { height:32px; padding:0 14px; font-size:12.5px; gap:6px; }
+ .mg-btn.lg { height:48px; padding:0 24px; font-size:15px; gap:10px; }
+
+ /* ————————————————————————————————————————————————————————— inputs ——— */
+ .mg-input, input, select, textarea {
+   width:100%; height:40px; padding:0 14px;
+   background:var(--mg-glass-soft); border:1px solid var(--mg-line);
+   border-radius:var(--mg-r-in); color:var(--mg-i);
+   font:400 14px/1 var(--mg-font); outline:none;
+   transition:border-color .18s,box-shadow .18s,background .18s;
+ }
+ .mg-input::placeholder, input::placeholder, textarea::placeholder { color:var(--mg-i3); }
+ .mg-input:hover, input:hover, select:hover, textarea:hover { border-color:var(--mg-line2); }
+ .mg-input:focus, input:focus, select:focus, textarea:focus {
+   border-color:rgba(62,207,142,.6); box-shadow:0 0 0 1px rgba(62,207,142,.4);
+ }
+ textarea, textarea.mg-input { height:auto; min-height:84px; padding:10px 14px;
+   line-height:1.55; resize:vertical; }
+ select { -webkit-appearance:none; appearance:none; width:auto; padding-right:34px;
+   cursor:pointer; font-size:13.5px; }
+ select option { background:#18181b; color:var(--mg-i); }
+ select option:disabled { color:var(--mg-i3); }
+ .mg-select { position:relative; display:inline-block; min-width:0; }
+ .mg-select > .ic { position:absolute; right:12px; top:50%; transform:translateY(-50%);
+   color:var(--mg-i3); pointer-events:none; font-size:10px; }
+ .mg-search { position:relative; display:block; min-width:0; }
+ .mg-search > input { border-radius:9999px; padding-left:38px; }
+ .mg-search > .ic { position:absolute; left:14px; top:50%; transform:translateY(-50%);
+   color:var(--mg-i3); pointer-events:none; font-size:13px; }
+
+ /* ———————————————————————————————————————————— chips, cards, labels ——— */
+ .mg-chip, .chip {
+   display:inline-flex; align-items:center; gap:6px; flex:none;
+   padding:6px 12px; border-radius:9999px;
+   background:var(--mg-glass-soft); border:1px solid var(--mg-line);
+   color:var(--mg-i2); font:500 12px/1 var(--mg-font); white-space:nowrap;
+   cursor:default; transition:background .18s,border-color .18s,color .18s;
+ }
+ .chip b, .mg-chip b { color:var(--mg-i); font-weight:600; }
+ button.mg-chip, a.mg-chip, a.chip { cursor:pointer; }
+ a.chip:hover, button.mg-chip:hover, a.mg-chip:hover {
+   background:var(--mg-glass-hover); border-color:var(--mg-line2); color:var(--mg-i); }
+ .mg-chip.on, .chip.gold { background:rgba(62,207,142,.12);
+   border-color:rgba(62,207,142,.4); color:var(--mg-ok); }
+ .mg-chip.ok, .chip.green { background:rgba(62,207,142,.12);
+   border-color:rgba(62,207,142,.25); color:var(--mg-ok); }
+ .mg-chip.warn, .chip.amber { background:rgba(240,180,41,.14);
+   border-color:rgba(240,180,41,.3); color:var(--mg-warn); }
+ .mg-chip.crit, .chip.red { background:rgba(242,109,100,.14);
+   border-color:rgba(242,109,100,.3); color:var(--mg-crit); }
+ .mg-chip.mgr, .chip.violet { background:rgba(167,139,250,.14);
+   border-color:rgba(167,139,250,.3); color:var(--mg-mgr); }
+ .mg-chip.on b, .mg-chip.ok b, .mg-chip.warn b, .mg-chip.crit b, .mg-chip.mgr b,
+ .chip.gold b, .chip.green b, .chip.amber b, .chip.red b, .chip.violet b { color:inherit; }
+ .mg-chip .dot { width:6px; height:6px; border-radius:50%; background:currentColor; flex:none; }
+
+ .mg-card, .card {
+   display:block; background:var(--mg-glass-soft); border:1px solid var(--mg-line);
+   border-radius:var(--mg-r-card); padding:16px; color:inherit;
+   transition:background .18s,border-color .18s,transform .24s cubic-bezier(.2,.8,.2,1);
+ }
+ a.mg-card:hover, button.mg-card:hover { background:var(--mg-glass-hover); border-color:var(--mg-line2); }
+ .card h3, .mg-card h3 { margin:0 0 10px; font:500 11px/1.4 var(--mg-font);
+   letter-spacing:.01em; text-transform:none; color:var(--mg-i3); }
+
+ .mg-label { display:block; font:500 11px/1.4 var(--mg-font);
+   letter-spacing:.01em; color:var(--mg-i3); }
+ .mg-h2, h2 { margin:0 0 12px; font:600 20px/1.2 var(--mg-font);
+   letter-spacing:-.01em; color:var(--mg-i); border:0; padding:0; text-transform:none; }
+ h1 { font:600 24px/1.2 var(--mg-font); letter-spacing:-.02em; margin:0 0 4px; color:var(--mg-i); }
+ .mg-count { font:400 13px/1 var(--mg-font); color:var(--mg-i3); font-variant-numeric:tabular-nums; }
+ .mg-tnum, .price, .bignum { font-variant-numeric:tabular-nums; }
+ .meta, .sub { color:var(--mg-i3); font-size:12px; line-height:1.5; }
+ .meta { margin-top:2px; }
+ .price { white-space:nowrap; font-weight:600; letter-spacing:-.01em; color:var(--mg-i); }
+ .bignum { font:600 32px/1 var(--mg-font); letter-spacing:-.02em; color:var(--mg-i); }
  .nowrap { white-space:nowrap; }
- details.desc { border:1px solid var(--line); border-radius:var(--r-lg);
-        background:var(--bg-2); padding:.55rem .95rem; margin-top:.75rem;
-        box-shadow:var(--shadow-1); }
- details.desc summary { cursor:pointer; color:var(--accent); font-size:.76rem;
-        font-weight:600; }
- details.desc .body { white-space:pre-wrap; font-size:.83rem; line-height:1.65;
-        color:var(--ink-2); margin-top:.75rem; }
- .thumbs { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
+
+ /* ————————————————————————————————————————————————————— state tones ——— */
+ /* Every tone sits next to a word; never colour alone. */
+ .tier { display:inline-flex; align-items:center; font:600 11px/1 var(--mg-font);
+   letter-spacing:.01em; padding:5px 10px; border-radius:9999px;
+   background:var(--mg-glass-soft); border:1px solid var(--mg-line); color:var(--mg-i2); }
+ .tier.hot { color:var(--mg-crit); background:rgba(242,109,100,.14); border-color:rgba(242,109,100,.3); }
+ .tier.warm { color:var(--mg-warn); background:rgba(240,180,41,.14); border-color:rgba(240,180,41,.3); }
+ .tier.cold { color:var(--mg-i2); }
+ .mv { display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+   text-transform:capitalize; padding:6px 12px; border-radius:9999px;
+   font:500 12px/1 var(--mg-font);
+   color:var(--mvc,var(--mg-i2)); background:var(--mvbg,var(--mg-glass-soft));
+   border:1px solid var(--mvl,var(--mg-line)); }
+ .mv::before { content:''; width:6px; height:6px; border-radius:50%;
+   background:currentColor; flex:none; }
+ .mv.open, .mv.probably_open { --mvc:var(--mg-ok); --mvbg:rgba(62,207,142,.12);
+   --mvl:rgba(62,207,142,.3); }
+ .mv.unknown { --mvc:var(--mg-i2); }
+ .mv.probably_sole { --mvc:var(--mg-warn); --mvbg:rgba(240,180,41,.14); --mvl:rgba(240,180,41,.3); }
+ .mv.sole { --mvc:var(--mg-crit); --mvbg:rgba(242,109,100,.14); --mvl:rgba(242,109,100,.3); }
+ .badge { display:inline-flex; align-items:center; padding:4px 10px; border-radius:9999px;
+   font:500 11.5px/1 var(--mg-font); white-space:nowrap;
+   color:var(--mg-ok); background:rgba(62,207,142,.12); border:1px solid rgba(62,207,142,.25); }
+ .badge.gray { color:var(--mg-i2); background:var(--mg-glass-soft); border-color:var(--mg-line); }
+ .badge.blue { color:var(--mg-warn); background:rgba(240,180,41,.14); border-color:rgba(240,180,41,.3); }
+ .delta.up { color:var(--mg-crit); } .delta.down { color:var(--mg-ok); }
+ .proof { font-size:12px; color:var(--mg-ok); margin-top:6px; }
+ .proof.stale { color:var(--mg-warn); }
+ .note { color:var(--mg-warn); font-size:12.5px; font-weight:500; line-height:1.5; }
+ .flagline { color:var(--mg-crit); font-size:12.5px; line-height:1.5; }
+
+ /* .mg-strip / .disclaimer — a slim notice inside a pane, never a boxed alert. */
+ .mg-strip, .disclaimer {
+   display:block; padding:10px 14px; margin:0 0 14px; border-radius:var(--mg-r-in);
+   background:var(--mg-glass-soft); border:1px solid var(--mg-line);
+   font:400 12.5px/1.5 var(--mg-font); color:var(--mg-i2);
+ }
+ .mg-strip.warn, .disclaimer { background:rgba(240,180,41,.1);
+   border-color:rgba(240,180,41,.28); color:var(--mg-warn); }
+ .mg-strip.crit { background:rgba(242,109,100,.1); border-color:rgba(242,109,100,.28);
+   color:var(--mg-crit); }
+
+ /* .internal — an internal-only block: red-tinted, and it never prints. */
+ .internal { border:1px solid rgba(242,109,100,.3); border-radius:var(--mg-r-card);
+   padding:16px 18px; margin-top:16px; background:rgba(242,109,100,.07); }
+ .internal .tag { display:block; margin-bottom:10px; color:var(--mg-crit);
+   font:500 11px/1.4 var(--mg-font); letter-spacing:.01em; }
+
+ /* ————————————————————————————————————————————————————————— tables ——— */
+ .mg-table, table { border-collapse:collapse; width:100%; }
+ th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--mg-line);
+   vertical-align:top; font-size:13px; }
+ th { font:500 11px/1.4 var(--mg-font); letter-spacing:.01em; color:var(--mg-i3);
+   text-transform:none; white-space:nowrap; }
+ tr:hover td { background:var(--mg-glass-soft); }
+ tr:first-child:hover th { background:none; }
+ .wrapx { overflow-x:auto; margin-top:4px; }
+ .wrapx table { min-width:900px; }
+ table.portaltbl { min-width:1080px; }
+ table.portaltbl th, table.portaltbl td { padding:8px 7px; font-size:12.5px; }
+ table.portaltbl .meta { font-size:11px; }
+
+ .kv, .mg-kv { display:grid; grid-template-columns:auto minmax(0,1fr);
+   gap:7px 14px; margin:0; font-size:13px; align-items:baseline; }
+ .kv dt, .mg-kv dt { font:400 12.5px/1.4 var(--mg-font); color:var(--mg-i3); white-space:nowrap; }
+ .kv dd, .mg-kv dd { margin:0; font:400 13px/1.45 var(--mg-font);
+   color:var(--mg-i); overflow-wrap:anywhere; }
+
+ .stats { display:flex; gap:10px; flex-wrap:wrap; margin:4px 0; }
+ .stat { background:var(--mg-glass-soft); border:1px solid var(--mg-line);
+   border-radius:9999px; padding:8px 16px; }
+ .stat b { display:block; font:600 17px/1.2 var(--mg-font); color:var(--mg-i);
+   font-variant-numeric:tabular-nums; }
+ .stat span { font:500 11px/1.4 var(--mg-font); color:var(--mg-i3);
+   text-transform:none; letter-spacing:.01em; }
+
+ /* .mg-bar / .meter — a progress bar. */
+ .mg-bar, .meter { height:6px; border-radius:9999px;
+   background:rgba(255,255,255,.08); overflow:hidden; margin-top:5px; }
+ .mg-bar > i, .meter i { display:block; height:100%; border-radius:9999px;
+   background:var(--mg-ok); }
+
+ .ev { margin:6px 0 0; padding-left:18px; }
+ .ev li { font-size:12.5px; color:var(--mg-i2); line-height:1.55; }
+
+ details.desc { border:1px solid var(--mg-line); border-radius:var(--mg-r-card);
+   background:var(--mg-glass-soft); padding:12px 16px; margin-top:12px; }
+ details.desc summary { cursor:pointer; color:var(--mg-i); font:500 13px/1.4 var(--mg-font); }
+ details.desc .body { white-space:pre-wrap; font-size:13.5px; line-height:1.65;
+   color:var(--mg-i2); margin-top:12px; }
+
+ .thumbs { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
  .thumbs figure { margin:0; }
- .thumbs img { width:104px; height:76px; object-fit:cover; border-radius:var(--r-sm);
-        border:1px solid var(--line-2); background:var(--bg-3); display:block; }
- .thumbs figcaption { font-size:.58rem; color:var(--ink-3); margin-top:.15rem;
-        text-align:center; letter-spacing:.06em; }
- .proof { font-size:.72rem; color:var(--good); margin-top:.3rem; }
- .proof.stale { color:var(--warm-ink); }
- .ev { margin:.35rem 0 0; padding-left:1.05rem; }
- .ev li { font-size:.7rem; color:var(--ink-2); line-height:1.55; }
- .flagline { color:var(--bad-ink); font-size:.75rem; line-height:1.5; }
- .note { color:var(--psole); font-size:.75rem; font-weight:500; line-height:1.5; }
- .hero { display:flex; gap:1.4rem; flex-wrap:wrap; align-items:flex-start; }
+ .thumbs img { width:110px; height:78px; object-fit:cover; border-radius:var(--mg-r-in);
+   border:1px solid var(--mg-line); background:rgba(255,255,255,.04); display:block; }
+ .thumbs figcaption { font:500 11px/1.4 var(--mg-font); color:var(--mg-i3);
+   margin-top:4px; text-align:center; }
+
+ .hero { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
  .hero img.shot { width:340px; max-width:100%; height:238px; object-fit:cover;
-        border-radius:var(--r-lg); border:1px solid var(--line); background:var(--bg-3); }
- .delta.up { color:var(--bad); } .delta.down { color:var(--good); }
+   border-radius:var(--mg-r-card); border:1px solid var(--mg-line);
+   background:rgba(255,255,255,.04); }
+
+ /* .mg-empty — the centred nothing-here state: what would be here, and what
+    to do about it. */
+ .mg-empty { display:grid; place-items:center; text-align:center; padding:56px 24px; }
+ .mg-empty > h3 { margin:0; font:500 14px/1.3 var(--mg-font); color:var(--mg-i); }
+ .mg-empty > p { margin:5px 0 0; max-width:42ch; font:400 12.5px/1.6 var(--mg-font); color:var(--mg-i3); }
+
+ /* ——————————————————————————————————————————————————————————— motion ——— */
+ .mg-fadeup { animation:mg-fadeup .32s cubic-bezier(.2,.8,.2,1) both; }
+ @keyframes mg-fadeup { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+ @keyframes mg-drift { from { transform:scale(1); } to { transform:scale(1.06); } }
+ @media (prefers-reduced-motion:reduce) {
+   *, *::before, *::after { animation-duration:.001ms !important;
+     animation-iteration-count:1 !important; transition-duration:.06s !important; }
+   .mg-fadeup { animation:none; opacity:1; transform:none; }
+   .mg-btn:active, button:active { transform:none; }
+ }
+
+ @media (max-width:640px) {
+   .topbar .ttl { margin-left:0; width:100%; text-align:left; }
+   .hero img.shot { width:100%; height:200px; }
+ }
+
+ /* —————————————————————————————————————————————————————————— print ——— */
+ /* Ink on paper: the glass, the photograph and the colour all drop away so a
+    saved report is a legible A4 document. */
  @media print {
-   /* force the light palette whatever theme is active on screen */
-   :root, :root[data-theme='dark'] {
+   :root, .mg-scene {
      color-scheme:light;
-     --bg:#fff; --bg-2:#fff; --bg-3:#f3f4f6; --bg-4:#e9eaee;
-     --line:#ddd; --line-2:#ccc; --line-3:#b9bec7;
-     --ink:#111; --ink-2:#444; --ink-3:#555;
-     --accent:#111; --accent-2:#111; --accent-soft:#f5f5f5;
-     --accent-line:#ccc; --accent-ink:#111;
-     --warn-bg:#f5f2ea; --warn-line:#bbb; --warn-ink:#444;
-     --shadow-1:none; --shadow-2:none;
+     --mg-bg:#fff; --mg-glass:#fff; --mg-glass-strong:#fff;
+     --mg-glass-soft:#fff; --mg-glass-hover:#fff;
+     --mg-line:#ddd; --mg-line2:#bbb;
+     --mg-i:#111; --mg-i2:#444; --mg-i3:#666;
+     --mg-ok:#111; --mg-warn:#444; --mg-crit:#111; --mg-mgr:#444;
+     --mg-sh:none; --mg-sh-2:none; --mg-lit:none; --mg-blur:0px;
+     --mg-r:6px; --mg-r-card:6px; --mg-r-in:4px;
    }
-   body { font-size:11pt; }
-   header.bar { position:static; height:auto; padding:.4cm 0 .2cm; }
-   nav.crumbs, .internal, .noprint, .themebtn { display:none !important; }
-   a { color:#111; text-decoration:none; }
-   .card, details.desc { break-inside:avoid; }
-   .wrapx table { min-width:0; }
-   .tier, .mv, .chip, .badge { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-   main { max-width:none; padding:0 .2cm; }
-   @page { size: A4; margin: 1.4cm; }
+   body { background:#fff !important; background-image:none !important;
+     color:#111; font-size:10.5pt; }
+   .mg-bd, .noprint, .internal, .topbar .mg-btn, .thumbs { display:none !important; }
+   .mg-glass, .mg-glass-strong, .pane { background:#fff !important; border:0 !important;
+     box-shadow:none !important; -webkit-backdrop-filter:none !important;
+     backdrop-filter:none !important; border-radius:0 !important; }
+   .pane { border-top:1px solid #ddd !important; margin:0; }
+   .pane:first-of-type { border-top:0 !important; }
+   .mg-page { padding:.3cm 0 .2cm !important; }
+   main, .mg-wrap { max-width:none; padding:0; }
+   .topbar { padding:0 0 .2cm; }
+   h2, .mg-h2 { font-size:12pt; }
+   a { color:#111; text-decoration:none; border-bottom:0 !important; }
+   .card, .mg-card, details.desc, .pane { break-inside:avoid; }
+   .card, .mg-card { border:1px solid #ddd; background:#fff; }
+   .chip, .mg-chip, .tier, .mv, .badge, .stat { border:1px solid #bbb !important;
+     background:#fff !important; color:#111 !important; }
+   .disclaimer, .mg-strip { border:1px solid #bbb !important; background:#fff !important;
+     color:#333 !important; }
+   .wrapx table, table.portaltbl { min-width:0; }
+   @page { size:A4; margin:1.4cm; }
  }
 """
 
-_HEADER = """<header class="bar">
- <a class="logo" href="/"><span class="mark"></span><h1>Oblivion</h1>
-  <span class="sub">CMA reports</span></a>
- <nav><a href="/">Prospects</a><a href="/map">Map</a>
-  <a class="on" href="/cma">CMA reports</a></nav>
- <button class="themebtn" id="themebtn" onclick="obTheme()"
-  title="toggle light / dark">◐</button>
-</header>"""
 
-# Standalone-download variant: branding only — no app nav, no theme toggle.
-_HEADER_CLIENT = """<header class="bar">
- <span class="logo"><span class="mark"></span><h1>Oblivion</h1>
-  <span class="sub">Comparative market analysis</span></span>
-</header>"""
+def _topbar(subtitle: str, *, back: bool = True) -> str:
+    """The chrome: a slim row inside the scene, not a bar across it.
 
-# Runs before first paint so the page can't flash the wrong theme. Same
-# localStorage key the SvelteKit app uses, so the choice follows the user.
-_THEME_JS = """
-document.documentElement.dataset.theme =
-  localStorage.getItem('oblivion-theme') || 'dark';
-function obTheme(){
-  var d = document.documentElement;
-  var t = d.dataset.theme === 'dark' ? 'light' : 'dark';
-  d.dataset.theme = t;
-  localStorage.setItem('oblivion-theme', t);
-  obGlyph();
-}
-function obGlyph(){
-  var b = document.getElementById('themebtn');
-  if (b) b.textContent = document.documentElement.dataset.theme === 'dark' ? '\\u2600' : '\\u263e';
-}
-"""
+    Wordmark, one pill back to the panel, then what this page is. No nav bar,
+    no theme toggle — the panel's dock is the navigation, and these pages are
+    always dark.  `back=False` is the standalone-download variant: a file that
+    has left the building must not offer links back into the app.
+    """
+    mark = ('<a class="wordmark" href="/"><i></i>Oblivion</a>' if back
+            else '<span class="wordmark"><i></i>Oblivion</span>')
+    pill = ('<a class="mg-btn secondary sm noprint" href="/">&larr; Panel</a>'
+            if back else "")
+    return (f'<header class="topbar">{mark}{pill}'
+            f'<span class="ttl">{_e(subtitle)}</span></header>')
+
+
+def _pane(inner: str, cls: str = "") -> str:
+    """One section of the report = one frosted pane. An empty section renders
+    nothing at all rather than an empty sheet of glass."""
+    if not (inner or "").strip():
+        return ""
+    return (f'<section class="mg-glass pane mg-fadeup {cls}">'
+            f'<div class="mg-page">{inner}</div></section>')
+
+
+def _backdrop() -> str:
+    """The one scene, picked by the hour the page is served — the same three
+    photographs and the same dim + two scrims the panel uses. Only the index
+    wears it; a report is a document and keeps to plain graphite."""
+    hour = datetime.now().hour
+    name = "morning" if hour < 10 else "day" if hour < 17 else "dusk"
+    return (f'<div class="mg-bd" aria-hidden="true">'
+            f'<i style="background-image:url(/hero-{name}.jpg)"></i>'
+            f'<span class="dim"></span><span class="top"></span>'
+            f'<span class="bot"></span></div>')
 
 
 def _page(title: str, body: str, extra_css: str = "",
-          script: str = "") -> str:
+          script: str = "", *, offline: bool = False,
+          backdrop: bool = False) -> str:
+    """One dark scene, one inline stylesheet, no theme plumbing.
+
+    `offline=True` drops the web-font link so the standalone download renders
+    with nothing but the system font stack — a file that is opened on a plane
+    must not wait on fonts.googleapis.com.
+    """
+    fonts = "" if offline else (
+        '<link rel="preconnect" href="https://fonts.googleapis.com">'
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;'
+        '500;600;700&display=swap" rel="stylesheet">')
+    tail = f"<script>{script}</script>" if script else ""
     return (f"""<!doctype html>
-<html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<script>{_THEME_JS}</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#111113">
+{fonts}
 <title>{_e(title)}</title>
-<style>{_CSS}{extra_css}</style></head><body>
+<style>{_CSS}{extra_css}</style></head><body class="mg-scene">
+{_backdrop() if backdrop else ""}
 {body}
-<script>obGlyph();{script}</script></body></html>""")
+{tail}</body></html>""")
 
 
 # --------------------------------------------------------------------- index
@@ -539,7 +722,8 @@ def render_index(conn: sqlite3.Connection) -> str:
               f'</span>' if r["gv_value"] else '<span class="meta">—</span>')
         owner = ('<span class="badge">owner known</span>' if r["owner_known"]
                  else '<span class="meta">—</span>')
-        trs.append(f"""<tr data-suburb="{_e(r['suburb'])}">
+        trs.append(f"""<tr data-suburb="{_e(r['suburb'])}"
+   data-q="{_e((r['title'] + ' ' + r['suburb']).lower())}">
   <td>{tier}</td>
   <td><a href="/cma/{r['group_id']}">{_e(r['title'])}</a></td>
   <td>{_e(r['suburb'])}</td>
@@ -550,34 +734,53 @@ def render_index(conn: sqlite3.Connection) -> str:
   <td>{owner}</td>
 </tr>""")
 
-    options = '<option value="">all suburbs</option>' + "".join(
+    options = '<option value="">All suburbs</option>' + "".join(
         f"<option>{_e(s)}</option>" for s in suburbs)
-    body = f"""{_HEADER}
-<nav class="crumbs"><a href="/">&larr; dashboard</a> · CMA index</nav>
-<main>
-<div class="disclaimer">{_e(DISCLAIMER)}</div>
-<div class="noprint" style="margin:.6rem 0 .9rem">
-  <select id="fsub">{options}</select>
-  <span id="fcount" class="meta"></span>
-</div>
-<table id="cmatable"><tr><th>Tier / score</th><th>Property</th><th>Suburb</th>
+    empty = ('<tr><td colspan="8"><div class="mg-empty"><h3>Nothing to '
+             'price yet</h3><p>Sellable property groups appear here once a '
+             'crawl has run and the listings have been scored. Run a crawl '
+             'from the panel, then score it.</p></div></td></tr>')
+    body = f"""{_topbar("CMA reports")}
+<main class="mg-wrap">
+<section class="mg-glass pane mg-fadeup"><div class="mg-page">
+  <div class="mg-row">
+    <h2 class="mg-h2">Sellable properties</h2>
+    <span class="mg-count" id="fcount"></span>
+  </div>
+  <div class="disclaimer">{_e(DISCLAIMER)}</div>
+  <div class="mg-controls noprint">
+    <label class="mg-search"><span class="ic">&#9906;</span>
+      <input id="fq" type="search" placeholder="Search a property or suburb"
+        autocomplete="off" aria-label="Search properties"></label>
+    <span class="mg-select"><select id="fsub" aria-label="Filter by suburb">{options}</select>
+      <span class="ic">&#9662;</span></span>
+  </div>
+  <table class="mg-table" id="cmatable">
+<tr><th>Tier / score</th><th>Property</th><th>Suburb</th>
 <th>Asking</th><th>Erf</th><th>Municipal GV</th><th>Agencies</th><th>Owner</th></tr>
-{"".join(trs) if trs else '<tr><td colspan="8" class="meta">No sellable property groups yet — run a scrape and score first.</td></tr>'}
-</table>
+{"".join(trs) if trs else empty}
+  </table>
+</div></section>
 </main>"""
     script = """
 const sel = document.getElementById('fsub');
+const box = document.getElementById('fq');
 const rows = [...document.querySelectorAll('#cmatable tr[data-suburb]')];
 function apply(){
   const v = sel.value;
+  const q = (box.value || '').trim().toLowerCase();
   let n = 0;
-  rows.forEach(tr => { const show = !v || tr.dataset.suburb === v;
+  rows.forEach(tr => {
+    const show = (!v || tr.dataset.suburb === v)
+              && (!q || (tr.dataset.q || '').includes(q));
     tr.style.display = show ? '' : 'none'; if (show) n++; });
-  document.getElementById('fcount').textContent = n + ' of ' + rows.length + ' properties';
+  document.getElementById('fcount').textContent =
+    n === rows.length ? n + ' properties' : n + ' of ' + rows.length + ' properties';
 }
-sel.addEventListener('input', apply); apply();
+sel.addEventListener('input', apply); box.addEventListener('input', apply); apply();
 """
-    return _page("Oblivion CMA — sellable properties", body, script=script)
+    return _page("Oblivion CMA — sellable properties", body, script=script,
+                 backdrop=True)
 
 
 # -------------------------------------------------------------------- report
@@ -616,9 +819,9 @@ def _band_graphic(band: dict, asking) -> str:
         return round((v - lo_dom) / span * 100, 1)
 
     ticks = ""
-    for v, label, color in ((low, "low", "var(--ink-3)"),
-                            (mid, "mid", "var(--accent)"),
-                            (high, "high", "var(--ink-3)")):
+    for v, label, color in ((low, "low", "var(--mg-i3)"),
+                            (mid, "mid", "var(--mg-ok)"),
+                            (high, "high", "var(--mg-i3)")):
         ticks += (
             f'<div style="position:absolute;left:{pct(v)}%;top:0;height:100%;'
             f'width:2px;background:{color}"></div>'
@@ -634,17 +837,17 @@ def _band_graphic(band: dict, asking) -> str:
             f'<div style="position:absolute;left:{pct(asking)}%;top:-.45rem;'
             f'transform:translateX(-50%);width:0;height:0;'
             f'border-left:7px solid transparent;border-right:7px solid transparent;'
-            f'border-top:9px solid var(--bad)"></div>'
+            f'border-top:9px solid var(--mg-crit)"></div>'
             f'<div style="position:absolute;left:{pct(asking)}%;top:-2.5rem;'
-            f'transform:translateX(-50%);font-size:.62rem;color:var(--bad);'
+            f'transform:translateX(-50%);font-size:.62rem;color:var(--mg-crit);'
             f'white-space:nowrap">asking {_fmt_r(asking)}</div>')
     fill = (f'<div style="position:absolute;left:{pct(low)}%;'
             f'width:{max(pct(high) - pct(low), 0.5)}%;top:30%;height:40%;'
             f'background:linear-gradient(90deg,transparent,'
-            f'color-mix(in srgb, var(--accent) 45%, transparent),transparent);'
+            f'color-mix(in srgb, var(--mg-ok) 45%, transparent),transparent);'
             f'border-radius:3px"></div>')
-    return (f'<div style="position:relative;height:22px;background:var(--bg-3);'
-            f'border:1px solid var(--line-2);border-radius:4px;'
+    return (f'<div style="position:relative;height:22px;background:rgba(255,255,255,.06);'
+            f'border:1px solid var(--mg-line);border-radius:4px;'
             f'margin:3.1rem .4rem 2.2rem">{fill}{ticks}{marker}</div>')
 
 
@@ -760,30 +963,29 @@ def _owner_block(conn: sqlite3.Connection, group_id: int,
                else f'<input id="own_{f}" '
                     f'{"type=number" if f == "purchase_price" else "type=text"}'
                     f'{" placeholder=YYYY-MM-DD" if f == "purchase_date" else ""}>')
-        inputs += (f'<label style="display:block;font-size:.68rem;color:var(--ink-3);'
-                   f'text-transform:uppercase;letter-spacing:.1em;'
-                   f'margin:.5rem 0 .15rem">{_e(label)}</label>{tag}')
+        inputs += (f'<label class="mg-label" style="margin:10px 0 4px">'
+                   f'{_e(label)}</label>{tag}')
 
     return f"""<div class="internal" id="ownerblock">
 <span class="tag">Internal — not for the seller · owner &amp; deed (POPIA: minimum data, mandate-pitch use only)</span>
 {summary}
-<div style="margin-top:.8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
-  <button onclick="deedFetch()" id="deedbtn"
+<div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <button class="mg-btn secondary" onclick="deedFetch()" id="deedbtn"
     title="Look this property's registered owner up in the LOOM deeds registry (needs a resolved erf)">
     {'Refresh deed (LOOM)' if summary_rows else 'Fetch deed (LOOM)'}</button>
-  <button class="danger" onclick="ownerDelete()">POPIA purge</button>
+  <button class="mg-btn danger" onclick="ownerDelete()">POPIA purge</button>
   <span id="own_updated" class="badge gray"
     {'style="display:none"' if not stored.get('updated_at') else ''}>{
       f"updated {_e(stored['updated_at'])} UTC" if stored.get('updated_at') else ''}</span>
   <span id="own_msg" class="meta"></span>
 </div>
-<details style="margin-top:.7rem" {form_open}>
-<summary style="cursor:pointer;font-size:.76rem;font-weight:600;color:var(--accent)">Manual capture / edit</summary>
-<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.2rem .9rem;margin-top:.3rem">
+<details class="desc" style="margin-top:12px" {form_open}>
+<summary>Manual capture / edit</summary>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px 16px;margin-top:6px">
 {inputs}
 </div>
-<div style="margin-top:.8rem"><button class="primary" onclick="ownerSave()">Save owner details</button></div>
-<div class="meta" style="margin-top:.5rem">Self-source against the erf number
+<div style="margin-top:14px"><button class="mg-btn primary" onclick="ownerSave()">Save owner details</button></div>
+<div class="meta" style="margin-top:10px">Self-source against the erf number
 above in a primary source — DeedsWeb (deeds.gov.za), the Deeds Office's own
 search at state-regulated fees — and note the source and search date in
 "notes".</div>
@@ -1072,8 +1274,8 @@ def _score_card(score: sqlite3.Row | None) -> str:
         pct = max(0, min(100, int(v or 0)))
         bars += (f'<div style="margin-top:.5rem"><div style="display:flex;'
                  f'justify-content:space-between;font-size:.68rem;'
-                 f'color:var(--ink-3)">'
-                 f'<span>{_e(label)}</span><b style="color:var(--ink)">'
+                 f'color:var(--mg-i3)">'
+                 f'<span>{_e(label)}</span><b style="color:var(--mg-i)">'
                  f'{"—" if v is None else int(v)}</b></div>'
                  f'<div class="meter"><i style="width:{pct}%"></i></div></div>')
     sellable = _rget(score, "sellable")
@@ -1276,7 +1478,7 @@ def _deal_signals(members: list[sqlite3.Row],
                 '<div class="meta">No price observations recorded yet.</div>')
 
     spark = _sparkline(_group_price_series(history))
-    spark_html = (f'<div class="card" style="max-width:360px">'
+    spark_html = (f'<div class="card" style="max-width:min(360px,100%)">'
                   f'<h3>Group asking price</h3>{spark}'
                   f'<div class="meta" style="margin-top:.35rem">median of the '
                   f'latest price known per portal, replayed over time</div>'
@@ -1284,9 +1486,9 @@ def _deal_signals(members: list[sqlite3.Row],
 
     return f"""<h2>Deal signals</h2>
 <div class="chips">{''.join(chips) or '<span class="meta">no deal signals recorded</span>'}</div>
-<div style="display:flex;gap:1.1rem;flex-wrap:wrap;align-items:flex-start;margin-top:.8rem">
+<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:14px">
   {spark_html}
-  <div style="flex:1;min-width:340px">{timeline}</div>
+  <div style="flex:1;min-width:min(340px,100%)">{timeline}</div>
 </div>"""
 
 
@@ -1341,7 +1543,7 @@ def _portal_table(members: list[sqlite3.Row]) -> str:
   <td class="nowrap">{_e(listed) or '—'}
       {f'<div class="meta">{listed_days}d ago</div>' if listed_days is not None else ''}</td>
   <td class="nowrap">{_fmt_num(_rget(m, 'photo_count'))}</td>
-  <td class="nowrap"{' style="color:var(--warm-ink)"' if stale else ''}>{_age_label(age)}
+  <td class="nowrap"{' style="color:var(--mg-warn)"' if stale else ''}>{_age_label(age)}
       <div class="meta">{_e((_rget(m, 'last_seen') or '')[:10])}</div></td>
   <td><div class="chips">{''.join(badges) or '<span class="meta">—</span>'}</div></td>
 </tr>"""
@@ -1599,10 +1801,10 @@ def render_report(conn: sqlite3.Connection, group_id: int,
     # ---------------- price guidance (unchanged maths, same graphic)
     if band.get("mid"):
         band_html = f"""
-<div style="display:flex;gap:2.2rem;flex-wrap:wrap;align-items:baseline">
-  <div><span class="meta">LOW</span><div class="price" style="font-size:1.25rem">{_fmt_r(band['low'])}</div></div>
-  <div><span class="meta">RECOMMENDED</span><div class="price" style="font-size:1.8rem;color:var(--accent-2)">{_fmt_r(band['mid'])}</div></div>
-  <div><span class="meta">HIGH</span><div class="price" style="font-size:1.25rem">{_fmt_r(band['high'])}</div></div>
+<div style="display:flex;gap:28px;flex-wrap:wrap;align-items:baseline">
+  <div><span class="mg-label">Low</span><div class="price" style="font-size:20px">{_fmt_r(band['low'])}</div></div>
+  <div><span class="mg-label">Recommended</span><div class="price" style="font-size:30px;color:var(--mg-ok)">{_fmt_r(band['mid'])}</div></div>
+  <div><span class="mg-label">High</span><div class="price" style="font-size:20px">{_fmt_r(band['high'])}</div></div>
 </div>
 {_band_graphic(band, asking)}
 <div class="meta">Basis: {_e(band.get('basis'))}</div>"""
@@ -1613,14 +1815,14 @@ def render_report(conn: sqlite3.Connection, group_id: int,
 
     # ---------------- action toolbar (screen-only, not in the client file)
     toolbar = "" if client else f"""
-<div class="noprint" style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.7rem 0 .2rem">
-  <button class="primary" onclick="toolDeed()"
+<div class="noprint" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+  <button class="mg-btn primary" onclick="toolDeed()"
     title="Fetch the registered owner / title deed from LOOM and save it to this property">Fetch deed (LOOM)</button>
-  <button onclick="copyRow(this)"
+  <button class="mg-btn secondary" onclick="copyRow(this)"
     title="Copy this property as a spreadsheet row">Copy for sheet</button>
-  <a class="btnlink" href="/cma/{group_id}/download" download
+  <a class="mg-btn secondary" href="/cma/{group_id}/download" download
     title="Save the client-safe report (no internal blocks) as a standalone HTML file">&darr; Download report</a>
-  <button onclick="window.print()">Print / save PDF</button>
+  <button class="mg-btn secondary" onclick="window.print()">Print / save PDF</button>
 </div>"""
 
     # ---------------- comps table
@@ -1723,57 +1925,62 @@ asking price at disappearance (a proxy, not a deeds record).</div>
 <div class="wrapx"><table><tr><th>Property</th><th>Status</th><th>Last price</th>
 <th>Delisted</th><th>DOM</th><th>Total cut</th></tr>{off_rows}</table></div>"""
 
-    crumbs = f"""<nav class="crumbs"><a href="/">&larr; dashboard</a> ·
- <a href="/cma">CMA index</a> · group {group_id}
- <span class="grow"></span>
- <a href="/cma/{group_id}/download" download
-   title="Save the client-safe report (no internal blocks) as a standalone HTML file">&darr; Download report</a> ·
- <button class="noprint" style="font-size:.72rem;padding:.25rem .6rem"
-   onclick="window.print()">Print / save PDF</button></nav>"""
-    body = f"""{_HEADER_CLIENT if client else _HEADER}
-{'' if client else crumbs}
-<main>
-<h1 style="font-weight:300;letter-spacing:.02em;font-size:1.5rem;margin:.4rem 0 .1rem">
-{_e(subj.get('title') or f"Property group {group_id}")}</h1>
-<div class="meta" style="font-size:.85rem">{_e(address_line) or _e(subj.get('suburb') or '')}</div>
-<div class="disclaimer">{_e(DISCLAIMER)}</div>
-{toolbar}
-<h2>Subject property</h2>
-{identity}
-
-<h2>Prospect verdict</h2>
+    # ---------------- the report, a glass pane per section
+    verdict_pane = f"""<h2>Prospect verdict</h2>
 <div class="cards">
 {_score_card(score)}
 {_mandate_card(members, score)}
 </div>
-{f'<div class="cards wide">{evidence_html}</div>' if evidence_html else ''}
-{'' if client else _internal_score_block(score)}
+{f'<div class="cards wide" style="margin-top:12px">{evidence_html}</div>' if evidence_html else ''}
+{'' if client else _internal_score_block(score)}"""
 
-{_deal_signals(members, history, lc)}
-
-<h2>Price guidance</h2>
+    guidance_pane = f"""<h2>Price guidance</h2>
 {band_html}
-{f'<ul style="font-size:.78rem;color:var(--ink-2);line-height:1.6;padding-left:1.2rem;margin-top:.7rem">{notes_html}</ul>' if notes_html else ''}
+{f'<ul class="ev" style="margin-top:12px">{notes_html}</ul>' if notes_html else ''}"""
 
-<h2>Comparable properties</h2>
-{comps_html}
+    suburb_pane = ""
+    if stat_bits:
+        suburb_pane = (
+            f'<h2>Suburb snapshot — {_e(subj.get("suburb") or slug)}</h2>'
+            f'<div class="stats">{stat_bits}</div>'
+            + (f'<div class="chips" style="margin-top:12px">{vs_chips}</div>'
+               if vs_chips else ""))
 
-{f'<h2>Suburb snapshot — {_e(subj.get("suburb") or slug)}</h2><div class="stats">{stat_bits}</div>' if stat_bits else ''}
-{f'<div class="chips" style="margin-top:.5rem">{vs_chips}</div>' if stat_bits and vs_chips else ''}
-
-<h2>Every portal listing for this property ({len(members)})</h2>
-<div class="meta" style="margin-bottom:.35rem">One row per portal listing the
+    portals_pane = f"""<h2>Every portal listing for this property ({len(members)})</h2>
+<div class="meta" style="margin-bottom:10px">One row per portal listing the
 crawl holds — the raw record behind the merged view above. Fields differ
 between portals; blanks mean that portal never published the field.</div>
 {_portal_table(members)}
 {_thumbs(members)}
-{_description_block(members)}
+{_description_block(members)}"""
 
-{_valuation_block(subj, stats, gv_value, gv_roll, erf)}
+    subtitle = ("Comparative market analysis" if client
+                else f"CMA report · group {group_id}")
+    body = f"""{_topbar(subtitle, back=not client)}
+<main class="mg-wrap">
+<section class="mg-glass pane mg-fadeup"><div class="mg-page">
+  <div class="mg-row" style="margin-bottom:10px">
+    <div style="min-width:240px">
+      <h1>{_e(subj.get('title') or f"Property group {group_id}")}</h1>
+      <div class="meta">{_e(address_line) or _e(subj.get('suburb') or '')}</div>
+    </div>
+    {'' if client else '<div class="mg-actions noprint">'
+     f'<a class="mg-btn secondary sm" href="/cma">CMA index</a></div>'}
+  </div>
+  <div class="disclaimer">{_e(DISCLAIMER)}</div>
+  {toolbar}
+</div></section>
 
-{'' if client else _owner_block(conn, group_id, asking)}
-
-{off_html}
+{_pane(f'<h2>Subject property</h2>{identity}')}
+{_pane(verdict_pane)}
+{_pane(_deal_signals(members, history, lc))}
+{_pane(guidance_pane)}
+{_pane(f'<h2>Comparable properties</h2>{comps_html}')}
+{_pane(suburb_pane) if suburb_pane else ''}
+{_pane(portals_pane)}
+{_pane(_valuation_block(subj, stats, gv_value, gv_roll, erf))}
+{'' if client else _pane(_owner_block(conn, group_id, asking), cls="noprint")}
+{_pane(off_html) if off_html else ''}
 </main>"""
 
     own_fields = [f for f in owners.FIELDS if f != "raw"]
@@ -1782,4 +1989,4 @@ between portals; blanks mean that portal never published the field.</div>
         .replace("__GID__", str(group_id))
         .replace("__OWN_FIELDS__", json.dumps(own_fields)))
     title = f"CMA — {subj.get('title') or group_id}"
-    return _page(title, body, script=script)
+    return _page(title, body, script=script, offline=client)
