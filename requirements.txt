@@ -36,7 +36,19 @@ opencv-python-headless==4.13.0.92  # frame grabs for video thumbnails
 psutil==5.9.8                     # /api/server-stats
 filelock==3.16.1                  # upload assembly lock
 python-magic==0.4.27
+# Zerko 1.2–1.4. All three are imported lazily upstream, so a platform where
+# one will not install loses only that feature (reported under "features" in
+# /api/media/status); all three publish manylinux wheels for Python 3.14.
+rawpy==0.27.1                     # camera RAW / DJI DNG: previews, HDR brackets
+pillow-heif==1.8.0                # iPhone HEIC photos
+onnxruntime==1.30.0               # photo editor AI selections + remove tool (CPU;
+                                  # its ~100 MB models download on first use,
+                                  # into DATA_DIR/media-data/state/models)
 # uvicorn is NOT needed: the app is mounted in-process, never self-served.
 # openai-whisper (transcription) is deliberately omitted — it pulls torch,
 # which has no wheel for this Python and would not fit the build image.
 # Transcription jobs report as unavailable; everything else works.
+# splat (3D fly-throughs, Zerko 1.4) is not vendored: it trains Gaussian
+# splats on a CUDA GPU. Local image AI (ComfyUI) likewise needs NVIDIA; Looks
+# and twilight run through a hosted image service key instead (fal / Gemini /
+# OpenAI, set in Media > Settings).

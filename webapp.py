@@ -1294,11 +1294,10 @@ def api_media_token():
 
     There is no second login: the dashboard's own sign-in is the
     authentication event, and this turns it into the JWT the mounted FastAPI
-    app expects. The Zerko account is created on first use and is always an
-    admin — the panel is single-role, so anyone who can open it can do
-    everything, which is exactly why holding the `media` privilege is what it
-    takes to get a token at all. A GET, but not a read: it hands out a
-    credential.
+    app expects. The Zerko account is created on first use and its role
+    follows the dashboard: `media` + `admin` is a Zerko admin, `media` alone
+    an editor (media.zerko_role_for). Holding `media` is what it takes to get
+    a token at all. A GET, but not a read: it hands out a credential.
     """
     basic = request.authorization
     user = ((basic.username if basic else None)
@@ -1377,6 +1376,11 @@ with db.connect() as _boot_conn:
 # without the media dependencies (or a deploy without a footage drive) starts
 # and serves the prospecting dashboard exactly as before.
 media.set_guard(_wsgi_authorised)
+# Roles and permissions (Zerko v1.2) follow the dashboard: media.role_for()
+# turns these privileges into the Zerko role each mirror account holds.
+media.set_privileges(
+    lambda u: auth.PRIVILEGES if (u or "").lower() == _DASH_USER.lower()
+    else auth.privileges_for(u))
 media.mount(app)
 
 

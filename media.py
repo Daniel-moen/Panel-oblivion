@@ -45,33 +45,59 @@ PREFIX = "/zerko"
 # A few upstream endpoints are actively hostile inside a shared process. They
 # are refused at the mount rather than edited out of main.py, so the vendored
 # source stays close to upstream and the reasoning lives in one place.
-_BLOCKED = {
+#
+# Each entry is (path prefix, methods or None for all, reason).
+_ACCOUNTS = ("Media accounts come from the dashboard sign-in (People page). "
+             "There are no separate media passwords.")
+_BLOCKED = (
     # The first-run wizard's directory browser lists *any* folder on the host
     # until an account exists. We auto-provision an account (see
     # ``ensure_account``) which makes it 403, but the dashboard has no use for
     # the wizard at all, so it never gets the chance.
-    "/api/setup": "The Zerko setup wizard is disabled: this install is "
-                  "configured by environment variables.",
+    ("/api/setup", None, "The Zerko setup wizard is disabled: this install is "
+                         "configured by environment variables."),
+    ("/setup", None, "The Zerko setup wizard is disabled."),
     # Server-Sent Events hold a worker thread open for the life of the client.
     # With gunicorn on 8 threads, a handful of open browser tabs would starve
     # the dashboard. The UI polls instead.
-    "/api/events": "Server-sent events are disabled here; poll the job "
-                   "endpoints instead.",
-    # Opens a file manager window on the *server*. Meaningless on Railway and
-    # a command-execution surface everywhere else.
-    "/api/videos/reveal": "Revealing files on the server is disabled.",
+    ("/api/events", None, "Server-sent events are disabled here; poll the job "
+                          "endpoints instead."),
     # Neutered by zerko/updater.py already; refused here too so the reason is
     # visible rather than implied.
-    "/api/updates": "Zerko updates ship with this repository.",
-}
+    ("/api/updates", None, "Zerko updates ship with this repository."),
+    # Roles and permissions (v1.2) map onto the dashboard's own accounts and
+    # passkeys: media.ensure_account() keeps each Zerko user's role in step
+    # with the dashboard privileges. Zerko's own sign-in, sign-up, password
+    # and user-admin routes would be a second, weaker login beside that.
+    ("/api/login", None, _ACCOUNTS),
+    ("/api/register", None, _ACCOUNTS),
+    ("/api/password-reset", None, _ACCOUNTS),
+    ("/api/me/password", None, _ACCOUNTS),
+    ("/api/users", ("POST", "PUT", "PATCH", "DELETE"), _ACCOUNTS),
+    # Installers that run on the *server*: a pip install of the RAW decoder
+    # into the live interpreter, and a multi-gigabyte ComfyUI + model download
+    # for NVIDIA cards. Neither belongs in a request handler on Railway;
+    # dependencies ship through requirements.txt.
+    ("/api/hdr/raw-support/install", None,
+     "Installing packages from the web UI is disabled; dependencies ship "
+     "with the deploy (requirements.txt)."),
+    ("/api/ai/image/install", None,
+     "Local image AI (ComfyUI) needs an NVIDIA GPU and is not available on "
+     "this deployment. Use a hosted image service key instead."),
+)
+_REVEAL = "Revealing files on the server is disabled."
 
 
-def _blocked_reason(path: str) -> str | None:
-    for prefix, why in _BLOCKED.items():
+def _blocked_reason(path: str, method: str = "GET") -> str | None:
+    method = (method or "GET").upper()
+    for prefix, methods, why in _BLOCKED:
         if path == prefix or path.startswith(prefix + "/"):
-            return why
+            if methods is None or method in methods:
+                return why
+    # Opens a file manager window on the *server*. Meaningless on Railway and
+    # a command-execution surface everywhere else.
     if path.endswith("/reveal") and path.startswith("/api/videos/"):
-        return _BLOCKED["/api/videos/reveal"]
+        return _REVEAL
     return None
 
 
@@ -113,6 +139,45 @@ def load_error() -> str | None:
     return _load()["error"]
 
 
+def _has(module: str) -> bool:
+    import importlib.util
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        return False
+
+
+def features() -> dict:
+    """Which of the heavier Zerko features can actually run here.
+
+    Every one of these degrades on its own inside Zerko (a clear message
+    instead of a crash); this gathers the answers in one place so the Media
+    pages can grey a tool out up front rather than let someone find out after
+    clicking. Only cheap checks: nothing heavy is imported.
+    """
+    import shutil
+
+    ffmpeg = bool(shutil.which("ffmpeg") and shutil.which("ffprobe"))
+    out = {
+        "ffmpeg": ffmpeg,                    # thumbnails, proxies, video editor renders
+        "raw": _has("rawpy"),                # camera RAW / DNG, RAW HDR brackets
+        "heic": _has("pillow_heif"),         # iPhone HEIC photos
+        "onnx": _has("onnxruntime"),         # editor AI selections + remove tool
+        "transcription": _has("whisper"),    # openai-whisper (torch) — never on Railway
+        "splat": False,                      # 3D fly-throughs: not vendored (deferred)
+        "ai": False,                         # Claude: captions, room types, assistant
+        "image_ai": False,                   # Looks / twilight: an image-edit model
+    }
+    if _load()["wsgi"] is not None:
+        try:
+            from zerko import ai, ai_image
+            out["ai"] = bool(ai.enabled())
+            out["image_ai"] = bool(ai_image.enabled())
+        except Exception:                             # noqa: BLE001
+            pass
+    return out
+
+
 def status() -> dict:
     """What the Media section shows when something is not set up.
 
@@ -132,6 +197,8 @@ def status() -> dict:
             import zerko
             out["media_root"] = zerko.media_root_state()
             out["data_dir"] = str(zerko.ZERKO_DATA)
+            out["features"] = features()
+            out["version"] = (zerko.ZERKO_PKG / "UPSTREAM_VERSION").read_text().strip()
         except Exception as e:                        # noqa: BLE001
             out["media_root"] = {"ok": False, "reason": "error",
                                  "message": str(e)}
@@ -147,9 +214,46 @@ def status() -> dict:
 # ever told: the only way to obtain a token for it is to already be through
 # ``_require_auth``.
 
-def ensure_account(username: str) -> str | None:
-    """Create (once) the admin account that mirrors the signed-in dashboard
-    user. Returns None on success, or a human-readable reason."""
+#: Dashboard privileges → Zerko role. Zerko's own permission table
+#: (zerko/permissions.py) then does the fine-grained work on every /api call.
+#:   media + admin  → "admin"   (includes permanent deletes, proxies, AI keys)
+#:   media          → "editor"  (runs the library day to day; no hard delete)
+#:   no media       → no access (refused by the gate before Zerko sees it)
+def zerko_role_for(privileges) -> str | None:
+    privs = set(privileges or ())
+    if "media" not in privs:
+        return None
+    return "admin" if "admin" in privs else "editor"
+
+
+#: Set by webapp.mount(): ``fn(username) -> tuple of dashboard privileges``.
+_privileges_for = None
+
+
+def set_privileges(fn) -> None:
+    global _privileges_for
+    _privileges_for = fn
+
+
+def role_for(username: str) -> str | None:
+    """The Zerko role the dashboard grants this username, or None."""
+    if _privileges_for is None:
+        return "admin"          # not wired (tests, scripts): the old behaviour
+    try:
+        return zerko_role_for(_privileges_for(username))
+    except Exception:                                 # noqa: BLE001
+        return None
+
+
+def ensure_account(username: str, role: str | None = "admin") -> str | None:
+    """Create or update the Zerko account that mirrors a dashboard user.
+
+    The role follows the dashboard: it is re-synced every time a token is
+    minted and whenever the gate sees it change. A role of None (the person
+    lost `media`, or was disabled) deactivates the mirror. The password is
+    random and never told to anyone; Zerko's own login is blocked anyway.
+    Returns None on success, or a human-readable reason.
+    """
     if not available():
         return load_error() or "The media backend is not installed."
     try:
@@ -162,25 +266,37 @@ def ensure_account(username: str) -> str | None:
         try:
             user = db.query(User).filter(User.username == username).first()
             if user is None:
+                if role is None:
+                    return None
                 user = User(
                     username=username,
                     email=f"{username}@oblivion.local",
                     hashed_password=get_password_hash(secrets.token_urlsafe(32)),
-                    role="admin",
+                    role=role,
                     is_active=True,
                 )
                 db.add(user)
                 db.commit()
-            elif user.role != "admin" or not user.is_active:
-                # Single-role by design: everyone who can open the dashboard
-                # can do everything in the media library.
-                user.role, user.is_active = "admin", True
+            elif role is None:
+                if user.is_active:
+                    user.is_active = False
+                    db.commit()
+            elif user.role != role or not user.is_active:
+                user.role, user.is_active = role, True
                 db.commit()
+            with _synced_lock:
+                _synced[username] = role
             return None
         finally:
             db.close()
     except Exception as e:                            # noqa: BLE001
         return f"{type(e).__name__}: {e}"
+
+
+#: username → the role last written to Zerko's users table, so the gate only
+#: touches the database when the dashboard's answer has actually changed.
+_synced: dict = {}
+_synced_lock = threading.Lock()
 
 
 def mint_token(username: str) -> tuple[dict | None, str | None]:
@@ -190,7 +306,10 @@ def mint_token(username: str) -> tuple[dict | None, str | None]:
     prefix every Zerko URL must be built on, and the media-root state, so the
     client bootstraps from a single call.
     """
-    problem = ensure_account(username)
+    role = role_for(username)
+    if role is None:
+        return None, "This account does not hold the media privilege."
+    problem = ensure_account(username, role)
     if problem:
         return None, problem
     try:
@@ -202,6 +321,7 @@ def mint_token(username: str) -> tuple[dict | None, str | None]:
             "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             "prefix": PREFIX,
             "user": username,
+            "role": role,
             **status(),
         }, None
     except Exception as e:                            # noqa: BLE001
@@ -246,7 +366,7 @@ def _norm(path: str) -> str:
     return posixpath.normpath(path or "/").replace("\\", "/") or "/"
 
 
-def _valid_zerko_token(environ) -> bool:
+def _valid_zerko_token(environ) -> bool:  # noqa: C901 - one linear check
     """True when the request carries a Zerko bearer token this app minted.
 
     There is only one Authorization header, and the two halves of the stack
@@ -273,9 +393,20 @@ def _valid_zerko_token(environ) -> bool:
         from jose import jwt
 
         claims = jwt.decode(raw, SECRET_KEY, algorithms=[ALGORITHM])
-        return bool(claims.get("sub"))
     except Exception:                    # noqa: BLE001 - expired, forged or malformed
         return False
+    sub = claims.get("sub")
+    if not sub:
+        return False
+    # A token lives 24 hours; the dashboard account behind it may have lost
+    # `media` (or been disabled) since. privileges_for() is cached for 30s,
+    # so this is cheap on every thumbnail and range request.
+    role = role_for(sub)
+    with _synced_lock:
+        changed = _synced.get(sub, "?") != role
+    if changed:
+        ensure_account(sub, role)
+    return role is not None
 
 
 def _gate(environ, start_response):
@@ -303,7 +434,7 @@ def _gate(environ, start_response):
             ("WWW-Authenticate", 'Basic realm="Oblivion Prospect Engine"')])
         return [raw_body]
 
-    why = _blocked_reason(path)
+    why = _blocked_reason(path, environ.get("REQUEST_METHOD", "GET"))
     if why:
         return _json_response(start_response, "403 Forbidden",
                               {"detail": why, "blocked": True})
