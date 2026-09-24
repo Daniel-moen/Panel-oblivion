@@ -16,6 +16,15 @@ Everything it fetches goes to the vendored Zerko share API, which treats the
 token in the URL as the credential and checks expiry, revocation, an optional
 password and a per-IP failure limit on every call. This module never touches
 the database itself — it renders the shell, and the shell talks to that API.
+
+Portals come in three kinds (Zerko 1.2): ``send`` shows the screening room
+(picks, notes, proofing pins on photos, downloads), ``receive`` shows only an
+upload form into the portal's own inbox folder, ``both`` shows the two. A
+link from before kinds existed carries no ``kind`` and is treated as ``both``,
+with the ``allow_*`` flags deciding — exactly how it behaved before. Either
+way the viewer can press "I'm done" (``/confirm``), which is the receipt the
+owner sees on the Portals page. ``allow_zip`` (and the backend's phone check,
+``offer_zip``) decides whether "Download all" is offered at all.
 """
 
 from __future__ import annotations
@@ -257,8 +266,75 @@ PAGE = r"""<!doctype html>
   kbd { font: 500 11px var(--mg-font); background: var(--mg-glass-soft);
         border: 1px solid var(--mg-line); border-radius: 6px; padding: 1px 6px; color: var(--mg-i2); }
 
+  /* ——————————————————————————————————————— wide panels under the stage ——— */
+  .wide { grid-column: 1 / -1; padding: clamp(14px, 2vw, 20px); }
+  .wide h3 { margin: 0 0 4px; font: 600 16px/1.3 var(--mg-font); letter-spacing: -0.015em; }
+  .wide .sub { margin: 0 0 14px; color: var(--mg-i3); font-size: 13px; }
+  main.solo { grid-template-columns: minmax(0, 760px); justify-content: center; }
+  .mg-input.name { max-width: 280px; height: 40px; padding: 0 14px; }
+
+  /* the drop zone — the whole of a receiving portal, a panel on a two-way one */
+  .drop { display: flex; flex-direction: column; align-items: center; justify-content: center;
+          gap: 10px; min-height: 170px; padding: 24px 16px; text-align: center;
+          border: 1.5px dashed var(--mg-line2); border-radius: var(--mg-r-card);
+          background: var(--mg-glass-soft); transition: border-color 0.18s, background 0.18s; }
+  .drop.over { border-color: var(--mg-ok); background: rgba(62,207,142,0.08); }
+  .drop b { font: 600 15px/1.3 var(--mg-font); }
+  .drop span { color: var(--mg-i3); font-size: 12.5px; }
+  .drop { position: relative; cursor: pointer; }
+  .drop input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .uprow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 14px; }
+  .uprow label { font: 500 11px/1.4 var(--mg-font); color: var(--mg-i3); }
+  .uplist { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .uplist li { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 12px; align-items: center;
+               padding: 9px 12px; border-radius: var(--mg-r-in); background: var(--mg-glass-soft);
+               border: 1px solid var(--mg-line); font-size: 13px; }
+  .uplist .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .uplist .st { color: var(--mg-i3); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .uplist .st.ok { color: var(--mg-ok); } .uplist .st.bad { color: var(--mg-crit); }
+  .uplist .bar { grid-column: 1 / -1; height: 3px; border-radius: 9999px; background: rgba(255,255,255,0.08);
+                 overflow: hidden; }
+  .uplist .bar i { display: block; height: 100%; width: 0; background: var(--mg-ok); transition: width 0.2s; }
+
+  /* "I'm done" — the receipt the viewer never used to get */
+  .donebar { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; }
+  .donebar .txt { flex: 1 1 260px; min-width: 0; }
+  .donebar .txt b { display: block; font: 600 15px/1.3 var(--mg-font); }
+  .donebar .txt span { color: var(--mg-i3); font-size: 13px; }
+  .donebar.sent { border-color: rgba(62,207,142,0.35); }
+  .donebar.sent .txt b { color: var(--mg-ok); }
+  .donebar .act { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  /* proofing pins: a numbered dot on the photo, the words underneath */
+  .pinlayer { position: absolute; pointer-events: none; }
+  .pinlayer.arm { pointer-events: auto; cursor: crosshair; }
+  .pin { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+         display: grid; place-items: center; pointer-events: auto;
+         background: var(--mg-warn); color: #231a02; font: 700 12px/1 var(--mg-font);
+         border: 2px solid rgba(0,0,0,0.45); box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+  .pin.done { background: var(--mg-i3); color: #111; }
+  .pin.draft { background: var(--mg-ok); color: var(--mg-ok-ink); }
+  .pins { margin-top: 16px; }
+  .pins label { display: block; font: 500 11px/1.4 var(--mg-font); color: var(--mg-i3); margin-bottom: 6px; }
+  .pins ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .pins li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: var(--mg-r-in);
+             background: var(--mg-glass-soft); border: 1px solid var(--mg-line); font-size: 13px; }
+  .pins li .n { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+                background: var(--mg-warn); color: #231a02; font: 700 11px/1 var(--mg-font); }
+  .pins li.done .n { background: var(--mg-i3); color: #111; }
+  .pins li .t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .pins li .t small { display: block; color: var(--mg-i3); font-size: 11.5px; }
+  .pins li button { flex: none; color: var(--mg-i3); min-width: 32px; min-height: 32px; border-radius: 9999px; }
+  .pins li button:hover { color: var(--mg-crit); background: var(--mg-glass-soft); }
+  .pinform { margin-top: 10px; }
+  .pinform textarea { width: 100%; min-height: 64px; resize: vertical; color: var(--mg-i);
+    background: var(--mg-glass-soft); border: 1px solid rgba(62,207,142,0.6); border-radius: var(--mg-r-in);
+    padding: 10px 14px; font: 400 14px/1.5 var(--mg-font); outline: none; }
+  .mg-btn.on { border-color: rgba(62,207,142,0.5); background: rgba(62,207,142,0.14); color: var(--mg-ok); }
+
   @media (max-width: 960px) {
     main { grid-template-columns: minmax(0, 1fr); }
+    main.solo { grid-template-columns: minmax(0, 1fr); }
     .reel { position: static; }
     .cards { max-height: none; flex-direction: row; overflow-x: auto; padding-bottom: 8px;
              scrollbar-width: none; }
@@ -291,6 +367,13 @@ PAGE = r"""<!doctype html>
   var wrap = document.getElementById('wrap');
   var pw = '';                 // held in memory only; never stored
   var data = null, idx = 0, picks = {}, notes = {}, saveTimer = null;
+  var pins = [], pinArm = false, draft = null;
+  var uploads = [], upSeq = 0, upBusy = false, queue = [];
+  var confirmMsg = '';
+  // The viewer's name is a convenience, not a credential: kept on this device
+  // so the next visit does not ask again, and never required.
+  var viewer = '';
+  try { viewer = localStorage.getItem('oblivion-share-name') || ''; } catch (e) { /* private mode */ }
 
   var esc = function (s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -309,23 +392,130 @@ PAGE = r"""<!doctype html>
     var pad = function (n) { return (n < 10 ? '0' : '') + n; };
     return h ? h + ':' + pad(m) + ':' + pad(x) : m + ':' + pad(x);
   };
+  var bytes = function (n) {
+    if (!n) return '0 B';
+    var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+    var v = n / Math.pow(1024, i);
+    return (v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)) + ' ' + u[i];
+  };
+  var when = function (iso) {
+    if (!iso) return '';
+    var d = new Date(/Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z');
+    if (isNaN(d)) return String(iso).slice(0, 16).replace('T', ' ');
+    return d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
+  var setName = function (v) {
+    viewer = String(v || '').slice(0, 60);
+    try { localStorage.setItem('oblivion-share-name', viewer); } catch (e) { /* fine */ }
+    wrap.querySelectorAll('input.who').forEach(function (i) { if (i.value !== viewer) i.value = viewer; });
+  };
+
+  // What kind of portal this is. Links made before portals had kinds carry no
+  // kind at all: treat them as "both" and let the allow_* flags decide, which
+  // is exactly how they behaved before.
+  var kind = function () { return (data && data.kind) || 'both'; };
+  var showRoom = function () { return kind() !== 'receive'; };
+  var canUpload = function () { return kind() !== 'send' && !!data.allow_upload; };
+  var offerZip = function () {
+    if (!data.allow_download) return false;
+    return ('offer_zip' in data) ? !!data.offer_zip : data.allow_zip !== false;
+  };
+  var isPhoto = function (m) {
+    return m && ((m.media_type || 'video') === 'photo' || /^image\//.test(m.mime || ''));
+  };
 
   function screenHTML(m) {
     if (!m) return '<div class="placeholder">Nothing in this link yet.</div>';
     var src = API + '/stream/' + m.id + q();
-    if ((m.media_type || 'video') === 'photo' || /^image\//.test(m.mime || '')) {
-      return '<img class="full" alt="' + esc(m.filename) + '" src="' + src + '">';
+    if (isPhoto(m)) {
+      return '<img class="full" id="still" alt="' + esc(m.filename) + '" src="' + src + '">' +
+             '<div class="pinlayer' + (pinArm ? ' arm' : '') + '" id="pinlayer"></div>';
+    }
+    if (data.watermark_previews && m.preview_state && m.preview_state !== 'ready') {
+      return '<div class="placeholder">' + (m.preview_state === 'preparing'
+        ? 'This preview is still being prepared. Reload in a minute or two.'
+        : 'A preview of this clip is not available.') + '</div>';
     }
     return '<video id="player" controls playsinline preload="metadata" ' +
            'poster="' + API + '/thumb/' + m.id + q() + '" src="' + src + '"></video>';
   }
 
+  function whoInput(id) {
+    return '<input class="mg-input name who" id="' + id + '" type="text" maxlength="60" ' +
+           'autocomplete="name" placeholder="Your name (optional)" value="' + esc(viewer) + '">';
+  }
+
+  function pinsHTML(m) {
+    if (!isPhoto(m)) return '';
+    var mine = pins.filter(function (p) { return p.video_id === m.id; });
+    var canPin = data.allow_selects;
+    if (!mine.length && !canPin && !draft) return '';
+    var rows = mine.map(function (p, i) {
+      return '<li class="' + (p.resolved ? 'done' : '') + '"><span class="n">' + (i + 1) + '</span>' +
+        '<span class="t">' + esc(p.text) +
+        '<small>' + esc([p.viewer_name, p.resolved ? 'dealt with' : ''].filter(Boolean).join(' · ')) + '</small></span>' +
+        (!p.resolved && canPin ? '<button type="button" data-pin="' + p.id + '" aria-label="Remove this note">&#10005;</button>' : '') +
+        '</li>';
+    }).join('');
+    return '<div class="pins">' +
+      '<label>Marked spots on this photo' + (canPin ? ' — tap “Mark a spot”, then tap the photo' : '') + '</label>' +
+      (rows ? '<ol>' + rows + '</ol>' : '') +
+      (draft ? '<div class="pinform"><textarea id="pintext" maxlength="1000" ' +
+               'placeholder="What should change here? e.g. remove the hose, brighter here."></textarea>' +
+               '<div class="noterow"><button class="mg-btn accent sm" id="pinsave">Save this spot</button>' +
+               '<button class="mg-btn sm" id="pincancel">Cancel</button></div></div>' : '') +
+      '</div>';
+  }
+
+  function uploadHTML(solo) {
+    var list = uploads.map(function (u) {
+      return '<li id="up-' + u.id + '"><span class="fn">' + esc(u.name) + '</span>' +
+        '<span class="st' + (u.state === 'done' ? ' ok' : u.state === 'failed' ? ' bad' : '') + '">' +
+        esc(upStatus(u)) + '</span>' +
+        '<span class="bar"><i style="width:' + Math.round(u.pct * 100) + '%"></i></span></li>';
+    }).join('');
+    return '<section class="wide mg-glass">' +
+      '<h3>' + (solo ? 'Send us your files' : 'Send files back') + '</h3>' +
+      '<p class="sub">' + (data.intake_folder_id && !solo ? 'They go straight to us — nothing you send appears on this page for anyone else. ' : '') +
+      'Photos, video, documents — any size. Keep this page open until each one says “Sent”.</p>' +
+      '<div class="uprow"><label for="who-up">Who is sending</label>' + whoInput('who-up') + '</div>' +
+      '<label class="drop" id="drop">' +
+        '<b>Drop files here</b><span>or tap to choose from this device</span>' +
+        '<span class="mg-btn primary" aria-hidden="true">Choose files</span>' +
+        '<input type="file" id="files" multiple>' +
+      '</label>' +
+      (list ? '<ul class="uplist" id="uplist">' + list + '</ul>' : '<ul class="uplist" id="uplist"></ul>') +
+      '</section>';
+  }
+
+  function doneHTML() {
+    var sent = !!data.confirmed_at;
+    var solo = !showRoom();
+    var title = sent ? 'Thanks — we have your answer'
+                     : (solo ? 'Sent everything?' : 'Finished looking?');
+    var body = sent
+      ? (confirmMsg ? confirmMsg + ' ' : '') + 'Marked done' +
+        (data.confirmed_by ? ' by ' + data.confirmed_by : '') + ' · ' + when(data.confirmed_at) +
+        '. You can still change things and press it again.'
+      : (solo ? 'Let us know when the last file is in, so we can get started.'
+              : 'Your picks and notes save as you go. Tell us when you are done so we can get started.');
+    return '<section class="wide mg-glass donebar' + (sent ? ' sent' : '') + '">' +
+      '<div class="txt"><b>' + esc(title) + '</b><span>' + esc(body) + '</span></div>' +
+      '<div class="act">' + (showRoom() || !canUpload() ? whoInput('who-done') : '') +
+      '<button class="mg-btn accent" id="confirm">' + (sent ? 'Send again' : 'I’m done') + '</button></div>' +
+      '</section>';
+  }
+
   function render() {
-    var m = data.videos[idx] || null;
+    var room = showRoom();
+    var m = room ? (data.videos[idx] || null) : null;
     var canPick = data.allow_selects, canDl = data.allow_download;
     var picked = m && picks[m.id];
+    var sub = room
+      ? data.count + (data.count === 1 ? ' file' : ' files')
+      : 'Upload link';
 
-    var cards = data.videos.map(function (v, i) {
+    var cards = room ? data.videos.map(function (v, i) {
       return '<button class="card mg-card" role="listitem" data-i="' + i + '" ' +
         'aria-current="' + (i === idx) + '" style="animation-delay:' + Math.min(i * 34, 400) + 'ms">' +
         '<span class="th"><img alt="" loading="lazy" data-src="' + API + '/thumb/' + v.id + q() + '">' +
@@ -334,25 +524,15 @@ PAGE = r"""<!doctype html>
         '<span class="nm"><b>' + esc(v.filename) + '</b><span>' +
         esc([v.resolution, v.file_size_formatted].filter(Boolean).join(' · ')) +
         '</span></span></button>';
-    }).join('');
+    }).join('') : '';
 
-    wrap.innerHTML =
-      '<header>' +
-        '<span class="brand"><i></i>Oblivion<small>Screening room</small></span>' +
-        '<span class="htitle"><h1>' + esc(data.title) + '</h1>' +
-        '<p>' + data.count + ' clip' + (data.count === 1 ? '' : 's') +
-        (data.expires_at ? ' · link expires ' + esc(data.expires_at.slice(0, 10)) : '') + '</p></span>' +
-        '<span class="hact">' +
-          (canDl && data.count ? '<button class="mg-btn" id="dlall">Download all</button>' : '') +
-        '</span>' +
-      '</header>' +
-      '<main>' +
+    var roomHTML = !room ? '' :
         '<section class="stage mg-glass">' +
           (data.message ? '<p class="msg">' + esc(data.message) + '</p>' : '') +
           '<div class="screen" id="screen">' + screenHTML(m) + '</div>' +
           (m ? '<div class="meta"><h2>' + esc(m.filename) + '</h2>' +
                '<span class="facts">' +
-               [m.resolution, dur(m.duration), m.file_size_formatted].filter(Boolean)
+               [m.resolution, isPhoto(m) ? '' : dur(m.duration), m.file_size_formatted].filter(Boolean)
                  .map(function (x) { return '<span>' + esc(x) + '</span>'; }).join('') +
                '</span></div>' : '') +
           (m ? '<div class="stageact">' +
@@ -360,23 +540,42 @@ PAGE = r"""<!doctype html>
               '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
               'stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21.2l7.8-7.7 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>' +
               '<span>' + (picked ? 'Picked' : 'Pick this') + '</span></button>' : '') +
+            (canPick && isPhoto(m) ? '<button class="mg-btn' + (pinArm ? ' on' : '') + '" id="arm" aria-pressed="' + pinArm + '">' +
+              (pinArm ? 'Tap the photo…' : 'Mark a spot') + '</button>' : '') +
             (canDl ? '<a class="mg-btn primary" href="' + API + '/stream/' + m.id + q('download=true') +
                      '" download>Download</a>' : '') +
             '<button class="mg-btn icon" id="prev" aria-label="Previous">&#8592;</button>' +
             '<button class="mg-btn icon" id="next" aria-label="Next">&#8594;</button>' +
           '</div>' : '') +
-          (m && canPick ? '<div class="note"><label for="cmt">Your note on this clip</label>' +
+          (m ? pinsHTML(m) : '') +
+          (m && canPick ? '<div class="note"><label for="cmt">Your note on this ' + (isPhoto(m) ? 'photo' : 'clip') + '</label>' +
             '<textarea id="cmt" placeholder="Anything you want us to know — a timecode, a change, a yes."></textarea>' +
             '<div class="noterow"><button class="mg-btn" id="savenote">Save note</button>' +
             '<span class="saved" id="savedmark">Saved</span></div></div>' : '') +
         '</section>' +
         '<aside class="reel mg-glass"><h3>In this link</h3>' +
           '<div class="cards" role="list">' + cards + '</div>' +
-        '</aside>' +
+        '</aside>';
+
+    wrap.innerHTML =
+      '<header>' +
+        '<span class="brand"><i></i>Oblivion<small>' + (room ? 'Screening room' : 'Upload') + '</small></span>' +
+        '<span class="htitle"><h1>' + esc(data.title) + '</h1>' +
+        '<p>' + esc(sub) +
+        (data.expires_at ? ' · link expires ' + esc(data.expires_at.slice(0, 10)) : '') + '</p></span>' +
+        '<span class="hact">' +
+          (room && offerZip() && data.count ? '<button class="mg-btn" id="dlall">Download all</button>' : '') +
+        '</span>' +
+      '</header>' +
+      '<main' + (room ? '' : ' class="solo"') + '>' +
+        (!room && data.message ? '<p class="msg wide" style="margin:0">' + esc(data.message) + '</p>' : '') +
+        roomHTML +
+        (canUpload() ? uploadHTML(!room) : '') +
+        ((room && data.count) || canUpload() ? doneHTML() : '') +
       '</main>' +
       '<footer><span>Sent by Oblivion Estates</span>' +
-      '<span><kbd>&#8592;</kbd> <kbd>&#8594;</kbd> move · <kbd>space</kbd> play' +
-      (canPick ? ' · <kbd>F</kbd> pick' : '') + '</span></footer>';
+      (room ? '<span><kbd>&#8592;</kbd> <kbd>&#8594;</kbd> move · <kbd>space</kbd> play' +
+      (canPick ? ' · <kbd>F</kbd> pick' : '') + '</span>' : '') + '</footer>';
 
     // thumbnails only once they are near the viewport
     var imgs = wrap.querySelectorAll('img[data-src]');
@@ -400,8 +599,18 @@ PAGE = r"""<!doctype html>
     on('next', function () { go(idx + 1); });
     on('heart', toggle);
     on('savenote', function () { saveNote(true); });
+    on('confirm', confirmDone);
+    on('arm', function () { pinArm = !pinArm; draft = null; render(); });
+    on('pincancel', function () { draft = null; pinArm = false; render(); });
+    on('pinsave', savePin);
     on('dlall', function () {
       location.href = API + '/download-zip' + q('ids=' + data.videos.map(function (v) { return v.id; }).join(','));
+    });
+    wrap.querySelectorAll('button[data-pin]').forEach(function (b) {
+      b.onclick = function () { removePin(+b.getAttribute('data-pin')); };
+    });
+    wrap.querySelectorAll('input.who').forEach(function (i) {
+      i.oninput = function () { setName(i.value); };
     });
     var cmt = document.getElementById('cmt');
     if (cmt && m) {
@@ -412,6 +621,10 @@ PAGE = r"""<!doctype html>
         saveTimer = setTimeout(function () { saveNote(false); }, 1200);
       };
     }
+    wirePins(m);
+    wireDrop();
+    var pt = document.getElementById('pintext');
+    if (pt) pt.focus();
     var card = wrap.querySelector('.card[aria-current="true"]');
     if (card && card.scrollIntoView) card.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
@@ -419,15 +632,24 @@ PAGE = r"""<!doctype html>
   function go(i) {
     if (!data.videos.length) return;
     idx = (i + data.videos.length) % data.videos.length;
+    pinArm = false; draft = null;
     render();
   }
 
-  function post(body) {
-    return fetch(API + '/select', {
+  function postJSON(path, body) {
+    return fetch(API + path, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ password: pw || undefined }, body))
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (b) {
+        if (!r.ok) throw new Error((b && b.detail) || 'That did not go through.');
+        return b;
+      });
     });
   }
+  var post = function (body) {
+    return postJSON('/select', Object.assign({ viewer_name: viewer || undefined }, body));
+  };
 
   function toggle() {
     var m = data.videos[idx]; if (!m) return;
@@ -453,11 +675,185 @@ PAGE = r"""<!doctype html>
       .catch(function () { if (explicit) alert('That note did not save — try again in a moment.'); });
   }
 
+  function confirmDone() {
+    var b = document.getElementById('confirm');
+    if (b) { b.disabled = true; b.textContent = 'Sending…'; }
+    // Flush a note that is still waiting on its debounce, so "done" is true.
+    clearTimeout(saveTimer);
+    var m = showRoom() ? data.videos[idx] : null;
+    var pending = (m && data.allow_selects && notes[m.id] != null)
+      ? post({ video_id: m.id, picked: !!picks[m.id], comment: notes[m.id] || '' }).catch(function () {})
+      : Promise.resolve();
+    pending.then(function () {
+      return postJSON('/confirm', { viewer_name: viewer || undefined });
+    }).then(function (r) {
+      data.confirmed_at = r.confirmed_at || new Date().toISOString();
+      data.confirmed_by = viewer || null;
+      confirmMsg = showRoom() && data.allow_selects ? (r.message || '') : '';
+      render();
+    }).catch(function (e) {
+      if (b) { b.disabled = false; b.textContent = 'I’m done'; }
+      alert(e.message || 'That did not go through — try again in a moment.');
+    });
+  }
+
+  // ————————————————————————————————————————————————————— proofing pins ———
+  function loadPins() {
+    if (!showRoom()) return;
+    var photos = data.videos.some(isPhoto);
+    if (!photos) return;
+    fetch(API + '/pins' + q()).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d && d.pins) { pins = d.pins; render(); } })
+      .catch(function () { /* pins are a nicety */ });
+  }
+
+  // The photo is letterboxed inside a 16:9 screen, so the pin layer is laid
+  // exactly over the picture itself — a pin at x=0.5 is the middle of the
+  // photo, not the middle of the black bars around it.
+  function layoutPins() {
+    var img = document.getElementById('still'), layer = document.getElementById('pinlayer');
+    var screen = document.getElementById('screen');
+    if (!img || !layer || !screen || !img.naturalWidth) return;
+    var cw = screen.clientWidth, ch = screen.clientHeight;
+    var s = Math.min(cw / img.naturalWidth, ch / img.naturalHeight);
+    var w = img.naturalWidth * s, h = img.naturalHeight * s;
+    layer.style.left = ((cw - w) / 2) + 'px'; layer.style.top = ((ch - h) / 2) + 'px';
+    layer.style.width = w + 'px'; layer.style.height = h + 'px';
+  }
+
+  function wirePins(m) {
+    var img = document.getElementById('still'), layer = document.getElementById('pinlayer');
+    if (!img || !layer || !m) return;
+    var mine = pins.filter(function (p) { return p.video_id === m.id; });
+    layer.innerHTML = mine.map(function (p, i) {
+      return '<span class="pin' + (p.resolved ? ' done' : '') + '" title="' + esc(p.text) + '" ' +
+             'style="left:' + (p.x * 100) + '%;top:' + (p.y * 100) + '%">' + (i + 1) + '</span>';
+    }).join('') + (draft ? '<span class="pin draft" style="left:' + (draft.x * 100) + '%;top:' +
+                            (draft.y * 100) + '%">+</span>' : '');
+    if (img.complete) layoutPins(); else img.addEventListener('load', layoutPins);
+    layer.onclick = function (e) {
+      if (!pinArm) return;
+      var r = layer.getBoundingClientRect();
+      var x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      var y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+      draft = { x: x, y: y };
+      render();
+    };
+  }
+
+  function savePin() {
+    var m = data.videos[idx], t = document.getElementById('pintext');
+    var text = t ? t.value.trim() : '';
+    if (!m || !draft) return;
+    if (!text) { if (t) t.focus(); return; }
+    postJSON('/pins', { video_id: m.id, x: draft.x, y: draft.y, text: text, viewer_name: viewer || undefined })
+      .then(function (p) { pins.push(p); draft = null; pinArm = false; render(); })
+      .catch(function (e) { alert(e.message || 'That spot did not save — try again.'); });
+  }
+
+  function removePin(id) {
+    fetch(API + '/pins/' + id + q(), { method: 'DELETE' }).then(function (r) {
+      if (!r.ok) throw new Error();
+      pins = pins.filter(function (p) { return p.id !== id; });
+      render();
+    }).catch(function () { alert('That note could not be removed just now.'); });
+  }
+
+  // ——————————————————————————————————————————————————————————— uploads ———
+  function upStatus(u) {
+    if (u.state === 'done') return 'Sent';
+    if (u.state === 'failed') return u.err || 'Failed';
+    if (u.state === 'queued') return 'Waiting · ' + bytes(u.size);
+    return Math.round(u.pct * 100) + '% of ' + bytes(u.size);
+  }
+
+  function paintUpload(u) {
+    var li = document.getElementById('up-' + u.id);
+    if (!li) return;
+    var st = li.querySelector('.st'), bar = li.querySelector('.bar i');
+    st.textContent = upStatus(u);
+    st.className = 'st' + (u.state === 'done' ? ' ok' : u.state === 'failed' ? ' bad' : '');
+    bar.style.width = Math.round(u.pct * 100) + '%';
+  }
+
+  function addFiles(list) {
+    var ul = document.getElementById('uplist');
+    Array.prototype.forEach.call(list || [], function (f) {
+      var u = { id: ++upSeq, name: f.name, size: f.size, pct: 0, state: 'queued', err: '' };
+      uploads.push(u);
+      queue.push({ u: u, f: f });
+      if (ul) {
+        var li = document.createElement('li');
+        li.id = 'up-' + u.id;
+        li.innerHTML = '<span class="fn">' + esc(u.name) + '</span><span class="st"></span>' +
+                       '<span class="bar"><i></i></span>';
+        ul.appendChild(li);
+        paintUpload(u);
+      }
+    });
+    pump();
+  }
+
+  // One at a time: a phone on a cell connection gets nothing from parallel
+  // uploads except all of them finishing late.
+  function pump() {
+    if (upBusy || !queue.length) return;
+    upBusy = true;
+    var job = queue.shift(), u = job.u;
+    u.state = 'sending';
+    paintUpload(u);
+    var form = new FormData();
+    form.append('file', job.f, job.f.name);
+    if (pw) form.append('password', pw);
+    if (viewer) form.append('sender', viewer);
+    var xhr = new XMLHttpRequest();
+    xhr.upload.onprogress = function (e) {
+      if (e.lengthComputable) { u.pct = e.loaded / e.total; paintUpload(u); }
+    };
+    var finish = function (ok, msg) {
+      u.state = ok ? 'done' : 'failed';
+      u.pct = ok ? 1 : u.pct;
+      u.err = msg || '';
+      paintUpload(u);
+      upBusy = false;
+      pump();
+    };
+    xhr.onload = function () {
+      var b = null;
+      try { b = JSON.parse(xhr.responseText); } catch (e) { /* not json */ }
+      if (xhr.status >= 200 && xhr.status < 300) finish(true);
+      else finish(false, (b && b.detail) || ('Failed (' + xhr.status + ')'));
+    };
+    xhr.onerror = function () { finish(false, 'Connection lost — try that one again'); };
+    xhr.open('POST', API + '/upload');
+    xhr.send(form);
+  }
+
+  function wireDrop() {
+    var drop = document.getElementById('drop'), input = document.getElementById('files');
+    if (!drop || !input) return;
+    input.onchange = function () { addFiles(input.files); input.value = ''; };
+    ['dragenter', 'dragover'].forEach(function (t) {
+      drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (t) {
+      drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+    });
+    drop.addEventListener('drop', function (e) {
+      if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+    });
+  }
+
+  window.addEventListener('beforeunload', function (e) {
+    if (upBusy || queue.length) { e.preventDefault(); e.returnValue = ''; }
+  });
+  window.addEventListener('resize', layoutPins);
+
   function gate(message, wrong) {
     wrap.innerHTML =
       '<div class="centre"><div class="box">' +
       '<h2>' + esc(message || 'This link needs a password') + '</h2>' +
-      '<p>Enter the password you were given to open this screening room.</p>' +
+      '<p>Enter the password you were given to open this link.</p>' +
       '<p class="bad">' + (wrong ? 'That password is not right.' : '') + '</p>' +
       '<input id="pwin" type="password" autocomplete="off" placeholder="Password" autofocus>' +
       '<button class="mg-btn primary" id="pwgo" style="width:100%;justify-content:center">Open</button>' +
@@ -476,12 +872,13 @@ PAGE = r"""<!doctype html>
 
   function load() {
     fetch(API + q()).then(function (r) {
-      if (r.status === 401) { gate(null, false); return null; }
+      // A wrong password answers 401 too; the second one says so.
+      if (r.status === 401) { gate(null, !!pw); return null; }
       if (r.status === 403) { gate(null, true); return null; }
       if (r.status === 404) { dead('This link is not available', 'It may have been turned off, or the address is not quite right.'); return null; }
       if (r.status === 410) { dead('This link has expired', 'Ask whoever sent it for a fresh one — it only takes a moment.'); return null; }
       if (r.status === 429) { dead('Too many attempts', 'Give it fifteen minutes and try again.'); return null; }
-      if (!r.ok) { dead('Something went wrong', 'The screening room could not be opened just now.'); return null; }
+      if (!r.ok) { dead('Something went wrong', 'This link could not be opened just now.'); return null; }
       return r.json();
     }).then(function (d) {
       if (!d) return;
@@ -490,15 +887,24 @@ PAGE = r"""<!doctype html>
       if (d.locked) { gate(null, !!d.wrong); return; }
       data = d;
       data.videos = data.videos || [];
+      data.count = data.count != null ? data.count : data.videos.length;
+      // Coming back to a link shows what was already picked and said.
+      picks = {}; notes = {};
+      Object.keys(data.picks || {}).forEach(function (k) {
+        var p = data.picks[k] || {};
+        picks[k] = !!p.picked;
+        if (p.comment) notes[k] = p.comment;
+      });
       idx = 0;
       render();
+      loadPins();
     }).catch(function () {
-      dead('No connection', 'The screening room could not be reached. Check the connection and reload.');
+      dead('No connection', 'This link could not be reached. Check the connection and reload.');
     });
   }
 
   document.addEventListener('keydown', function (e) {
-    if (!data) return;
+    if (!data || !showRoom()) return;
     var t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); go(idx + 1); }
