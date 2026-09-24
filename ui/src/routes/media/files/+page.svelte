@@ -9,7 +9,7 @@
   import { onMount } from 'svelte';
   import { fly, fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
-  import { mstate, boot, say } from '$lib/media.svelte.js';
+  import { mstate, boot, say, can, CAP } from '$lib/media.svelte.js';
   import { media, uploadFile, fmtBytes } from '$lib/media.js';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
@@ -155,12 +155,14 @@
       </span>
     {/if}
     <div class="mg-actions">
-      <button class="mg-btn secondary sm" onclick={mkdir} disabled={!mstate.status?.backend}>
-        <Icon name="plus" size={14} />Folder
-      </button>
-      <button class="mg-btn primary sm" onclick={() => input?.click()} disabled={!mstate.status?.backend}>
-        <Icon name="upload" size={14} />Upload
-      </button>
+      {#if can(CAP.UPLOAD)}
+        <button class="mg-btn secondary sm" onclick={mkdir} disabled={!mstate.status?.backend}>
+          <Icon name="plus" size={14} />Folder
+        </button>
+        <button class="mg-btn primary sm" onclick={() => input?.click()} disabled={!mstate.status?.backend}>
+          <Icon name="upload" size={14} />Upload
+        </button>
+      {/if}
       <input type="file" multiple bind:this={input} hidden
              onchange={(e) => { accept(e.currentTarget.files); e.currentTarget.value = ''; }} />
     </div>
@@ -178,15 +180,19 @@
   {#if sel.size}
     <div class="selbar mg-glass-soft" in:fly={{ y: -8, duration: 180 }}>
       <b class="mg-tnum">{sel.size} selected</b>
-      <button class="mg-btn secondary sm" onclick={zip}><Icon name="download" size={14} />Zip</button>
-      <button class="mg-btn danger sm" onclick={trash}><Icon name="trash" size={14} />Trash</button>
+      {#if can(CAP.DOWNLOAD)}
+        <button class="mg-btn secondary sm" onclick={zip}><Icon name="download" size={14} />Zip</button>
+      {/if}
+      {#if can(CAP.UPLOAD)}
+        <button class="mg-btn danger sm" onclick={trash}><Icon name="trash" size={14} />Trash</button>
+      {/if}
       <button class="mg-btn ghost sm" onclick={() => (sel = new Set())}>Clear</button>
     </div>
   {/if}
 
   <!-- ——————————————————————————————————————————————— the drop target ——— -->
   <button class="dz mg-glass-soft" class:over={dragging}
-          onclick={() => input?.click()} disabled={!mstate.status?.backend}>
+          onclick={() => input?.click()} disabled={!mstate.status?.backend || (mstate.me && !can(CAP.UPLOAD))}>
     <span class="dzi"><Icon name="upload" size={16} /></span>
     {#if dragging}
       <b transition:fade={{ duration: 140 }}>Drop to upload</b>
@@ -251,15 +257,19 @@
                 <Icon name="download" size={14} />
               </a>
             {/if}
-            <button class="mg-btn icon sm secondary" onclick={() => share(e)}
-                    aria-label="Copy a share link for {e.name}" title="Share">
-              <Icon name="share" size={14} />
-            </button>
-            <button class="mg-btn ghost sm rn" onclick={() => rename(e)}>Rename</button>
-            <button class="mg-btn icon sm danger" onclick={() => trashOne(e)}
-                    aria-label="Move {e.name} to trash" title="Move to trash">
-              <Icon name="trash" size={14} />
-            </button>
+            {#if can(CAP.SHARES)}
+              <button class="mg-btn icon sm secondary" onclick={() => share(e)}
+                      aria-label="Copy a share link for {e.name}" title="Share">
+                <Icon name="share" size={14} />
+              </button>
+            {/if}
+            {#if can(CAP.UPLOAD)}
+              <button class="mg-btn ghost sm rn" onclick={() => rename(e)}>Rename</button>
+              <button class="mg-btn icon sm danger" onclick={() => trashOne(e)}
+                      aria-label="Move {e.name} to trash" title="Move to trash">
+                <Icon name="trash" size={14} />
+              </button>
+            {/if}
           </div>
         </div>
       {/each}
@@ -364,6 +374,8 @@
   @media (pointer: coarse) {
     .acts .mg-btn.icon { width: 40px; height: 40px; }
     .crumb { height: 40px; }
+    .row input[type='checkbox'] { width: 22px; height: 22px; margin: 0 2px; }
+    .selbar .mg-btn { height: 40px; }
   }
 
   /* A phone keeps the two actions you reach for; the rest live on the row you
@@ -371,5 +383,8 @@
   @media (max-width: 560px) {
     .rn, .dl { display: none; }
     .dz .into { margin-left: 0; width: 100%; }
+    .row { padding: 10px; gap: 8px; }
+    .acts { gap: 2px; }
+    .ic { width: 32px; height: 32px; }
   }
 </style>

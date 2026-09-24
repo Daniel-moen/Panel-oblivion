@@ -12,11 +12,13 @@
      actually comes here to start. */
   import { onMount } from 'svelte';
   import { fly } from 'svelte/transition';
-  import { mstate, boot, runRescan, runProxies, runAutoTag } from '$lib/media.svelte.js';
+  import { mstate, boot, runRescan, runProxies, runAutoTag, can, CAP } from '$lib/media.svelte.js';
   import { media, streamUrl, thumbUrl, fmtBytes, fmtHours } from '$lib/media.js';
   import CountUp from '$lib/components/CountUp.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
+  import ActivityBell from '$lib/components/media/library/ActivityBell.svelte';
+  import ProjectsPanel from '$lib/components/media/library/ProjectsPanel.svelte';
 
   let reel = $state([]);          // clips with proxies, for the montage
   let shot = $state(0);           // which one is on screen
@@ -76,6 +78,7 @@
     <span class="mg-count">{clipCount.toLocaleString('en-ZA').replace(/,/g, ' ')} clips</span>
   {/if}
   <div class="mg-actions">
+    {#if mstate.ready}<ActivityBell />{/if}
     <a class="mg-btn secondary sm" href="/media/search"><Icon name="search" size={14} />Search</a>
     <a class="mg-btn primary sm" href="/media/browse"><Icon name="grid" size={14} />Browse</a>
   </div>
@@ -155,23 +158,37 @@
 
 <!-- ————————————————————————————————————————————————— quick actions ——— -->
 <section class="mg-grid acts">
-  <button class="mg-card act" onclick={runRescan} disabled={mstate.busy || !mstate.ready}>
-    <span class="ic"><Icon name="refresh" size={17} /></span>
-    <b>Re-index</b><span class="hint">Pick up anything new on the drive</span>
-  </button>
-  <button class="mg-card act" onclick={runProxies} disabled={!mstate.ready}>
-    <span class="ic"><Icon name="film" size={17} /></span>
-    <b>Build proxies</b><span class="hint">{mstate.proxies?.pending ?? '—'} clips still need one</span>
-  </button>
-  <button class="mg-card act" onclick={runAutoTag} disabled={!mstate.ready}>
-    <span class="ic"><Icon name="sparkles" size={17} /></span>
-    <b>Auto-tag</b><span class="hint">Camera, stage and spoken-word tags</span>
-  </button>
-  <a class="mg-card act" href="/media/shares">
-    <span class="ic"><Icon name="link" size={17} /></span>
-    <b>New share link</b><span class="hint">Send a reel to a client</span>
+  {#if can(CAP.ORGANISE)}
+    <button class="mg-card act" onclick={runRescan} disabled={mstate.busy || !mstate.ready}>
+      <span class="ic"><Icon name="refresh" size={17} /></span>
+      <b>Re-index</b><span class="hint">Pick up anything new on the drive</span>
+    </button>
+  {/if}
+  {#if can(CAP.PROXY)}
+    <button class="mg-card act" onclick={runProxies} disabled={!mstate.ready}>
+      <span class="ic"><Icon name="film" size={17} /></span>
+      <b>Build proxies</b><span class="hint">{mstate.proxies?.pending ?? '—'} clips still need one</span>
+    </button>
+  {/if}
+  {#if can(CAP.ADMIN)}
+    <button class="mg-card act" onclick={runAutoTag} disabled={!mstate.ready}>
+      <span class="ic"><Icon name="sparkles" size={17} /></span>
+      <b>Auto-tag</b><span class="hint">Camera, stage and spoken-word tags</span>
+    </button>
+  {/if}
+  {#if can(CAP.SHARES)}
+    <a class="mg-card act" href="/media/shares">
+      <span class="ic"><Icon name="link" size={17} /></span>
+      <b>New share link</b><span class="hint">Send a reel to a client</span>
+    </a>
+  {/if}
+  <a class="mg-card act" href="/media/browse?trash=1">
+    <span class="ic"><Icon name="trash" size={17} /></span>
+    <b>Trash</b><span class="hint">Restore what was deleted</span>
   </a>
 </section>
+
+{#if mstate.ready}<ProjectsPanel />{/if}
 
 <!-- —————————————————————————————————————————————————————————— recent ——— -->
 <section class="recent">
@@ -280,7 +297,7 @@
   .mg-h2.sm { font-size: 15px; }
   .strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
   .rcard {
-    flex: none; width: 190px; aspect-ratio: 16 / 10; border-radius: 14px;
+    flex: none; width: min(190px, 62vw); aspect-ratio: 16 / 10; border-radius: 14px;
     overflow: hidden; position: relative; background: rgba(255, 255, 255, 0.05);
   }
   .rcard.real { transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.2s; }
@@ -295,6 +312,12 @@
     background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.85));
   }
   .none { margin: 0; padding: 22px 0; font-size: 13px; color: var(--mg-i3); }
+
+  @media (max-width: 560px) {
+    .acts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .act .hint { display: none; }
+    .tile b { font-size: 20px; }
+  }
 
   @media (prefers-reduced-motion: reduce) {
     .film video { transition: none; }

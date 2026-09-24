@@ -34,9 +34,14 @@
     { value: '/media', label: 'Overview', icon: 'sparkles' },
     { value: '/media/browse', label: 'Browse', icon: 'grid' },
     { value: '/media/search', label: 'Search', icon: 'search' },
+    { value: '/media/shoots', label: 'Shoots', icon: 'camera' },
+    { value: '/media/calendar', label: 'Calendar', icon: 'calendar' },
+    { value: '/media/edit', label: 'Photo editor', icon: 'sliders' },
+    { value: '/media/hdr', label: 'HDR & Looks', icon: 'sun' },
+    { value: '/media/video', label: 'Video editor', icon: 'film' },
     { value: '/media/tags', label: 'Tags', icon: 'tag' },
     { value: '/media/duplicates', label: 'Duplicates', icon: 'copy' },
-    { value: '/media/shares', label: 'Shares', icon: 'share' },
+    { value: '/media/shares', label: 'Portals', icon: 'share' },
     { value: '/media/files', label: 'Files', icon: 'folder' },
     { value: '/media/settings', label: 'Settings', icon: 'settings' }
   ];

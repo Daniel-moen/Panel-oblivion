@@ -11,6 +11,7 @@
      Touch devices never get it: `hover: hover` gates the whole thing, so a
      phone is not asked to autoplay anything. */
   import { thumbUrl, streamUrl, fmtDuration } from '$lib/media.js';
+  import { labelColor } from '$lib/media.svelte.js';
   import Icon from '$lib/components/glass/Icon.svelte';
 
   let { clip, selected = false, selecting = false, onopen, ontoggle } = $props();
@@ -86,7 +87,8 @@
     </span>
 
     <span class="meta">
-      <b>{clip.filename}</b>
+      <b>{#if clip.label}<i class="lbl" style:background={labelColor(clip.label)}
+             role="img" title="{clip.label} label" aria-label="{clip.label} label"></i>{/if}{clip.filename}</b>
       <span>{[clip.folder_name, clip.file_size_formatted].filter(Boolean).join(' · ')}</span>
     </span>
   </button>
@@ -171,6 +173,8 @@
   .meta { display: block; padding: 8px 7px 5px; min-width: 0; }
   .meta b { display: block; font: 500 13px/1.35 var(--mg-font); color: var(--mg-i);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lbl { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
+         vertical-align: 0.05em; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25); }
   .meta span { display: block; font: 400 11.5px/1.45 var(--mg-font); color: var(--mg-i3);
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -191,6 +195,8 @@
     background: var(--mg-ok); border-color: var(--mg-ok); color: var(--mg-ok-ink);
     transform: scale(1.06);
   }
+  /* 24px to look at, 40px to hit: a thumb needs the bigger target. */
+  .tick::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; }
   .tick:focus-visible { outline: 2px solid var(--mg-ok); outline-offset: 2px; }
 
   @media (hover: none) {

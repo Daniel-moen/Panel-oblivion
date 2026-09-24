@@ -38,6 +38,13 @@ export const mstate = $state({
   openId: null,
   openClip: null,
 
+  /* who is looking: GET /api/me — role + capabilities */
+  me: null,
+
+  /* library extras (Zerko 1.2–1.4) */
+  labelFilter: null,         // client-side: /api/videos has no label param
+  clipboard: [],             // ids copied for paste-into-folder
+
   /* background work */
   jobs: { running: [], recent: [] },
   rescan: null,
@@ -81,6 +88,7 @@ export function boot() {
       // Mint the token now so <img>/<video> URLs built during the first
       // render already carry one.
       await media.stats().then((st) => { mstate.stats = st; }).catch(() => {});
+      loadMe();                 // capabilities; pages hide what the role lacks
       mstate.ready = true;
       mstate.error = bootError.message || null;
       return s;
@@ -195,4 +203,70 @@ export async function rate(clip, rating) {
   clip.rating = rating;                       // optimistic: a star must feel instant
   try { await media.rate(clip.id, rating); }
   catch (e) { clip.rating = before; fail(e); }
+}
+
+
+/* ----------------------------------------------------- who may do what */
+
+/* The capability names from zerko/permissions.py. Hiding a control is a
+   courtesy — the backend middleware is the guard. */
+export const CAP = {
+  DOWNLOAD: 'media.download', UPLOAD: 'media.upload', ORGANISE: 'media.organise',
+  ANNOTATE: 'media.annotate', TRASH: 'media.trash', HARD_DELETE: 'media.harddelete',
+  TRANSCRIBE: 'jobs.transcribe', PROXY: 'jobs.proxy', SHARES: 'shares.manage', ADMIN: 'admin'
+};
+
+let meLoading = null;
+export function loadMe() {
+  if (mstate.me) return Promise.resolve(mstate.me);
+  if (!meLoading) {
+    meLoading = media.me()
+      .then((m) => { mstate.me = m; return m; })
+      .catch(() => null)
+      .finally(() => { meLoading = null; });
+  }
+  return meLoading;
+}
+
+/** True when the signed-in role holds this capability. False until /api/me
+    has answered, so nothing destructive flashes up and then vanishes. */
+export const can = (cap) => !!mstate.me?.capabilities?.includes(cap);
+
+/* ------------------------------------------------------- colour labels */
+
+export const LABELS = [
+  { value: 'red', label: 'Red', color: '#f26d64' },
+  { value: 'yellow', label: 'Yellow', color: '#f0b429' },
+  { value: 'green', label: 'Green', color: '#3ecf8e' },
+  { value: 'blue', label: 'Blue', color: '#5aa9f5' },
+  { value: 'purple', label: 'Purple', color: '#a78bfa' }
+];
+export const labelColor = (v) => LABELS.find((l) => l.value === v)?.color || null;
+
+/** Set (or clear, with null) the colour label on these clips. Optimistic on
+    the grid and the open clip; rolled back if the server says no. */
+export async function setLabel(ids, label) {
+  const want = new Set(ids);
+  const before = new Map();
+  for (const c of mstate.clips) if (want.has(c.id)) { before.set(c.id, c.label); c.label = label; }
+  const open = mstate.openClip && want.has(mstate.openClip.id) ? mstate.openClip : null;
+  const openBefore = open?.label;
+  if (open) open.label = label;
+  try {
+    await media.label(ids, label);
+    return true;
+  } catch (e) {
+    for (const c of mstate.clips) if (before.has(c.id)) c.label = before.get(c.id);
+    if (open) open.label = openBefore;
+    fail(e);
+    return false;
+  }
+}
+
+/** Drop clips from the grid (after they went to the trash or moved away). */
+export function dropClips(ids) {
+  const gone = new Set(ids);
+  mstate.clips = mstate.clips.filter((c) => !gone.has(c.id));
+  if (mstate.selection.size) mstate.selection = new Set([...mstate.selection].filter((i) => !gone.has(i)));
+  if (mstate.openId != null && gone.has(mstate.openId)) closeClip();
 }

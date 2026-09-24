@@ -13,7 +13,7 @@
   import { onMount } from 'svelte';
   import { fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
-  import { mstate, boot, runAutoTag, say } from '$lib/media.svelte.js';
+  import { mstate, boot, runAutoTag, say, can, CAP } from '$lib/media.svelte.js';
   import { media } from '$lib/media.js';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
@@ -53,11 +53,13 @@
   {#if overview}
     <span class="mg-count">{tags.length} tag{tags.length === 1 ? '' : 's'}</span>
   {/if}
-  <div class="mg-actions">
-    <button class="mg-btn secondary sm" onclick={runAutoTag} disabled={!mstate.ready}>
-      <Icon name="sparkles" size={14} />Auto-tag
-    </button>
-  </div>
+  {#if can(CAP.ADMIN)}
+    <div class="mg-actions">
+      <button class="mg-btn secondary sm" onclick={runAutoTag} disabled={!mstate.ready}>
+        <Icon name="sparkles" size={14} />Auto-tag
+      </button>
+    </div>
+  {/if}
 </div>
 
 <div class="mg-controls">
@@ -88,7 +90,7 @@
     {#snippet children()}
       {#if q}
         <button class="mg-btn secondary sm" onclick={() => (q = '')}>Clear the filter</button>
-      {:else}
+      {:else if can(CAP.ADMIN)}
         <button class="mg-btn primary sm" onclick={runAutoTag} disabled={!mstate.ready}>
           <Icon name="sparkles" size={14} />Run auto-tag
         </button>
@@ -123,6 +125,12 @@
   .src { font-size: 10.5px; font-weight: 500; color: var(--mg-i3); flex: none; }
   .n { font-size: 11px; color: var(--mg-i3); flex: none; }
   .tag:hover .n, .tag:hover .src { color: var(--mg-i2); }
+
+  @media (max-width: 560px) {
+    .wall { gap: 6px; }
+    .tag { padding: 0 12px; }
+    .src { display: none; }
+  }
 
   /* The browser's own clear affordance would sit beside ours. */
   .mg-search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
