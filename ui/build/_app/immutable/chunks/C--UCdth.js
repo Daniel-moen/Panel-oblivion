@@ -1,0 +1,1 @@
+import{b as r}from"./DWtoNjzh.js";import{a as s}from"./DN3GrMXs.js";const e=r({loaded:!1,id:null,username:"",display_name:"",role:"owner",privileges:[],is_owner:!0,via:"",passkeys:0});async function t(){try{const a=await s.me();Object.assign(e,a,{loaded:!0})}catch{}return e}function i(a){return e.loaded?e.privileges.includes(a):!0}export{i as c,t as l,e as m};
