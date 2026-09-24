@@ -14,7 +14,11 @@ const config = {
            share_page.py so it needs no JavaScript bundle and no auth
            exemption for /_app. */
         '/media', '/media/browse', '/media/search', '/media/tags',
-        '/media/duplicates', '/media/shares', '/media/files', '/media/settings'
+        '/media/duplicates', '/media/shares', '/media/files', '/media/settings',
+        /* Zerko 1.2–1.4. Detail views take ?id= rather than a [param] route
+           so each one still prerenders to a file webapp.py can find. */
+        '/media/shoots', '/media/shoot', '/media/calendar', '/media/edit',
+        '/media/hdr', '/media/video'
       ]
     }
   }

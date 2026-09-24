@@ -7,7 +7,7 @@
      asks first. The copy being kept is marked before you press anything. */
   import { onMount } from 'svelte';
   import { fly } from 'svelte/transition';
-  import { mstate, boot, say } from '$lib/media.svelte.js';
+  import { mstate, boot, say, can, CAP, loadMe } from '$lib/media.svelte.js';
   import { media, thumbUrl, fmtBytes } from '$lib/media.js';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
@@ -20,8 +20,14 @@
   onMount(async () => {
     await boot();
     if (!mstate.ready) { loading = false; return; }
+    /* /api/duplicates is an administrator route (permissions.py); asking
+       as an editor would only earn a 403 toast. */
+    await loadMe();
+    if (mstate.me && !can(CAP.ADMIN)) { loading = false; return; }
     load();
   });
+
+  const denied = $derived(!!mstate.me && !can(CAP.ADMIN));
 
   async function load() {
     loading = true;
@@ -65,14 +71,17 @@
   {:else}
     <span class="mg-count">Byte-identical copies</span>
   {/if}
-  <div class="mg-actions">
+  <div class="mg-actions" class:hide={denied}>
     <button class="mg-btn secondary sm" onclick={scan} disabled={scanning || !mstate.ready}>
       {#if scanning}<span class="mg-spin"></span>Scanning…{:else}<Icon name="refresh" size={14} />Re-scan{/if}
     </button>
   </div>
 </div>
 
-{#if loading}
+{#if denied}
+  <Empty icon="lock" title="Duplicates are an administrator tool"
+         hint="Finding and removing duplicate masters needs the administrator role. Ask an admin to run the scan." />
+{:else if loading}
   <div class="list">
     {#each Array(4) as _, i (i)}
       <Skeleton h="180px" r="var(--mg-r-card)" delay={i * 70} />
@@ -127,6 +136,7 @@
 {/if}
 
 <style>
+  .hide { display: none; }
   .list { display: flex; flex-direction: column; gap: 12px; }
   .grp { padding: 14px; }
 
@@ -155,6 +165,12 @@
   figcaption { display: flex; flex-direction: column; gap: 2px; padding: 8px 4px 3px; min-width: 0; }
   figcaption b { font: 500 12px/1.3 var(--mg-font); color: var(--mg-i);
                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 560px) {
+    .grp { padding: 12px; }
+    .ga { margin-left: 0; flex: 1 1 100%; }
+    .ga .mg-btn { height: 40px; width: 100%; }
+    .copy { width: 140px; }
+  }
   .path { font: 11px/1.35 var(--mg-mono); color: var(--mg-i3);
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

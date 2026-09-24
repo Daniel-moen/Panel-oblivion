@@ -10,7 +10,9 @@
      said "sea view" is the whole job. */
   import { fade, fly } from 'svelte/transition';
   import { media, posterUrl, streamUrl, photoUrl, thumbUrl, fmtDuration, fmtBytes } from '$lib/media.js';
-  import { say } from '$lib/media.svelte.js';
+  import { say, can, CAP, setLabel, dropClips } from '$lib/media.svelte.js';
+  import LabelDots from '$lib/components/media/library/LabelDots.svelte';
+  import VirtualCopies from '$lib/components/media/library/VirtualCopies.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
 
@@ -75,6 +77,18 @@
       newNote = '';
       say('Note added');
     } catch (e) { say(e.message, 'error'); }
+  }
+
+  let trashing = $state(false);
+  async function trashIt() {
+    if (!clip) return;
+    trashing = true;
+    try {
+      await media.trashOne(clip.id);
+      say(`Moved ${clip.filename} to the trash`);
+      dropClips([clip.id]);
+    } catch (e) { say(e.message, 'error'); }
+    finally { trashing = false; }
   }
 
   function onKey(e) {
@@ -186,6 +200,46 @@
           <div style="margin-bottom:0.6rem"><Skeleton h="0.9rem" delay={i * 60} /></div>
         {/each}
       {:else}
+        {#if can(CAP.ANNOTATE)}
+          <section>
+            <span class="mg-label">Label</span>
+            <LabelDots value={clip.label ?? null} noneLabel="Clear label"
+                       onchange={(v) => setLabel([clip.id], v)} />
+          </section>
+        {:else if clip.label}
+          <section>
+            <span class="mg-label">Label</span>
+            <span class="mg-chip">{clip.label}</span>
+          </section>
+        {/if}
+
+        <section>
+          <span class="mg-label">Open in</span>
+          <div class="open">
+            {#if isPhoto}
+              <a class="mg-btn secondary sm" href="/media/edit?id={clip.id}">
+                <Icon name="sliders" size={14} />Edit photo
+              </a>
+              <a class="mg-btn secondary sm" href="/media/hdr?id={clip.id}">
+                <Icon name="sun" size={14} />HDR / Looks
+              </a>
+            {:else if clip.media_type === 'video'}
+              <a class="mg-btn secondary sm" href="/media/video?clip={clip.id}">
+                <Icon name="film" size={14} />Open in video editor
+              </a>
+            {/if}
+            {#if can(CAP.DOWNLOAD)}
+              <a class="mg-btn ghost sm" href={media.fileUrl(clip.id)} download={clip.filename}>
+                <Icon name="download" size={14} />Download
+              </a>
+            {/if}
+          </div>
+        </section>
+
+        {#if isPhoto}
+          <VirtualCopies {clip} />
+        {/if}
+
         <section>
           <span class="mg-label">Details</span>
           <dl class="mg-kv">
@@ -222,6 +276,14 @@
           <span class="mg-label">File</span>
           <p class="path">{clip.filepath}</p>
         </section>
+
+        {#if can(CAP.TRASH)}
+          <section>
+            <button class="mg-btn danger sm" disabled={trashing} onclick={trashIt}>
+              <Icon name="trash" size={14} />Move to trash
+            </button>
+          </section>
+        {/if}
       {/if}
     </aside>
   </div>
@@ -305,6 +367,7 @@
   }
   .path { margin: 0; padding: 8px 11px; border-radius: 12px; background: var(--mg-term);
           font: 11.5px/1.55 var(--mg-mono); color: var(--mg-i3); overflow-wrap: anywhere; }
+  .open { display: flex; gap: 6px; flex-wrap: wrap; }
   .dim { display: block; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
   form { margin-top: 8px; }
 
@@ -313,6 +376,11 @@
     .side { border-left: 0; border-top: 1px solid var(--mg-line); }
     .nav { display: none; }
     .lines { max-height: none; }
+    .side { padding: 16px 14px calc(16px + var(--mg-sab, 0px)); }
+  }
+  @media (pointer: coarse) {
+    .x { width: 40px; height: 40px; }
+    .open .mg-btn, section > .mg-btn { height: 40px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .tags .mg-chip { animation: none; }

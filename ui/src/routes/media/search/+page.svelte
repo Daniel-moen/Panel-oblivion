@@ -11,7 +11,7 @@
   import { onMount } from 'svelte';
   import { flip } from 'svelte/animate';
   import { fly } from 'svelte/transition';
-  import { mstate, boot, openClip, closeClip, stepClip } from '$lib/media.svelte.js';
+  import { mstate, boot, openClip, closeClip, stepClip, labelColor } from '$lib/media.svelte.js';
   import { media, thumbUrl, fmtDuration } from '$lib/media.js';
   import ClipDrawer from '$lib/components/ClipDrawer.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
@@ -137,6 +137,8 @@
 
         <div class="body">
           <h3>
+            {#if r.label}<i class="lbl" style:background={labelColor(r.label)} role="img"
+                            aria-label="{r.label} label" title="{r.label} label"></i>{/if}
             <button class="name" onclick={() => playFrom(r, 0)}>
               {#each highlight(r.filename, q) as part (part.k)}
                 {#if part.hit}<mark>{part.t}</mark>{:else}{part.t}{/if}
@@ -240,6 +242,13 @@
     border-radius: 3px; padding: 0 0.12em; font-weight: 600;
   }
 
+  .lbl { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
+         vertical-align: 0.05em; }
+
+  @media (max-width: 420px) {
+    .th { width: 72px; height: 44px; }
+    .big .mg-input { font-size: 16px; }   /* 16px stops iOS zooming the page on focus */
+  }
   @media (max-width: 620px) {
     .row { padding: 11px; gap: 11px; }
     .tc { height: 40px; padding: 0 12px; }

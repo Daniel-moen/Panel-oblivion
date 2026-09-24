@@ -117,7 +117,7 @@ export async function mfetch(path, opts = {}, retry = true) {
   return handle(res);
 }
 
-const q = (params) => {
+export const q = (params) => {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(params || {}))
     if (v != null && v !== '' && v !== 'all') u.set(k, v);
@@ -125,9 +125,9 @@ const q = (params) => {
   return s ? '?' + s : '';
 };
 
-const post = (p, body) => mfetch(p, { method: 'POST', body: JSON.stringify(body ?? {}) });
-const put = (p, body) => mfetch(p, { method: 'PUT', body: JSON.stringify(body ?? {}) });
-const del = (p) => mfetch(p, { method: 'DELETE' });
+export const post = (p, body) => mfetch(p, { method: 'POST', body: JSON.stringify(body ?? {}) });
+export const put = (p, body) => mfetch(p, { method: 'PUT', body: JSON.stringify(body ?? {}) });
+export const del = (p) => mfetch(p, { method: 'DELETE' });
 
 /* ------------------------------------------------------------------- api */
 
@@ -153,7 +153,9 @@ export const media = {
   setTags: (id, tag_ids) => post(`/api/videos/${id}/tags`, { tag_ids }),
   untag: (id, tagId) => del(`/api/videos/${id}/tags/${tagId}`),
   move: (id, folder_id) => post(`/api/videos/${id}/folder`, { folder_id }),
-  remove: (id, permanent = false) => del(`/api/videos/${id}${permanent ? '?permanent=true' : ''}`),
+  /* delete_file=true is the real trash move; without it upstream only drops
+     the catalogue row and the next rescan brings the file back. */
+  remove: (id, permanent = false) => del(`/api/videos/${id}?delete_file=true${permanent ? '&permanent=true' : ''}`),
   bulk: (body) => post('/api/videos/bulk', body),
   notes: (id) => mfetch(`/api/videos/${id}/notes`),
   addNote: (id, content) => post(`/api/videos/${id}/notes`, { content }),
@@ -196,6 +198,48 @@ export const media = {
   /* The owner-side exports are downloads, so they go through murl. */
   fcpxmlUrl: (id) => murl(`/api/shares/${id}/export.fcpxml`),
   csvUrl: (id) => murl(`/api/shares/${id}/export.csv`),
+
+  /* ---- who am I: role + capability list, for hiding what the role can't do */
+  me: () => mfetch('/api/me'),
+
+  /* ---- colour labels (Lightroom-style). There is no single-clip route:
+     the bulk action is the one writer, so one clip is a bulk of one.
+     label null clears it. */
+  label: (video_ids, label) => post('/api/videos/bulk', { action: 'label', video_ids, label }),
+
+  /* ---- trash. DELETE without delete_file removes the catalogue row only
+     (the next rescan brings it back); delete_file=true is the reversible
+     move into _Trash that the Trash view lists. */
+  trashOne: (id) => del(`/api/videos/${id}?delete_file=true`),
+  trashMany: (video_ids) => post('/api/videos/bulk', { action: 'delete', video_ids }),
+  trash: () => mfetch('/api/trash'),
+  restore: (id) => post(`/api/videos/${id}/restore`),
+  restoreAll: () => post('/api/trash/restore-all'),
+  emptyTrash: () => post('/api/trash/empty'),
+  trashSettings: (auto_days) => post('/api/trash/settings', { auto_days }),
+
+  /* ---- virtual copies of a photo (photo_edit.py) */
+  copies: (id) => mfetch(`/api/photo-edit/${id}/copies`),
+  newCopy: (id, name, recipe) => post(`/api/photo-edit/${id}/copies`, { name, recipe }),
+  renameCopy: (id, copyId, name) =>
+    mfetch(`/api/photo-edit/${id}/copies/${copyId}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+  delCopy: (id, copyId) => del(`/api/photo-edit/${id}/copies/${copyId}`),
+
+  /* ---- the bell */
+  activity: () => mfetch('/api/activity'),
+  activitySeen: () => post('/api/activity/seen'),
+
+  /* ---- projects: a folder per shoot with numbered stage folders */
+  projects: () => mfetch('/api/projects'),
+  createProject: (body) => post('/api/projects', body),
+  bringIn: (id, video_ids, stage = 'originals', move_files = true) =>
+    post(`/api/projects/${id}/bring-in`, { video_ids, stage, move_files }),
+  forgetProject: (id) => del(`/api/projects/${id}`),
+
+  /* ---- copy/paste and zip download */
+  copyTo: (video_ids, folder_id) => post('/api/videos/copy', { video_ids, folder_id }),
+  zipUrl: (ids) => murl('/api/download-zip', { ids: ids.join(',') }),
+  fileUrl: (id) => murl(`/api/video-file/${id}`),
 
   /* ---- the general file store */
   files: {

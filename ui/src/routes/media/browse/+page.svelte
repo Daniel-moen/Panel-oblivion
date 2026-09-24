@@ -8,13 +8,20 @@
 
      On a phone the rail is not a rail: 220px of folder names would eat the
      grid, so below 860px the same buttons become one sideways-scrolling row of
-     chips. Same state, same handlers, a different shape. */
+     chips. Same state, same handlers, a different shape.
+
+     Zerko 1.2–1.4 additions: colour labels (a filter here, client-side —
+     /api/videos has no label parameter), the trash as the last entry of the
+     rail, and a selection bar that labels, files into a project, copies for
+     paste-into-folder, zips for download and trashes. Every control checks
+     the role's capabilities from /api/me. */
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { flip } from 'svelte/animate';
   import { fly } from 'svelte/transition';
   import { mstate, boot, loadClips, loadFolders, openClip, closeClip, stepClip,
-           toggleSelect, clearSelect, selectAll, say } from '$lib/media.svelte.js';
+           toggleSelect, clearSelect, selectAll, say, can, CAP, setLabel, dropClips,
+           LABELS } from '$lib/media.svelte.js';
   import { media, fmtBytes } from '$lib/media.js';
   import ClipCard from '$lib/components/ClipCard.svelte';
   import ClipDrawer from '$lib/components/ClipDrawer.svelte';
@@ -22,29 +29,59 @@
   import Icon from '$lib/components/glass/Icon.svelte';
   import Seg from '$lib/components/glass/Seg.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
+  import LabelDots from '$lib/components/media/library/LabelDots.svelte';
+  import ActivityBell from '$lib/components/media/library/ActivityBell.svelte';
+  import TrashView from '$lib/components/media/library/TrashView.svelte';
+  import ProjectSheet from '$lib/components/media/library/ProjectSheet.svelte';
 
   let opening = $state(false);
-  let q = $state('');
+  let q = $state(mstate.filters.search || '');
   let debounce;
+
+  let mode = $state('library');        // library | trash
+  let trashCount = $state(null);
+  let labelOpen = $state(false);
+  let projectOpen = $state(false);
+  let working = $state(false);
 
   onMount(async () => {
     await boot();
     if (!mstate.ready) return;
     loadFolders();
+    refreshTrashCount();
+    const sp = page.url.searchParams;
+    if (sp.get('trash')) mode = 'trash';
     /* Arriving from the Tags page (/media/browse?tag=drone) filters to it;
+       from a project stage (/media/browse?folder=12) opens that folder;
        otherwise keep whatever the grid was last showing. */
-    const tag = page.url.searchParams.get('tag');
+    const tag = sp.get('tag');
+    const folder = sp.get('folder');
     if (tag && tag !== mstate.filters.tags) {
       mstate.filters.tags = tag;
       mstate.filters.search = '';
       q = '';
       await loadClips();
+    } else if (folder && Number(folder) !== mstate.filters.folder_id) {
+      setFolder(Number(folder));
     } else if (!mstate.loaded) {
       await loadClips();
     }
-    const pre = page.url.searchParams.get('open');
-    if (pre) open({ id: Number(pre) });
   });
+
+  /* ?open= may change while we are already here (the bell links to it), so
+     it is an effect, not a mount-time read. */
+  let lastOpen = null;
+  $effect(() => {
+    const pre = page.url.searchParams.get('open');
+    if (!pre || pre === lastOpen || !mstate.ready) return;
+    lastOpen = pre;
+    mode = 'library';
+    open({ id: Number(pre) });
+  });
+
+  async function refreshTrashCount() {
+    try { trashCount = (await media.trash())?.count ?? null; } catch { trashCount = null; }
+  }
 
   async function open(clip) {
     opening = true;
@@ -53,6 +90,7 @@
   }
 
   function setFolder(id) {
+    mode = 'library';
     mstate.filters.folder_id = id;
     mstate.filters.include_subfolders = id != null;
     clearSelect();
@@ -79,7 +117,10 @@
   });
 
   const sel = $derived(mstate.selection);
-  const clips = $derived(mstate.clips);
+  /* Label filter is client-side: the list endpoint takes no label param. */
+  const clips = $derived(mstate.labelFilter
+    ? mstate.clips.filter((c) => c.label === mstate.labelFilter)
+    : mstate.clips);
   const totalSize = $derived(clips.reduce((a, c) => a + (c.file_size || 0), 0));
 
   /* The folder tree arrives nested; flatten it once for a simple list with
@@ -107,6 +148,58 @@
     } catch (e) { say(e.message, 'error'); }
   }
 
+  async function labelSel(label) {
+    const ids = [...sel];
+    labelOpen = false;
+    if (ids.length && await setLabel(ids, label))
+      say(label ? `Labelled ${ids.length} ${label}` : `Cleared the label on ${ids.length}`);
+  }
+
+  async function trashSel() {
+    const ids = [...sel];
+    if (!ids.length) return;
+    working = true;
+    try {
+      const r = await media.trashMany(ids);
+      say(`Moved ${r.affected} to the trash`);
+      dropClips(ids);
+      refreshTrashCount();
+    } catch (e) { say(e.message, 'error'); }
+    finally { working = false; }
+  }
+
+  function copySel() {
+    mstate.clipboard = [...sel];
+    say(`Copied ${sel.size} — open a folder and paste`);
+    clearSelect();
+  }
+
+  const here = $derived(flatFolders.find((f) => f.id === mstate.filters.folder_id));
+
+  async function paste() {
+    const ids = mstate.clipboard;
+    if (!ids.length || !here) return;
+    working = true;
+    try {
+      const r = await media.copyTo(ids, here.id);
+      say(`Pasted ${r.copied} into ${here.name}` + (r.failed?.length ? ` · ${r.failed.length} failed` : ''),
+          r.failed?.length ? 'error' : 'ok');
+      mstate.clipboard = [];
+      loadClips();
+      loadFolders();
+    } catch (e) { say(e.message, 'error'); }
+    finally { working = false; }
+  }
+
+  const zipHref = $derived(sel.size ? media.zipUrl([...sel]) : null);
+
+  function projectDone() {
+    projectOpen = false;
+    clearSelect();
+    loadClips();
+    loadFolders();
+  }
+
   const TYPES = [
     { value: 'all', label: 'All' },
     { value: 'video', label: 'Video' },
@@ -123,11 +216,14 @@
 <!-- ————————————————————————————————————————————————————— header row ——— -->
 <div class="mg-row">
   <h2 class="mg-h2">Browse</h2>
-  {#if clips.length}
+  {#if mode === 'library' && clips.length}
     <span class="mg-count">
       {clips.length} clip{clips.length === 1 ? '' : 's'} · {fmtBytes(totalSize)}
     </span>
   {/if}
+  <div class="mg-actions">
+    <ActivityBell compact />
+  </div>
 </div>
 
 <!-- ——————————————————————————————————————————————— the one control row ——— -->
@@ -152,6 +248,11 @@
 
   <Seg options={TYPES} value={mstate.filters.media_type}
        onchange={setType} label="Media type" />
+
+  <span class="lf mg-glass-soft" title="Filter by colour label">
+    <LabelDots value={mstate.labelFilter} noneLabel="Any label" label="Filter by label"
+               onchange={(v) => (mstate.labelFilter = v)} />
+  </span>
 
   <span class="mg-select sort">
     <select aria-label="Sort"
@@ -196,20 +297,82 @@
         {/each}
       {/if}
     {/each}
+
+    <span class="sep" aria-hidden="true"></span>
+    <button class="f trash" class:on={mode === 'trash'}
+            onclick={() => { mode = 'trash'; clearSelect(); }}>
+      <span><Icon name="trash" size={13} /> Trash</span>
+      {#if trashCount}<i class="mg-tnum">{trashCount}</i>{/if}
+    </button>
   </nav>
 
   <section class="main">
+    {#if mode === 'trash'}
+      <TrashView oncount={(n) => (trashCount = n)} />
+    {:else}
+    {#if mstate.clipboard.length && can(CAP.UPLOAD)}
+      <div class="selbar paste mg-glass-soft" in:fly={{ y: 8, duration: 220 }}>
+        <b>{mstate.clipboard.length} copied</b>
+        {#if here}
+          <button class="mg-btn primary sm" disabled={working} onclick={paste}>
+            <Icon name="copy" size={14} /><span class="t">Paste into {here.name}</span>
+          </button>
+        {:else}
+          <span class="hint">Pick a folder to paste into</span>
+        {/if}
+        <button class="mg-btn ghost sm" onclick={() => (mstate.clipboard = [])}>Cancel</button>
+      </div>
+    {/if}
+
     {#if sel.size}
       <div class="selbar mg-glass-soft" in:fly={{ y: 8, duration: 220 }}>
         <b>{sel.size} selected</b>
-        <button class="mg-btn secondary sm" onclick={() => bulk('proxy')}>
-          <Icon name="film" size={14} />Build proxies
-        </button>
-        <button class="mg-btn secondary sm" onclick={() => bulk('transcribe')}>
-          <Icon name="mic" size={14} />Transcribe
-        </button>
-        <button class="mg-btn ghost sm" onclick={selectAll}>Select all</button>
+        {#if can(CAP.ANNOTATE)}
+          <button class="mg-btn secondary sm" class:on={labelOpen} aria-expanded={labelOpen}
+                  onclick={() => (labelOpen = !labelOpen)} title="Colour label">
+            <Icon name="palette" size={14} /><span class="t">Label</span>
+          </button>
+        {/if}
+        {#if can(CAP.ORGANISE)}
+          <button class="mg-btn secondary sm" onclick={() => (projectOpen = true)} title="Add to project">
+            <Icon name="folder" size={14} /><span class="t">Add to project</span>
+          </button>
+        {/if}
+        {#if can(CAP.UPLOAD)}
+          <button class="mg-btn secondary sm" onclick={copySel} title="Copy (paste into a folder)">
+            <Icon name="copy" size={14} /><span class="t">Copy</span>
+          </button>
+        {/if}
+        {#if can(CAP.DOWNLOAD) && zipHref}
+          <a class="mg-btn secondary sm" href={zipHref} download title="Download as zip">
+            <Icon name="download" size={14} /><span class="t">Zip</span>
+          </a>
+        {/if}
+        {#if can(CAP.PROXY)}
+          <button class="mg-btn secondary sm" onclick={() => bulk('proxy')} title="Build proxies">
+            <Icon name="film" size={14} /><span class="t">Build proxies</span>
+          </button>
+        {/if}
+        {#if can(CAP.TRANSCRIBE)}
+          <button class="mg-btn secondary sm" onclick={() => bulk('transcribe')} title="Transcribe">
+            <Icon name="mic" size={14} /><span class="t">Transcribe</span>
+          </button>
+        {/if}
+        {#if can(CAP.TRASH)}
+          <button class="mg-btn danger sm" disabled={working} onclick={trashSel} title="Move to trash">
+            <Icon name="trash" size={14} /><span class="t">Trash</span>
+          </button>
+        {/if}
+        <span class="gap"></span>
+        <button class="mg-btn ghost sm" onclick={selectAll}>All</button>
         <button class="mg-btn ghost sm" onclick={clearSelect}>Clear</button>
+        {#if labelOpen}
+          <div class="labelrow" in:fly={{ y: -4, duration: 180 }}>
+            <LabelDots value={null} showNone={false} toggle={false} label="Label the selection"
+                       onchange={labelSel} />
+            <button class="mg-btn ghost sm" onclick={() => labelSel(null)}>Clear label</button>
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -220,7 +383,16 @@
         {/each}
       </div>
     {:else if !clips.length}
-      {#if mstate.filters.search}
+      {#if mstate.labelFilter && mstate.clips.length}
+        <Empty icon="palette" title="No {mstate.labelFilter} labels here"
+               hint="Nothing in this view carries that colour label.">
+          {#snippet children()}
+            <button class="mg-btn secondary sm" onclick={() => (mstate.labelFilter = null)}>
+              Show every label
+            </button>
+          {/snippet}
+        </Empty>
+      {:else if mstate.filters.search}
         <Empty icon="search" title="Nothing matches that"
                hint="Try fewer words — or search what was said on camera instead.">
           {#snippet children()}
@@ -256,8 +428,12 @@
         {/each}
       </div>
     {/if}
+    {/if}
   </section>
 </div>
+
+<ProjectSheet open={projectOpen} ids={[...sel]} onclose={() => (projectOpen = false)}
+              ondone={projectDone} />
 
 {#if mstate.openId != null}
   <ClipDrawer clip={mstate.openClip} loading={opening}
@@ -293,6 +469,11 @@
   .f i { font-style: normal; font-size: 11px; color: var(--mg-i3); flex: none; }
   .f.on i { color: var(--mg-i2); }
   .sk { padding: 8px 10px; }
+  .sep { display: block; height: 1px; margin: 6px 8px; background: var(--mg-line); flex: none; }
+  .f.trash span { display: inline-flex; align-items: center; gap: 7px; }
+
+  .lf { display: inline-flex; align-items: center; height: 40px; padding: 0 4px;
+        border-radius: 9999px; border: 1px solid var(--mg-line); }
 
   /* —————————————————————————————————————————————————————— selection ——— */
   .main { min-width: 0; }
@@ -301,6 +482,11 @@
     padding: 6px 8px 6px 16px; margin-bottom: 12px; border-radius: 9999px;
   }
   .selbar b { margin-right: 4px; font: 600 12.5px/1 var(--mg-font); color: var(--mg-i); }
+  .selbar .gap { flex: 1; }
+  .selbar .on { border-color: rgba(62, 207, 142, 0.5); color: var(--mg-ok); }
+  .selbar .hint { font: 400 12px/1 var(--mg-font); color: var(--mg-i3); }
+  .labelrow { flex: 1 1 100%; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+              padding: 4px 0 2px; border-top: 1px solid var(--mg-line); margin-top: 2px; }
 
   /* ———————————————————————————————————————————————————————— the grid ——— */
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); }
@@ -328,8 +514,18 @@
     .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
     .list { grid-template-columns: minmax(0, 1fr); }
   }
+  @media (max-width: 860px) {
+    .sep { width: 1px; height: 24px; margin: 0 2px; }
+  }
   @media (max-width: 560px) {
     .selbar { border-radius: var(--mg-r-card); padding: 8px 10px; }
+    .selbar b { flex: 1 1 100%; margin: 2px 0 4px; }
+    .selbar .t { display: none; }
+    .selbar .mg-btn { height: 40px; }
+    .selbar .mg-btn:has(.t) { width: 40px; padding: 0; }
+    .paste .mg-btn:has(.t) { width: auto; padding: 0 14px; }
+    .paste .t { display: inline; }
     .sort > select { width: 132px; }
+    .lf { height: 40px; }
   }
 </style>
