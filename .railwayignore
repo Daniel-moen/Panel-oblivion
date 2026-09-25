@@ -18,6 +18,12 @@ prospects.db-wal
 prospects.db.bak*
 /prospects.html
 
+# crawler.py job spec + progress snapshot: webapp writes them to DATA_DIR,
+# which is the repo root locally.
+crawl_job.json
+crawl_progress.json
+crawl_progress.json.tmp
+
 .claude/
 .dashboard-password.txt
 
