@@ -87,7 +87,7 @@
   /* — the shell's fixed furniture, so pages can clear it ———————————— */
   --mc-strip-h: 52px;   /* the status strip                */
   --mc-dock-h: 64px;    /* the phone dock, without the inset */
-  --mc-rail-w: 264px;   /* the iPad / desktop rail          */
+  --mc-rail-w: 300px;   /* the iPad / desktop rail          */
 
   /* ————————————————————————————————————— `--mg-*` aliases (the app) ——— */
   --mg-bg: var(--mc-bg);
@@ -374,13 +374,13 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
   text-transform: uppercase; color: var(--mc-ink3);
 }
 /* .mg-h1 — a page title; .mg-h2 — a view header; .mg-h3 — a panel header. */
-.mg-h1 { margin: 0; font: 650 22px/1.2 var(--mc-font); letter-spacing: -0.015em; color: var(--mc-ink); }
+.mg-h1 { margin: 0; font: 650 24px/1.2 var(--mc-font); letter-spacing: -0.015em; color: var(--mc-ink); }
 .mg-h2 { margin: 0; font: 600 18px/1.25 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
 .mg-h3 { margin: 0; font: 600 13px/1.4 var(--mc-font); color: var(--mc-ink2); }
 .mg-count { font: 400 13px/1 var(--mc-font); color: var(--mc-ink3); font-variant-numeric: tabular-nums; }
 .mg-tnum { font-variant-numeric: tabular-nums; }
 .mg-mono { font-family: var(--mc-mono); font-variant-numeric: tabular-nums; }
-.mg-sub { margin: 0; font: 400 13px/1.5 var(--mc-font); color: var(--mc-ink2); }
+.mg-sub { margin: 0; font: 400 13.5px/1.5 var(--mc-font); color: var(--mc-ink2); }
 .mg-hint { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
 
 /* .mg-kv — a <dl> of details: label left, value right, 44px rows. */
@@ -422,7 +422,7 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 .mg-grid.c4 { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 
 /* .mg-stack — a column of panels with the standard gap. */
-.mg-stack { display: flex; flex-direction: column; gap: 12px; }
+.mg-stack { display: flex; flex-direction: column; gap: 16px; }
 
 /* .mg-section — a panel with a titled header row and hairline-divided body. */
 .mg-section { background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-r); box-shadow: var(--mc-sh-1); overflow: hidden; }
@@ -434,9 +434,9 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 
 /* .mg-empty — the centred nothing-here state. Holds .ic / h3 / p / .act. */
 .mg-empty { display: grid; place-items: center; text-align: center; padding: 48px 24px; }
-.mg-empty > .ic { width: 52px; height: 52px; border-radius: var(--mc-r); display: grid; place-items: center; color: var(--mc-ink3); background: var(--mc-surface); border: 1px solid var(--mc-line); }
-.mg-empty > h3 { margin: 14px 0 0; font: 600 15px/1.3 var(--mc-font); color: var(--mc-ink2); }
-.mg-empty > p { margin: 6px 0 0; max-width: 42ch; font: 400 13px/1.55 var(--mc-font); color: var(--mc-ink3); }
+.mg-empty > .ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; color: var(--mc-ink3); background: var(--mc-surface); border: 1px solid var(--mc-line); }
+.mg-empty > h3 { margin: 12px 0 0; font: 600 14.5px/1.3 var(--mc-font); color: var(--mc-ink2); }
+.mg-empty > p { margin: 4px 0 0; max-width: 42ch; font: 400 13px/1.5 var(--mc-font); color: var(--mc-ink3); }
 .mg-empty > .act { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
 /* .mg-strip — a slim notice. `.warn` amber, `.crit` red, `.ok` green. */
@@ -530,10 +530,14 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 .mg-listrow {
   display: flex; align-items: center; gap: 12px; min-height: 48px; width: 100%;
   padding: 10px 16px; background: none; border: 0; color: inherit; text-align: left; font: inherit;
-  transition: background var(--mc-t-fast);
+  transition: background var(--mc-t-fast), transform var(--mc-t) var(--mc-ease);
 }
 a.mg-listrow, button.mg-listrow { cursor: pointer; }
 a.mg-listrow:hover, button.mg-listrow:hover { background: rgba(255, 255, 255, 0.03); }
+a.mg-listrow:active, button.mg-listrow:active { background: rgba(255, 255, 255, 0.05); transform: scale(0.985); }
+a.mg-stat-tile { transition: border-color var(--mc-t-fast), transform var(--mc-t) var(--mc-ease); }
+a.mg-stat-tile:hover { border-color: var(--mc-line2); }
+a.mg-stat-tile:active { transform: scale(0.985); }
 .mg-listrow.sel { background: var(--mc-ok-soft); }
 .mg-listrow > .t { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .mg-listrow > .t > b { font: 600 13.5px/1.35 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -584,6 +588,16 @@ a.mg-listrow:hover, button.mg-listrow:hover { background: rgba(255, 255, 255, 0.
 /* .mg-code — a path or a command. */
 .mg-code { font: 12.5px/1.6 var(--mc-mono); color: var(--mc-ink2); background: var(--mc-inset); border: 1px solid var(--mc-line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
 
+/* Mission Control proportions from 640px: 20px section gutters, 20px first/last
+   table columns (phones keep 16px). Placed after the base rules so it wins. */
+@media (min-width: 640px) {
+  .mg-section > .head { padding: 12px 20px; }
+  .mg-section > .body { padding: 20px; }
+  .mg-listrow { padding: 10px 20px; }
+  .mg-table th:first-child, .mg-table td:first-child { padding-left: 20px; }
+  .mg-table th:last-child, .mg-table td:last-child { padding-right: 20px; }
+}
+
 /* ——————————————————————————————————————————————————————————— motion ——— */
 /* Small on purpose: rise for entry (staggered by --i), slide-in for panels,
    ping for liveness, spin for loading, sweep for skeletons. Nothing else. */
@@ -612,5 +626,6 @@ a.mg-listrow:hover, button.mg-listrow:hover { background: rgba(255, 255, 255, 0.
   }
   .mg-rise, .mg-fadeup, .anim-rise, .mg-slide { animation: none; opacity: 1; transform: none; }
   .mg-ping { display: none; }
-  .mg-hover:active, a.mg-card:active, button.mg-card:active, .mg-btn:active:not(:disabled) { transform: none; }
+  .mg-hover:active, a.mg-card:active, button.mg-card:active, .mg-btn:active:not(:disabled),
+  a.mg-stat-tile:active, a.mg-listrow:active, button.mg-listrow:active { transform: none; }
 }

@@ -31,6 +31,19 @@ to feed it the suburb/portal registry that the legacy page got inlined at
 render time. CMA reports stay server-rendered Python (`/cma`, `/cma/<group_id>`)
 and are linked from the new UI.
 
+Home paints from one call, `GET /api/home` (behind the normal sign-in): `hot`
+(the /prospects Hot count, read from the warm prospect cache, SQL fallback
+when cold), `stats` (exactly the `/api/stats` object), `tracked` /
+`tracked_active` (lead management), `series` (14 local days of new sale
+listings, price cuts and scores), `events` (newest-first activity feed, max
+40: new listings, price cuts, likely-sold, relists, scoring runs, lead moves,
+finished auto-crawls; ISO-8601 UTC `t` with a `Z`) and `crawl` (live job
+state plus the persisted auto-crawl stamps). The payload is cached in-process
+for 15 s — a crawl starting or stopping invalidates it — while `crawl` and
+the live "Crawling …" event are read on every call. The index
+`idx_listings_type_first` on `listings(listing_type, first_seen)` backs the
+per-day counts.
+
 ```bash
 cd ui && npm install && npm run build   # after editing anything in ui/src (Node 20+)
 cd ui && npm run dev                    # live dev at :5173, proxies /api and /cma to :5051
@@ -59,6 +72,16 @@ left rail from 1024 px. Sections register themselves through
 dock and the rail, `addHomeCard()` mounts a card on the Home overview, and
 `setStatus()` / `setActions()` post a section's status readout and icon
 buttons into the strip.
+
+Proportions follow the panel: a 52 px strip, a 300 px rail, 16 px gaps between
+cards, 20 px section gutters from 640 px (16 px on phones), 13 px section heads
+with a quiet count beside them. The shared data pieces are `StatTile` (label ·
+26 px figure · caption, an optional `Meter` ratio bar and a `Sparkline`),
+`glass/Meter.svelte`, `glass/Sparkline.svelte` and `ActivityFeed` (clock ·
+who · what rows). Home paints from `GET /api/home` in one round trip. The crawl
+strip (`JobStrip`) is one row — state dot, phase, pages, a thin progress bar,
+Activity log and Stop — plus one sideways-scrolling row of per-portal chips, so
+its height never depends on how many portals are crawling.
 
 ### Find me… (AI brief)
 

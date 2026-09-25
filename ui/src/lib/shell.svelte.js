@@ -106,8 +106,10 @@ export function removeHomeCard(id) {
 export function engineStatus(status) {
   const s = status || {};
   if (s.running) {
+    /* Sentence case, like the panel: "Crawling portals", not "Crawling Portals". */
+    const p = String(s.phase || 'crawling');
     const n = s.total ? ` · ${s.done}/${s.total}` : '';
-    return { tone: 'warn', label: `${s.phase || 'crawling'}${n}`, ping: true };
+    return { tone: 'warn', label: `${p[0].toUpperCase()}${p.slice(1)}${n}`, ping: true };
   }
   if (s.ai_ok) return { tone: 'ok', label: 'Live', ping: false };
   if (s.ai_reason) return { tone: 'off', label: 'AI off', ping: false, title: s.ai_reason };

@@ -62,17 +62,17 @@
     position: fixed; left: 0; top: 0; bottom: 0; z-index: 45;
     width: var(--mc-rail-w);
     flex-direction: column;
-    padding: calc(var(--sat) + 14px) 12px calc(var(--sab) + 12px);
+    padding: var(--sat) 0 0;
     background: var(--mc-surface);
     border-right: 1px solid var(--mc-line);
   }
   @media (min-width: 1024px) { .rail { display: flex; } }
 
-  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; }
   .name { font: 600 15px/1 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
-  .st { margin-left: auto; font: 500 11px/1 var(--mc-font); color: var(--mc-ink3); text-transform: capitalize; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st { margin-left: auto; font: 500 11px/1 var(--mc-font); color: var(--mc-ink3); max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .nav { display: flex; flex-direction: column; gap: 2px; padding-top: 10px; border-top: 1px solid var(--mc-line); }
+  .nav { display: flex; flex-direction: column; gap: 2px; margin: 0 12px; padding-top: 10px; border-top: 1px solid var(--mc-line); min-height: 0; overflow-y: auto; }
   .nav a {
     display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; border-radius: 10px;
     color: var(--mc-ink2); font: 500 13.5px/1 var(--mc-font);
@@ -83,7 +83,7 @@
   .nav a.ext { margin-top: 8px; color: var(--mc-ink3); }
   .nav a.ext :global(.ext-ic) { margin-left: auto; opacity: 0.7; }
 
-  .foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--mc-line); }
+  .foot { margin-top: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px calc(10px + var(--sab)); border-top: 1px solid var(--mc-line); }
   .acct {
     display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 8px; border-radius: 12px;
     color: var(--mc-ink3); transition: background var(--mc-t-fast);

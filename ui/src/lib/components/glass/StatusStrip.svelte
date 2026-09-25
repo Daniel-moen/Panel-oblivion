@@ -101,7 +101,7 @@
   .gap { flex: 1; min-width: 4px; }
 
   .readout { display: inline-flex; align-items: baseline; gap: 10px; margin-right: 4px; min-width: 0; max-width: 42vw; font: 500 12px/1 var(--mc-font); color: var(--mc-ink3); white-space: nowrap; }
-  .st { text-transform: capitalize; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .st { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .hot { flex: none; }
   .st.ok { color: var(--mc-accent); font-weight: 600; }
   .st.warn { color: var(--mc-warn); font-weight: 600; }
