@@ -24,6 +24,7 @@ is the single best moment to pitch. Those are surfaced with a timing note.
 
 from __future__ import annotations
 
+import functools
 import json
 import sqlite3
 import statistics
@@ -229,6 +230,17 @@ def _system_prompt() -> str:
 # ------------------------------------------------------------------ payload
 
 def _parse_date(value: str | None) -> datetime | None:
+    # A pure function of one string, called ~40k times per /api/prospects
+    # build and dominated by strptime; the same few thousand date strings
+    # repeat across every build, so strings go through a memo. Anything else
+    # (None, or a stray non-string from raw JSON) takes the uncached path so
+    # it fails, or doesn't, exactly as it always has.
+    if isinstance(value, str):
+        return _parse_date_str(value)
+    return _parse_date_uncached(value)
+
+
+def _parse_date_uncached(value) -> datetime | None:
     if not value:
         return None
     for fmt in ("%d %B %Y", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"):
@@ -240,6 +252,11 @@ def _parse_date(value: str | None) -> datetime | None:
         return datetime.fromisoformat(value[:19])
     except ValueError:
         return None
+
+
+# datetimes are immutable, so handing the same cached object to every caller
+# is safe.
+_parse_date_str = functools.lru_cache(maxsize=8192)(_parse_date_uncached)
 
 
 # ----------------------------------------------------------- market context

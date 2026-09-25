@@ -10,8 +10,11 @@ default because Oblivion cannot win business on them.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
+import sqlite3
 import threading
 import time
 from datetime import datetime, timezone
@@ -391,6 +394,9 @@ def api_status():
         out = {k: job[k] for k in
                ("running", "phase", "log", "done", "total", "per_source",
                 "listing_types")}
+    # The log keeps 600 lines but rides on a poll every few seconds; the
+    # progress strip only shows the tail, so send the last 200.
+    out["log"] = out["log"][-200:]
     ok, reason = scorer.ai_status()
     out["ai_ok"] = ok
     out["ai_reason"] = reason
@@ -433,27 +439,178 @@ ORDER BY (s.prospect_score IS NULL) DESC, s.prospect_score DESC, l.price_zar DES
 """
 
 
-def _prospects_payload(show_sole: bool, listing_type: str = "sale") -> list:
-    now = time.monotonic()
+# The prospects cache is keyed on what the rows are built from rather than on
+# a clock: SQLite's data_version (bumped whenever any other connection
+# commits) plus the in-memory erf-AI / re-eval job states that are merged into
+# the rows. A 12k-row build is ~3s of CPU, so rebuilding it on every 2s poll
+# with nothing changed was the dominant cost of an idle dashboard.
+_version_conn = None
+_version_lock = threading.Lock()
+
+
+def _db_version() -> int:
+    """PRAGMA data_version from ONE long-lived connection.
+
+    The counter is per connection and only moves when a *different*
+    connection commits, which is every writer in this app, so one dedicated
+    connection sees them all. It only ever runs this pragma in autocommit
+    mode, so it never holds a transaction (or a WAL snapshot) open.
+    """
+    global _version_conn
+    with _version_lock:
+        if _version_conn is None:
+            _version_conn = sqlite3.connect(
+                config.DB_PATH, check_same_thread=False, timeout=30)
+        return _version_conn.execute("PRAGMA data_version").fetchone()[0]
+
+
+def _jobs_fingerprint() -> tuple:
+    """Hashable snapshot of the job dicts _build_prospects merges into rows
+    (erf_ai_running/erf_ai_error, reevaluating/reeval_error). list() first:
+    worker threads replace entries while this runs."""
+    def snap(d):
+        return tuple(sorted((k, bool(v.get("running")), v.get("error"))
+                            for k, v in list(d.items())))
+    return snap(_ai_jobs), snap(_reeval_jobs)
+
+
+def _prospects_entry(show_sole: bool, listing_type: str = "sale") -> dict:
+    """The cache entry for one (sole, book): full rows, rows by listing_key,
+    and the slim list JSON once something has asked for it."""
     key = (show_sole, listing_type)
+    version, fp = _db_version(), _jobs_fingerprint()
+    now = time.monotonic()
     with _prospects_lock:
         hit = _prospects_cache.get(key)
-        if hit and now - hit[0] < _PROSPECTS_TTL:
-            return hit[1]
-    payload = _build_prospects(show_sole, listing_type)
+    if hit:
+        age = now - hit["built_at"]
+        # Unchanged inputs keep the entry; the short floor stops a crawl,
+        # which bumps data_version on every commit, from forcing a rebuild on
+        # every poll; the ceiling lets days_on_market (computed against
+        # now()) roll over on a database nobody is writing to.
+        if age < _PROSPECTS_TTL or (
+                age < _PROSPECTS_MAX_AGE
+                and hit["version"] == version and hit["fingerprint"] == fp):
+            return hit
+    # Built outside the lock: two threads may race and both build, which is
+    # wasted work but never a wrong answer.
+    rows = _build_prospects(show_sole, listing_type)
+    entry = {"built_at": time.monotonic(), "version": version,
+             "fingerprint": fp, "rows": rows,
+             "by_key": {r["listing_key"]: r for r in rows},
+             "slim_json": None, "etag": None}
     with _prospects_lock:
-        _prospects_cache[key] = (time.monotonic(), payload)
-    return payload
+        _prospects_cache[key] = entry
+    return entry
 
 
-@app.get("/api/prospects")
-def api_prospects():
+def _prospects_payload(show_sole: bool, listing_type: str = "sale") -> list:
+    return _prospects_entry(show_sole, listing_type)["rows"]
+
+
+# Only read by the detail drawer, which fetches the whole row for one
+# property from /api/prospect/<key>. Keeping them out of the list response
+# is most of its size: reasoning, candidates and member listings are the
+# bulk of every row, and the list/cards/filters never look at them.
+_DETAIL_ONLY = {
+    "reasoning", "red_flags", "erf_cands", "erf_note", "erf_ai", "evidence",
+    "listings", "description", "match_evidence", "mandate_text",
+    "official_suburb", "scored_by", "erf_lat", "erf_lng", "lat", "lng", "loc",
+    "latitude", "longitude", "erf_portion", "erf_method", "erf_ai_status",
+    "parcel_area_m2", "content_changed", "first_seen", "last_seen", "rates",
+    "levies", "pool", "parking", "garages", "mandate_explicit",
+    "reeval_error", "erf_ai_error", "source_count", "agency_count",
+    "listing_date", "photo_count", "raw_overview"}
+
+
+def _slim_json(entry: dict) -> tuple[bytes, str]:
+    """The list response for one cache entry, serialised once.
+
+    None values are dropped too (the client treats a missing key as null),
+    but False/0 are kept: the cards test has_photo === false.
+    """
+    if entry["slim_json"] is None:
+        slim = [{k: v for k, v in r.items()
+                 if v is not None and k not in _DETAIL_ONLY}
+                for r in entry["rows"]]
+        body = json.dumps(slim, separators=(",", ":"), ensure_ascii=False,
+                          default=str).encode("utf-8")
+        # Assigned together, etag last: a racing reader sees either nothing
+        # (and builds its own identical copy) or both.
+        entry["slim_json"] = body
+        entry["etag"] = hashlib.md5(body).hexdigest()
+    return entry["slim_json"], entry["etag"]
+
+
+# body bytes -> gzipped bytes, for the two big JSON responses. Keyed on the
+# bytes object itself so a rebuilt payload is a new entry and the old one is
+# collected with it. One entry per (book, sole) list and per map: tiny.
+_gzip_cache: dict = {}
+_gzip_lock = threading.Lock()
+
+
+def _gzipped(body: bytes) -> bytes:
+    with _gzip_lock:
+        hit = _gzip_cache.get(id(body))
+        if hit and hit[0] is body:
+            return hit[1]
+    import gzip
+    gz = gzip.compress(body, compresslevel=5)
+    with _gzip_lock:
+        if len(_gzip_cache) > 8:
+            _gzip_cache.clear()
+        _gzip_cache[id(body)] = (body, gz)
+    return gz
+
+
+def _etag_response(body: bytes, etag: str) -> Response:
+    """JSON bytes with an ETag, or a bodiless 304 when the client has them.
+
+    no-cache (not no-store) so the browser keeps the copy but revalidates
+    every time; the 304 then saves the whole transfer. The comparison is
+    the weak one RFC 9110 prescribes for If-None-Match, so a proxy that
+    weakens the tag (W/"...") after compressing still gets its 304.
+
+    The body goes out gzipped when the client accepts it: a 15 MB list is
+    ~2.3 MB on the wire, and compressing it here, once per build, means a
+    phone on mobile data gets that regardless of what sits in front of the
+    app (the Railway edge was compressing on the fly, per request).
+    """
+    if request.if_none_match.contains_weak(etag):
+        rv = Response(status=304)
+    elif "gzip" in (request.headers.get("Accept-Encoding") or "").lower():
+        rv = Response(_gzipped(body), mimetype="application/json")
+        rv.headers["Content-Encoding"] = "gzip"
+    else:
+        rv = Response(body, mimetype="application/json")
+    rv.headers["Vary"] = "Accept-Encoding"
+    rv.set_etag(etag)
+    rv.headers["Cache-Control"] = "private, no-cache"
+    return rv
+
+
+def _book_args() -> tuple[bool, str]:
     # ?type=rent switches to the rental book. Anything else — including no
     # parameter at all, which is every caller that predates rentals — is the
     # for-sale view, unchanged.
     listing_type = "rent" if request.args.get("type") == "rent" else "sale"
-    return jsonify(_prospects_payload(
-        request.args.get("sole") == "1", listing_type))
+    return request.args.get("sole") == "1", listing_type
+
+
+@app.get("/api/prospects")
+def api_prospects():
+    body, etag = _slim_json(_prospects_entry(*_book_args()))
+    return _etag_response(body, etag)
+
+
+@app.get("/api/prospect/<path:listing_key>")
+def api_prospect(listing_key):
+    """One full row (every field the list response leaves out), for the
+    detail drawer. Same ?sole / ?type meaning and same cache as the list."""
+    row = _prospects_entry(*_book_args())["by_key"].get(listing_key)
+    if row is None:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify(row)
 
 
 # Price-cut history is a whole-DB aggregate (~0.5s); lifecycle is one scan.
@@ -674,11 +831,17 @@ def api_map():
     along so the page can render tooltips, badges and the dossier popup
     without a second round trip per pin.
     """
-    import hashlib
     show_sole = request.args.get("sole") == "1"
+    rows = _prospects_payload(show_sole)
     centroids = _suburb_centroids()
+    # ~7 MB of points, identical until either input is rebuilt, so it is
+    # serialised once per (rows, centroids) pair. Identity, not id(): the
+    # cached tuple holds both objects, so their ids can't be recycled.
+    hit = _map_cache.get(show_sole)
+    if hit and hit[0] is rows and hit[1] is centroids:
+        return _etag_response(hit[2], hit[3])
     points, unmapped = [], 0
-    for d in _prospects_payload(show_sole):
+    for d in rows:
         lat, lng, loc = d.get("lat"), d.get("lng"), d.get("loc")
         if lat is None:
             c = centroids.get(d["suburb_slug"])
@@ -736,7 +899,17 @@ def api_map():
             if v:
                 pt[k] = v
         points.append(pt)
-    return jsonify({"points": points, "unmapped": unmapped})
+    # Byte-for-byte what jsonify() produced (same provider, compact, trailing
+    # newline), just kept.
+    body = (app.json.dumps({"points": points, "unmapped": unmapped},
+                           separators=(",", ":")) + "\n").encode("utf-8")
+    etag = hashlib.md5(body).hexdigest()
+    _map_cache[show_sole] = (rows, centroids, body, etag)
+    return _etag_response(body, etag)
+
+
+# show_sole -> (rows, centroids, body, etag); see api_map.
+_map_cache: dict = {}
 
 
 _MAP_PATH = os.path.join(config.ROOT, "map.html")
@@ -763,12 +936,15 @@ def map_page():
 # locator downloads listing photos + satellite crops and asks a vision model
 # to rank candidate parcels — seconds to a minute per property, so both run
 # in background threads and the dashboard polls /api/erf/busy.
-# /api/prospects is polled every 2s by the dashboard and costs ~90ms of
-# GIL-holding query + grouping work. During a crawl that poll competes with
-# the scrapers for the same interpreter, so identical back-to-back polls are
-# served from a short-lived cache instead of recomputed. The TTL is below the
-# poll interval, so the dashboard still updates every cycle.
+#
+# /api/prospects is polled every 2s by the dashboard and a full build is ~3s
+# of GIL-holding query + grouping work, so builds are cached per database
+# version (see _prospects_entry). _PROSPECTS_TTL is the floor an entry lives
+# regardless: during a crawl data_version moves on every commit, and without
+# it each poll would rebuild. _PROSPECTS_MAX_AGE is the ceiling, so the
+# now()-relative fields (days_on_market) still roll over when nothing writes.
 _PROSPECTS_TTL = 1.5
+_PROSPECTS_MAX_AGE = 600.0
 _prospects_cache: dict = {}
 _prospects_lock = threading.Lock()
 
@@ -1336,6 +1512,34 @@ def ui_assets(p):
 @app.get("/favicon.svg")
 def ui_favicon():
     return send_from_directory(_UI_BUILD, "favicon.svg")
+
+
+_HERO_PATH = re.compile(r"^/hero-[^/]+\.jpg$")
+
+
+@app.after_request
+def _cache_headers(rv):
+    """Browser caching for the front end's static files.
+
+    /_app/immutable/ is SvelteKit output with a content hash in every file
+    name, so a changed file is a new URL and the old one can be kept
+    forever. Hero images and the favicon change rarely: a week, then the
+    ETag/Last-Modified send_from_directory emits revalidates them. HTML
+    pages are no-cache so a redeploy shows on the next load. Anything a view
+    already gave a Cache-Control of its own (the ETag'd JSON) is left alone,
+    as is every other response.
+    """
+    path = request.path
+    if rv.status_code not in (200, 304):
+        return rv
+    if path.startswith("/_app/immutable/"):
+        rv.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif path == "/favicon.svg" or _HERO_PATH.match(path):
+        rv.headers["Cache-Control"] = "public, max-age=604800"
+    elif (request.method == "GET" and rv.mimetype == "text/html"
+          and "Cache-Control" not in rv.headers):
+        rv.headers["Cache-Control"] = "no-cache"
+    return rv
 
 
 # --------------------------------------------------------------- CMA pages
