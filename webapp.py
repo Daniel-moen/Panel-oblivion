@@ -474,34 +474,93 @@ def _jobs_fingerprint() -> tuple:
     return snap(_ai_jobs), snap(_reeval_jobs)
 
 
+def _prospects_stale(entry: dict, version: int, fp: tuple,
+                     now: float) -> bool:
+    """Whether a cached entry should be rebuilt (in the background).
+
+    Changed inputs make it stale once it is older than the floor — 1.5 s
+    normally, PROSPECTS_CRAWL_REFRESH_S while a crawl runs, since a crawl
+    bumps data_version on every commit. The ceiling lets days_on_market
+    (computed against now()) roll over on a database nobody is writing to.
+    """
+    age = now - entry["built_at"]
+    if age >= _PROSPECTS_MAX_AGE:
+        return True
+    floor = (config.PROSPECTS_CRAWL_REFRESH_S if job["running"]
+             else _PROSPECTS_TTL)
+    return age >= floor and (entry["version"] != version
+                             or entry["fingerprint"] != fp)
+
+
+def _build_entry(show_sole: bool, listing_type: str) -> dict:
+    # Inputs are read BEFORE the build: a commit landing mid-build then makes
+    # the next check see a newer version (one extra rebuild), never hides it.
+    version, fp = _db_version(), _jobs_fingerprint()
+    rows = _build_prospects(show_sole, listing_type)
+    return {"built_at": time.monotonic(), "version": version,
+            "fingerprint": fp, "rows": rows,
+            "by_key": {r["listing_key"]: r for r in rows},
+            "slim_json": None, "etag": None}
+
+
+def _rebuild_in_background(key: tuple) -> None:
+    try:
+        entry = _build_entry(*key)
+        with _prospects_lock:
+            _prospects_cache[key] = entry
+    except Exception as e:                              # noqa: BLE001
+        print(f"prospects rebuild failed: {type(e).__name__}: {e}",
+              flush=True)
+    finally:
+        with _prospects_cond:
+            _prospects_building.discard(key)
+            _prospects_cond.notify_all()
+
+
 def _prospects_entry(show_sole: bool, listing_type: str = "sale") -> dict:
     """The cache entry for one (sole, book): full rows, rows by listing_key,
-    and the slim list JSON once something has asked for it."""
+    and the slim list JSON once something has asked for it.
+
+    Stale-while-revalidate: a cached entry is returned at once, and if it is
+    stale a single background thread rebuilds it and swaps it in (a build is
+    3-40 s of GIL-holding work, which used to sit on the request path — and
+    on several gunicorn threads at once). Only a cold cache builds on the
+    request path, and then single-flight: one thread builds, concurrent
+    requests for the same key wait for it.
+    """
     key = (show_sole, listing_type)
-    version, fp = _db_version(), _jobs_fingerprint()
-    now = time.monotonic()
     with _prospects_lock:
         hit = _prospects_cache.get(key)
-    if hit:
-        age = now - hit["built_at"]
-        # Unchanged inputs keep the entry; the short floor stops a crawl,
-        # which bumps data_version on every commit, from forcing a rebuild on
-        # every poll; the ceiling lets days_on_market (computed against
-        # now()) roll over on a database nobody is writing to.
-        if age < _PROSPECTS_TTL or (
-                age < _PROSPECTS_MAX_AGE
-                and hit["version"] == version and hit["fingerprint"] == fp):
+    if hit is not None:
+        if _prospects_stale(hit, _db_version(), _jobs_fingerprint(),
+                            time.monotonic()):
+            with _prospects_lock:
+                start = key not in _prospects_building
+                if start:
+                    _prospects_building.add(key)
+            if start:
+                threading.Thread(target=_rebuild_in_background, args=(key,),
+                                 daemon=True).start()
+        return hit
+    # Cold: wait out a build already in flight for this key, else claim it.
+    with _prospects_cond:
+        while key in _prospects_building and key not in _prospects_cache:
+            _prospects_cond.wait()
+        hit = _prospects_cache.get(key)
+        if hit is not None:
             return hit
-    # Built outside the lock: two threads may race and both build, which is
-    # wasted work but never a wrong answer.
-    rows = _build_prospects(show_sole, listing_type)
-    entry = {"built_at": time.monotonic(), "version": version,
-             "fingerprint": fp, "rows": rows,
-             "by_key": {r["listing_key"]: r for r in rows},
-             "slim_json": None, "etag": None}
-    with _prospects_lock:
-        _prospects_cache[key] = entry
-    return entry
+        _prospects_building.add(key)
+    try:
+        entry = _build_entry(show_sole, listing_type)
+        with _prospects_lock:
+            _prospects_cache[key] = entry
+        return entry
+    finally:
+        # A failed build leaves the key unclaimed, so a waiter takes over
+        # (and raises on its own request if the build keeps failing).
+        with _prospects_cond:
+            _prospects_building.discard(key)
+            _prospects_cond.notify_all()
 
 
 def _prospects_payload(show_sole: bool, listing_type: str = "sale") -> list:
@@ -937,16 +996,22 @@ def map_page():
 # to rank candidate parcels — seconds to a minute per property, so both run
 # in background threads and the dashboard polls /api/erf/busy.
 #
-# /api/prospects is polled every 2s by the dashboard and a full build is ~3s
+# /api/prospects is polled every 2s by the dashboard and a full build is 3-40s
 # of GIL-holding query + grouping work, so builds are cached per database
-# version (see _prospects_entry). _PROSPECTS_TTL is the floor an entry lives
-# regardless: during a crawl data_version moves on every commit, and without
-# it each poll would rebuild. _PROSPECTS_MAX_AGE is the ceiling, so the
-# now()-relative fields (days_on_market) still roll over when nothing writes.
+# version and served stale-while-revalidate (see _prospects_entry): requests
+# never wait on a rebuild once the cache is warm. _PROSPECTS_TTL is the floor
+# an entry lives regardless when idle; while a crawl runs the floor is
+# config.PROSPECTS_CRAWL_REFRESH_S, since data_version then moves on every
+# commit. _PROSPECTS_MAX_AGE is the ceiling, so the now()-relative fields
+# (days_on_market) still roll over when nothing writes.
 _PROSPECTS_TTL = 1.5
 _PROSPECTS_MAX_AGE = 600.0
 _prospects_cache: dict = {}
 _prospects_lock = threading.Lock()
+# Keys with a build in flight (single-flight), and the condition cold-cache
+# waiters sleep on until that build lands.
+_prospects_building: set = set()
+_prospects_cond = threading.Condition(_prospects_lock)
 
 _erf_job = {"running": False}
 _ai_jobs: dict[str, dict] = {}
@@ -1791,6 +1856,23 @@ def api_gv_refresh():
     except Exception as e:                              # noqa: BLE001
         return jsonify({"error": f"{type(e).__name__}: {e}"}), 502
     return jsonify(counts)
+
+
+def _warm_prospects():
+    # Build the default dashboard list once at boot, so the first visitor
+    # after a deploy is not the one who waits for a cold build.
+    try:
+        t = time.monotonic()
+        rows = _prospects_payload(False, "sale")
+        print(f"prospects cache warmed: {len(rows)} rows in "
+              f"{time.monotonic() - t:.1f}s", flush=True)
+    except Exception as e:                              # noqa: BLE001
+        print(f"prospects warm-up failed: {type(e).__name__}: {e}",
+              flush=True)
+
+
+if os.environ.get("PROSPECTS_NO_WARM") != "1":
+    threading.Thread(target=_warm_prospects, daemon=True).start()
 
 
 if __name__ == "__main__":

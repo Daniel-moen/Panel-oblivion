@@ -485,6 +485,14 @@ AUTO_SWEEP_HOURS = float(os.environ.get("AUTO_SWEEP_HOURS", "6"))  # 0 = off
 # AUTO_CRAWL_RENTALS=0 turns the nightly rental crawl off.
 AUTO_CRAWL_RENTALS = os.environ.get("AUTO_CRAWL_RENTALS", "1") != "0"
 
+# While a crawl runs, the dashboard's prospect list is rebuilt (in the
+# background, never on the request path) at most this often. A crawl commits
+# every listing, so without a floor the cache would be stale on every 2 s
+# poll and the web process would spend the whole crawl rebuilding a list
+# that a few new rows barely change.
+PROSPECTS_CRAWL_REFRESH_S = float(
+    os.environ.get("PROSPECTS_CRAWL_REFRESH_S", "30"))
+
 # Yield canary: a portal redesign can make a parser "succeed" while storing
 # far fewer listings, and 48h later the lifecycle sweep would read the gap as
 # a mass delisting — poisoning the comps feed with phantom off-market events.
