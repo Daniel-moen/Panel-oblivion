@@ -9,7 +9,9 @@ because it seeds DATA_DIR/prospects.db with ~2000 synthetic listings. The
 crawl is the fake portal (tests/fake_source.py via CRAWL_SOURCES_PLUGIN): no
 network, real parse cost, one commit per listing. Two poller threads hit
 /api/status and /api/prospects every 2 s like the SPA while the main thread
-times the dashboard's pages and APIs. Every endpoint's p95 must stay under
+times the dashboard's pages and APIs. A third poller hits /api/chat/sync every
+second (the team chat's only polled call) and a writer posts a few chat
+messages while the crawl runs. Every endpoint's p95 must stay under
 LATENCY_BUDGET_S (default 1.0 s), the crawl must finish, and no log line may
 say "database is locked".
 
@@ -170,9 +172,23 @@ while (False, "sale") not in webapp._prospects_cache and time.monotonic() < dead
     time.sleep(0.2)
 check("boot warm-up built the default book", (False, "sale") in webapp._prospects_cache)
 
+# Team chat: a few messages before the crawl, so the sync with a real
+# cursor has something behind it and the since=0 sync has a full page.
+_chat = webapp.app.test_client()
+GENERAL = next(c["id"] for c in _chat.get("/api/chat/channels", headers=BASIC)
+               .get_json()["channels"] if c["slug"] == "general")
+for i in range(5):
+    _r = _chat.post(f"/api/chat/channels/{GENERAL}/messages", json={"body": f"pre-crawl {i}"},
+                    headers=BASIC)
+    check(f"chat post {i} before the crawl", _r.status_code == 201, _r.status_code)
+chat_cursor = _chat.get("/api/chat/sync", headers=BASIC).get_json()["cursor"]
+check("chat sync gives a cursor", isinstance(chat_cursor, int) and chat_cursor >= 5,
+      chat_cursor)
+
 ENDPOINTS = ["/", "/prospects", "/online", "/api/status", "/api/stats",
-             "/api/home", "/api/prospects"]
-samples: dict[str, list[float]] = {p: [] for p in ENDPOINTS}
+             "/api/home", "/api/prospects", "/api/chat/sync?since=0",
+             f"/api/chat/sync?since={chat_cursor - 2}"]
+samples: dict[str, list[float]] = {p: [] for p in ENDPOINTS + ["chat sync poll"]}
 bad_status: list[str] = []
 samples_lock = threading.Lock()
 stop_polling = threading.Event()
@@ -188,11 +204,43 @@ def timed_get(client, path):
     return dt
 
 
-def poller(path):
+def poller(path, every=2.0):
     c = webapp.app.test_client()
     while not stop_polling.is_set():
         timed_get(c, path)
-        stop_polling.wait(2.0)
+        stop_polling.wait(every)
+
+
+chat_posts: list[int] = []
+
+
+def chat_sync_poller():
+    """The chat widget: one sync a second, following the cursor."""
+    c = webapp.app.test_client()
+    cur = chat_cursor
+    while not stop_polling.is_set():
+        t = time.perf_counter()
+        r = c.get(f"/api/chat/sync?since={cur}", headers=BASIC)
+        body = r.get_json(silent=True) or {}
+        with samples_lock:
+            samples["chat sync poll"].append(time.perf_counter() - t)
+        if r.status_code != 200:
+            bad_status.append(f"/api/chat/sync -> {r.status_code}")
+        else:
+            cur = body.get("cursor", cur)
+        stop_polling.wait(1.0)
+
+
+def chat_writer():
+    """A person typing now and then while the crawl runs."""
+    c = webapp.app.test_client()
+    i = 0
+    while not stop_polling.is_set() and i < 10:
+        r = c.post(f"/api/chat/channels/{GENERAL}/messages",
+                   json={"body": f"during the crawl {i}"}, headers=BASIC)
+        chat_posts.append(r.status_code)
+        i += 1
+        stop_polling.wait(1.5)
 
 
 # --- /api/home payload shape (idle, then again mid-crawl below) -------------
@@ -228,6 +276,8 @@ check("crawl starts", webapp._start_job(["bakoven"], ["fake"], pages=1, use_ai=F
                                         listing_types=("rent",)))
 pollers = [threading.Thread(target=poller, args=(p,), daemon=True)
            for p in ("/api/status", "/api/prospects")]
+pollers += [threading.Thread(target=chat_sync_poller, daemon=True),
+            threading.Thread(target=chat_writer, daemon=True)]
 for t in pollers:
     t.start()
 
@@ -262,13 +312,13 @@ def pct(xs, q):
 
 print()
 print(f"crawl ran {crawl_s:.1f}s  (budget: p95 < {BUDGET:.2f}s)")
-print(f"{'endpoint':<16}{'n':>5}{'p50 ms':>10}{'p95 ms':>10}{'max ms':>10}")
-for path in ENDPOINTS:
+print(f"{'endpoint':<30}{'n':>5}{'p50 ms':>10}{'p95 ms':>10}{'max ms':>10}")
+for path in ENDPOINTS + ["chat sync poll"]:
     xs = samples[path]
     if not xs:
-        print(f"{path:<16}{0:>5}")
+        print(f"{path:<30}{0:>5}")
         continue
-    print(f"{path:<16}{len(xs):>5}{pct(xs, .5) * 1000:>10.0f}"
+    print(f"{path:<30}{len(xs):>5}{pct(xs, .5) * 1000:>10.0f}"
           f"{pct(xs, .95) * 1000:>10.0f}{max(xs) * 1000:>10.0f}")
 print()
 
@@ -280,7 +330,9 @@ check("ran as a separate process", "crawler: started pid" in " ".join(webapp.job
 check('no "database is locked" in the log',
       not any("database is locked" in line for line in webapp.job["log"]))
 check("every request answered 200", not bad_status, bad_status[:5])
-for path in ENDPOINTS:
+check("chat posts during the crawl all 201",
+      bool(chat_posts) and all(c == 201 for c in chat_posts), chat_posts)
+for path in ENDPOINTS + ["chat sync poll"]:
     xs = samples[path]
     check(f"{path} sampled", len(xs) >= 3, len(xs))
     if xs:

@@ -27,8 +27,9 @@
   import { fade, slide } from '$lib/motion.js';
   import { api } from '$lib/api.js';
   import { app, selected, actions, gidOf, trackProspect } from '$lib/state.svelte.js';
+  import { openChannelForProperty } from '$lib/chat.svelte.js';
   import { fmtR, fmtM, fmtInt, fmtArea, addrOf, mvLabel,
-           isRent, priceTxt, furnishedTxt } from '$lib/format.js';
+           isRent, priceTxt, furnishedTxt, photoSrc } from '$lib/format.js';
 
   /* The list rows are slim: everything only this drawer reads (reasoning,
      listings, evidence, erf candidates, coordinates …) is left off them. The
@@ -215,6 +216,7 @@
                   <button type="button" class="mg-btn sm secondary" onclick={() => actions.reevaluate(r.listing_key)}
                     title="Refetch this listing live from the portal(s), re-score it and re-run the erf match"><Icon name="refresh" size={14} /> Re-evaluate</button>
                 {/if}
+                {#if r.group_id != null}<button type="button" class="mg-btn sm secondary" data-testid="discuss-property" onclick={() => openChannelForProperty(String(r.group_id), { label: addrOf(r) || r.title, suburb: r.suburb, price_zar: r.price_zar, tier: r.tier, photo_url: photoSrc(r) })} title="Talk about this property in team chat"><Icon name="chat" size={14} /> Discuss</button>{/if}
                 <button type="button" class="mg-btn sm secondary" onclick={() => actions.copyRow(String(r.group_id ?? r.listing_key))}
                   title="Copy as a spreadsheet row — paste into Excel or Google Sheets"><Icon name="copy" size={14} /> Copy row</button>
                 {#if r.cma_url}

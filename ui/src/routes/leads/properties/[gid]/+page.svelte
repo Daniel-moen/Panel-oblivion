@@ -17,7 +17,8 @@
   import Icon from '$lib/components/glass/Icon.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
   import Sheet from '$lib/components/glass/Sheet.svelte';
-  import { fmtR, fmtM } from '$lib/format.js';
+  import { fmtR, fmtM, photoSrc } from '$lib/format.js';
+  import { openChannelForProperty } from '$lib/chat.svelte.js';
   import { STAGE_LABEL, MANDATE_LABEL, ago, isPast, shortDate, label } from '$lib/panel.js';
 
   const gid = $derived(page.params.gid);
@@ -169,6 +170,7 @@
   <Empty icon="building" title="Not tracked" hint="This property isn't in lead management yet.">
     <button type="button" class="mg-btn primary" onclick={trackIt}><Icon name="plus" size={15} /> Track it</button>
     <a class="mg-btn secondary" href="/leads/properties">All properties</a>
+    <button type="button" class="mg-btn secondary" data-testid="discuss-property" onclick={() => openChannelForProperty(gid)}><Icon name="chat" size={15} /> Discuss</button>
   </Empty>
 {:else if err}
   <div class="mg-strip crit"><span class="ic"><Icon name="alert" size={15} /></span><span><b>Couldn't load this property</b> — {err}</span></div>
@@ -202,6 +204,7 @@
         {#if primary?.phone}<a class="mg-btn primary sm" href="tel:{primary.phone}"><Icon name="phone" size={14} stroke={2} /> Call {primary.name?.split(' ')[0] || ''}</a>{/if}
         {#if wa}<a class="mg-btn secondary sm" href="https://wa.me/{wa}" target="_blank" rel="noopener"><Icon name="message" size={14} /> WhatsApp</a>{/if}
         <button type="button" class="mg-btn secondary sm" onclick={openBrief} title="What to say when you phone the owner"><Icon name="list" size={14} /> Call brief</button>
+        <button type="button" class="mg-btn secondary sm" data-testid="discuss-property" onclick={() => openChannelForProperty(gid, { label: addrOf(d), suburb: d.suburb, price_zar: d.price_zar, tier: d.tier, photo_url: photoSrc(d) })} title="Talk about this property in team chat"><Icon name="chat" size={14} /> Discuss</button>
         {#if d.cma_url}<a class="mg-btn secondary sm" href={d.cma_url}><Icon name="ruler" size={14} /> CMA report</a>{/if}
         <a class="mg-btn secondary sm" href="/prospects?open={encodeURIComponent(d.listing_key)}" title="Open in the prospect engine: score, signals, erf tools"><Icon name="bolt" size={14} /> Engine view</a>
         <a class="mg-btn secondary sm" href="/map?focus={encodeURIComponent(gid)}"><Icon name="mapPin" size={14} /> Map</a>

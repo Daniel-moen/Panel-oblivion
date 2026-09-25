@@ -1222,9 +1222,16 @@ def user_patch(user_id: int):
                                 "message": "Only the owner sets roles."}), 403
             sets.append("role=?")
             vals.append(role)
-        if "privileges" in body:
+        # A member never carries the 'admin' privilege (same rule as invites):
+        # admin is a role, granted by the owner, not a tick box.
+        final_role = role if "role" in body else target["role"]
+        if "privileges" in body or ("role" in body and final_role == "member"):
+            privs = clean_privileges(body.get("privileges") if "privileges" in body
+                                     else _json_list(target["privileges"]))
+            if final_role == "member":
+                privs = [p for p in privs if p != "admin"]
             sets.append("privileges=?")
-            vals.append(json.dumps(clean_privileges(body.get("privileges"))))
+            vals.append(json.dumps(privs))
         if "disabled" in body:
             sets.append("disabled=?")
             vals.append(1 if body.get("disabled") else 0)

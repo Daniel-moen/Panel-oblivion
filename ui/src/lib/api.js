@@ -91,11 +91,30 @@ export const api = {
      type is sent: Z reads the conversation and picks the book itself. */
   agent: (messages, sole) => post('/api/agent', { messages, sole: !!sole }),
 
-  /* Team chat — the agents talking to each other, nothing to do with Z.
-     `after` is the id of the newest message the client already holds; left
-     off, the server hands back the tail of the book. */
+  /* Team chat — the team talking to each other, nothing to do with Z.
+     docs/CHAT.md is the contract. `chatSync` is the only polled call;
+     everything else is fired by a person doing something. `chat`/`say`
+     are the old single-thread shim, kept for anything still calling them. */
   chat: (after) => get('/api/chat' + (after ? '?after=' + after : '')),
   say: (sender, body) => post('/api/chat', { sender, body }),
+  chatChannels: () => get('/api/chat/channels'),
+  chatCreateChannel: (body) => post('/api/chat/channels', body),
+  chatPatchChannel: (id, body) => patch('/api/chat/channels/' + id, body),
+  chatMessages: (id, { before, after, limit } = {}) => {
+    const p = new URLSearchParams();
+    if (before) p.set('before', before);
+    if (after) p.set('after', after);
+    if (limit) p.set('limit', limit);
+    const q = p.toString();
+    return get(`/api/chat/channels/${id}/messages` + (q ? '?' + q : ''));
+  },
+  chatPost: (id, body) => post(`/api/chat/channels/${id}/messages`, body),
+  chatEdit: (mid, body) => patch('/api/chat/messages/' + mid, { body }),
+  chatDelete: (mid) => del('/api/chat/messages/' + mid),
+  chatRead: (id, lastReadId) => post(`/api/chat/channels/${id}/read`, { last_read_id: lastReadId }),
+  chatSync: (since) => get('/api/chat/sync' + (since != null ? '?since=' + since : '')),
+  chatMentions: (limit = 50) => get('/api/chat/mentions?limit=' + limit),
+  chatPeople: () => get('/api/chat/people'),
 
   scrape: (payload) => post('/api/scrape', payload),
   stop: () => post('/api/stop'),
