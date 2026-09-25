@@ -11,7 +11,8 @@
   import Drawer from '$lib/components/Drawer.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
-  import { fmtR, monthlyRent } from '$lib/format.js';
+  import StatTile from '$lib/components/StatTile.svelte';
+  import { fmtR, fmtInt, monthlyRent } from '$lib/format.js';
 
   const rows = $derived(sortRows(applyFilters(app.prospects)));
   const rent = $derived(app.dealType === 'rent');
@@ -53,23 +54,33 @@
     };
   });
 
-  const tiles = $derived(rent
-    ? [{ k: 'Rentals', v: rentInfo.count, sub: 'in the to-rent book' },
-       { k: 'Suburbs', v: rentInfo.suburbs, sub: 'with stock' },
-       { k: 'Median rent', v: rentInfo.median ? fmtR(rentInfo.median) : null, sub: 'a month' },
-       { k: 'Furnished', v: rentInfo.furnished, sub: 'ready to move in' }]
-    : [{ k: 'Hot', v: saleInfo.hot, tone: saleInfo.hot ? 'crit' : '', sub: 'call these first' },
-       { k: 'Sellable', v: saleInfo.sellable, sub: 'scored and deduped' },
-       { k: 'Multi-agency', v: saleInfo.multi, tone: 'ok', sub: 'proven open mandate' },
-       { k: 'Erf resolved', v: saleInfo.erf, sub: 'matched to cadastre' }]);
+  const crawling = $derived(!!app.status.running);
+  const share = (a, b) => (a != null && b ? (100 * a) / b : null);
 
-  const crawling = $derived(app.status.running);
+  const tiles = $derived.by(() => {
+    if (rent)
+      return [{ k: 'Rentals', v: rentInfo.count, sub: 'in the to-rent book' },
+              { k: 'Suburbs', v: rentInfo.suburbs, sub: 'with stock' },
+              { k: 'Median rent', v: rentInfo.median ? fmtR(rentInfo.median) : null, sub: 'a month' },
+              { k: 'Furnished', v: rentInfo.furnished, sub: 'ready to move in' }];
+    const s = app.stats || {};
+    const hot = app.loaded ? saleInfo.hot : null;
+    return [
+      { k: 'Hot', v: hot, tone: hot ? 'crit' : '', sub: 'call these first', live: crawling,
+        pct: share(hot, s.sellable), pctDetail: `${hot ?? '—'} of ${s.sellable ?? '—'} sellable` },
+      { k: 'Sellable', v: s.sellable ?? null, sub: s.properties != null ? `of ${fmtInt(s.properties)} properties` : 'scored and deduped',
+        pct: share(s.sellable, s.properties), pctDetail: `${s.sellable ?? '—'} of ${s.properties ?? '—'} properties` },
+      { k: 'Multi-agency', v: s.multi_agency ?? null, tone: 'ok', sub: 'proven open mandate',
+        pct: share(s.multi_agency, s.sellable), pctDetail: `${s.multi_agency ?? '—'} of ${s.sellable ?? '—'} sellable` },
+      { k: 'Erf resolved', v: s.erf_ready ?? null, sub: 'matched to cadastre',
+        pct: share(s.erf_ready, s.properties), pctDetail: `${s.erf_ready ?? '—'} of ${s.properties ?? '—'} properties` }
+    ];
+  });
 
   /* One plain sentence about the book. */
   const line = $derived.by(() => {
     const s = app.status;
-    if (s.running)
-      return `Crawling · ${s.phase}${s.total ? ` · ${s.done}/${s.total} pages` : ''}`;
+    if (s.running) return 'Crawl running — progress below.';
     if (!app.loaded) return `Loading the ${rent ? 'rent' : 'sale'} book…`;
     if (rent) {
       if (!rentInfo.count) return 'No rentals yet — crawl with “include rentals” ticked.';
@@ -99,11 +110,9 @@
 
 <div class="tiles">
   {#each tiles as t, i (t.k)}
-    <div class="mg-stat-tile mg-rise" style:--i={i}>
-      <span class="hud">{t.k}</span>
-      <div class="v {t.tone || ''}">{#if t.v != null}{t.v}{:else if app.loaded && (app.stats || rent)}—{:else}<Skeleton h="26px" w="56px" />{/if}</div>
-      <div class="sub">{t.sub}</div>
-    </div>
+    <StatTile label={t.k} value={t.v} sub={t.sub} tone={t.tone || ''} live={!!t.live}
+              pct={t.pct ?? null} pctDetail={t.pctDetail || ''} pctTone={t.tone === 'crit' ? 'crit' : 'ok'} {i}
+              loading={rent ? !app.loaded : !app.stats || (t.k === 'Hot' && !app.loaded)} />
   {/each}
 </div>
 
@@ -166,7 +175,7 @@
   .titles { min-width: 0; }
   .line { margin-top: 4px; display: flex; align-items: center; gap: 8px; }
 
-  .tiles { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 14px; }
+  .tiles { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 16px; }
   @media (min-width: 900px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }

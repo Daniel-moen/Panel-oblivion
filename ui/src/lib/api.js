@@ -76,6 +76,9 @@ export const api = {
     return get('/api/prospect/' + encodeURIComponent(key) + (q ? '?' + q : ''));
   },
   stats: () => get('/api/stats'),
+  /* Home's one cheap payload: hot count, stats, 14-day series, the event
+     feed and the crawl state (webapp.py, cached 15 s server-side). */
+  home: () => get('/api/home'),
   status: () => get('/api/status'),
   erfBusy: () => get('/api/erf/busy'),
   mapPoints: (sole) => get('/api/map' + (sole ? '?sole=1' : '')),
