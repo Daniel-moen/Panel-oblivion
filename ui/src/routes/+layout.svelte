@@ -94,7 +94,7 @@
 <style>
   .mg-scene { display: flex; flex-direction: column; }
   .col { flex: 1; min-height: 0; display: flex; flex-direction: column; min-width: 0; }
-  main { position: relative; z-index: 1; }
+  main { position: relative; }
   .view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
   main.mg-page { flex: 1; display: flex; flex-direction: column; }
 

@@ -139,9 +139,17 @@
   function grabEnd() { if (held == null) return; held = null; if (drag > 120) close(); drag = 0; }
 
   const barTone = (v) => (v >= 70 ? 'ok' : v >= 40 ? 'warn' : 'crit');
+
+  /* Rendered at the end of <body> so no ancestor's stacking context (the
+     page's, the strip's) can sit on top of it or clip it. */
+  function portal(node) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
 </script>
 
 {#if r}
+<div class="mg-portal" use:portal>
   <div class="scrim" onclick={close} role="presentation" transition:fade={{ duration: 200 }}></div>
 
   {#key wide}
@@ -296,6 +304,7 @@
       </div>
     </aside>
   {/key}
+</div>
 {/if}
 
 <style>
