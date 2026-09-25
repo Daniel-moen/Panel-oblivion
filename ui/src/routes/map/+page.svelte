@@ -252,10 +252,17 @@
       </div>`;
   }
 
-  /* keep a popup clear of the floating bar above and the dock below */
-  function popPad() {
-    const bottom = narrow ? 96 : 24;
-    return { tl: [16, narrow ? 150 : 24], br: [16, bottom] };
+  /* Keep a popup clear of the floating chrome and the dock. Leaflet reads
+     these arrays each time it auto-pans, so they are mutated in place as the
+     panel opens and closes — no marker rebuild needed. */
+  const PAD_TL = [16, 24];
+  const PAD_BR = [16, 24];
+  const CHROME_W = 360;
+  function syncPad() {
+    const beside = panelOpen && !narrow;
+    PAD_TL[0] = beside ? CHROME_W + 32 : 16;
+    PAD_TL[1] = narrow ? 150 : (beside ? 24 : 120);
+    PAD_BR[1] = narrow ? 110 : 56;
   }
 
   /* —————————————————————————————————————————————————— marker rebuild ——— */
@@ -265,7 +272,6 @@
     if (layer) layer.remove();
     markers = new Map();
 
-    const pad = popPad();
     const list = [];
     for (const p of pts) {
       const m = L.circleMarker([p.lat, p.lng], baseStyle(p));
@@ -273,8 +279,8 @@
         className: 'ob-pop',
         maxWidth: 300,
         minWidth: 260,
-        autoPanPaddingTopLeft: pad.tl,
-        autoPanPaddingBottomRight: pad.br,
+        autoPanPaddingTopLeft: PAD_TL,
+        autoPanPaddingBottomRight: PAD_BR,
         closeButton: true
       });
       m.on('popupopen', () => {
@@ -312,7 +318,14 @@
     activeGid = p.gid;
     /* on a phone the panel covers the map — fold it so the pin shows */
     if (narrow) panelOpen = false;
-    map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 16), { duration: 0.7 });
+    /* land the pin right of the panel and low in the frame, so the popup
+       that opens above it fits in the clear part of the map */
+    const z = Math.max(map.getZoom(), 16);
+    const size = map.getSize();
+    const dx = panelOpen && !narrow ? (CHROME_W + 16) / 2 : 0;
+    const dy = size.y * 0.22;
+    const target = map.unproject(map.project([p.lat, p.lng], z).subtract([dx, dy]), z);
+    map.flyTo(target, z, { duration: 0.7 });
     const m = markers.get(p.gid);
     if (m) {
       m.bringToFront();
@@ -375,6 +388,11 @@
   $effect(() => {
     const pts = filtered;
     if (map) rebuild(pts);
+  });
+
+  $effect(() => {
+    panelOpen; narrow;
+    syncPad();
   });
 
   /* reset paging when the result set changes shape */
@@ -648,6 +666,8 @@
   .row { display: flex; gap: 10px; }
   .fl { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .fl .mg-select { display: block; width: 100%; }
+  .fl input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+  .fl input::-webkit-outer-spin-button, .fl input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
   .swrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
 
@@ -657,7 +677,8 @@
     font: 500 13px/1.3 var(--mc-font); color: var(--mc-ink2); user-select: none; -webkit-user-select: none;
   }
   .sw:hover { color: var(--mc-ink); }
-  .sw input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+  .sw { position: relative; }
+  .sw input { position: absolute; left: 0; top: 50%; margin: 0; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
   .sw i {
     position: relative; flex: none; width: 36px; height: 22px; border-radius: 9999px;
     background: var(--mc-line2); transition: background var(--mc-t-fast);
@@ -680,6 +701,7 @@
   .grow { flex: 1; min-width: 0; }
 
   .card {
+    flex: none; /* a row never shrinks: the title would collapse to 0px */
     display: flex; gap: 10px; align-items: stretch; text-align: left; width: 100%;
     padding: 8px; border: 1px solid transparent; border-radius: var(--mc-r-md);
     background: none; color: inherit; font: inherit; cursor: pointer;
