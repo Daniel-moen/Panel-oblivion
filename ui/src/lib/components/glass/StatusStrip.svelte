@@ -93,15 +93,16 @@
     -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--mc-line);
   }
-  .in { display: flex; align-items: center; gap: 6px; height: var(--mc-strip-h); padding: 0 12px 0 16px; }
+  .in { display: flex; align-items: center; gap: 6px; height: var(--mc-strip-h); padding: 0 12px 0 16px; min-width: 0; overflow: hidden; }
 
   .link { display: inline-flex; margin-right: 4px; }
   .brand { font: 600 15px/1 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
   .where { display: none; font: 600 15px/1 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
   .gap { flex: 1; min-width: 4px; }
 
-  .readout { display: inline-flex; align-items: baseline; gap: 10px; margin-right: 4px; font: 500 12px/1 var(--mc-font); color: var(--mc-ink3); white-space: nowrap; }
-  .st { text-transform: capitalize; }
+  .readout { display: inline-flex; align-items: baseline; gap: 10px; margin-right: 4px; min-width: 0; max-width: 42vw; font: 500 12px/1 var(--mc-font); color: var(--mc-ink3); white-space: nowrap; }
+  .st { text-transform: capitalize; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .hot { flex: none; }
   .st.ok { color: var(--mc-accent); font-weight: 600; }
   .st.warn { color: var(--mc-warn); font-weight: 600; }
   .st.crit { color: var(--mc-crit); font-weight: 600; }
@@ -125,6 +126,7 @@
 
   @media (max-width: 480px) {
     .hot { display: none; }
+    .readout { max-width: 34vw; }
   }
   @media (pointer: coarse) { .ib { width: 44px; height: 44px; } .in { gap: 2px; } }
 
