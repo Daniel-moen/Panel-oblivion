@@ -322,6 +322,21 @@ python main.py run --new-only
 property from scratch (~15–20 min on Kimi's 3-request concurrency cap);
 `--new-only` skips anything already scored and unchanged.
 
+### Checks
+
+Plain scripts, no test runner. Each refuses to run unless `DATA_DIR` points
+at a scratch directory, so none can touch the real `prospects.db`:
+
+```bash
+DATA_DIR=$(mktemp -d) .venv/bin/python tests/team_check.py            # tasks + presence
+DATA_DIR=$(mktemp -d) .venv/bin/python tests/media_mount_check.py     # /zerko mount
+DATA_DIR=$(mktemp -d) .venv/bin/python tests/dashboard_latency_check.py  # dashboard p95 during a crawl
+```
+
+The latency check crawls a fake portal (`tests/fake_source.py`, loaded via
+`CRAWL_SOURCES_PLUGIN=tests.fake_source`) — a test hook only, never set it on
+a deploy. `LATENCY_BUDGET_S` (default 1.0) is the p95 it enforces.
+
 ---
 
 ## Rentals
@@ -480,10 +495,24 @@ rather than publishing the data; locally it stays open for convenience.
 empty database. `.railwayignore` keeps `.env` and the local `prospects.db` out
 of the upload, so a deploy never overwrites production data.
 
-**One worker, many threads.** Crawl jobs run in background threads and report
-progress through an in-memory dict. A second gunicorn worker would be a
-separate process with its own copy, so the dashboard would poll one process
-while the job ran in another. Scale threads, never workers.
+**One worker, many threads — and a crawler process.** A crawl runs as its own
+OS process (`crawler.py`), so HTML parsing, dedupe, scoring and erf/GV
+resolution never compete with dashboard requests for the web process's GIL.
+The web process writes the job spec to `DATA_DIR/crawl_job.json`, pipes the
+child's stdout into the job log (so `railway logs` still shows the crawl),
+polls `DATA_DIR/crawl_progress.json` for progress, and forwards Stop as
+SIGTERM (a kill 90 s later if it hangs); the child stops itself if the web
+process dies. `CRAWL_IN_PROCESS=1` falls back to the old in-process thread.
+Gunicorn still runs exactly one worker: the job dict, the single-job guard and
+the stop flag live in that worker's memory, and a second worker would poll one
+copy while the job ran under another. Scale threads, never workers.
+
+SQLite connections never hold the write lock between statements
+(`db.connect()` leaves no transaction open; schema setup runs once per
+process), and the prospect list is served stale-while-revalidate: a warm
+cache answers at once and a stale one is rebuilt in the background, at most
+every `PROSPECTS_CRAWL_REFRESH_S` (default 30) while a crawl runs. The
+default list is built at boot (`PROSPECTS_NO_WARM=1` skips that).
 
 ### Property24 does not work from Railway
 
@@ -517,7 +546,19 @@ Set `AUTO_CRAWL=1` and the dashboard process schedules itself:
 
 Scheduled runs use the same single-job guard as the Scrape button, so the
 loop and a human can never collide; on a Mac that sleeps overnight the pass
-fires on wake. A **yield canary** protects the comps feed: a source whose
+fires on wake.
+
+The loop's stamps are **persisted in the database** (`app_state`:
+`auto_last_full_started`, `auto_last_full`, `auto_last_sweep_started`,
+`auto_last_sweep`), so a deploy does not start a crawl: the nightly pass
+needs its last *start* to be at least `AUTO_FULL_MIN_HOURS` (default 20) old
+— a redeploy during `AUTO_CRAWL_HOUR` no longer re-runs it — and a sweep needs
+the newer of the last *finished* sweep and full pass to be `AUTO_SWEEP_HOURS`
+old. A sweep that started but never finished is retried no sooner than 30
+minutes after it started. Each boot logs `auto-crawl: last full pass finished
+…, last sweep …`, and `/api/status` reports both plus `auto_full_min_hours`.
+Crawls run in a separate `crawler.py` process by default (see Deployment);
+`CRAWL_IN_PROCESS=1` restores the in-process thread. A **yield canary** protects the comps feed: a source whose
 crawled-suburb listings were confirmed at under `LIFECYCLE_MIN_COVERAGE`
 (50%) this run — a parser regression or a block — is excluded from that
 run's delisting sweep instead of reading as a mass delisting.
