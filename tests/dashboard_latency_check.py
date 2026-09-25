@@ -170,7 +170,8 @@ while (False, "sale") not in webapp._prospects_cache and time.monotonic() < dead
     time.sleep(0.2)
 check("boot warm-up built the default book", (False, "sale") in webapp._prospects_cache)
 
-ENDPOINTS = ["/", "/prospects", "/online", "/api/status", "/api/stats", "/api/prospects"]
+ENDPOINTS = ["/", "/prospects", "/online", "/api/status", "/api/stats",
+             "/api/home", "/api/prospects"]
 samples: dict[str, list[float]] = {p: [] for p in ENDPOINTS}
 bad_status: list[str] = []
 samples_lock = threading.Lock()
@@ -194,6 +195,35 @@ def poller(path):
         stop_polling.wait(2.0)
 
 
+# --- /api/home payload shape (idle, then again mid-crawl below) -------------
+def check_home(label, client):
+    r = client.get("/api/home", headers=BASIC)
+    check(f"/api/home {label}: 200", r.status_code == 200, r.status_code)
+    home = r.get_json(silent=True) or {}
+    check(f"/api/home {label}: hot is an int", isinstance(home.get("hot"), int),
+          home.get("hot"))
+    stats = client.get("/api/stats", headers=BASIC).get_json()
+    check(f"/api/home {label}: stats has the /api/stats keys",
+          isinstance(home.get("stats"), dict) and set(home["stats"]) == set(stats))
+    series = home.get("series") or {}
+    check(f"/api/home {label}: series.days has 14 days", len(series.get("days") or []) == 14)
+    check(f"/api/home {label}: every series has 14 points",
+          all(len(series.get(k) or []) == 14 for k in ("new_listings", "price_cuts", "scored")))
+    check(f"/api/home {label}: events is a list (max 40)",
+          isinstance(home.get("events"), list) and len(home["events"]) <= 40)
+    check(f"/api/home {label}: crawl.running present",
+          isinstance((home.get("crawl") or {}).get("running"), bool))
+    return home
+
+
+home = check_home("idle", webapp.app.test_client())
+check("/api/home idle: seeded listings show in the series",
+      sum(home.get("series", {}).get("new_listings") or []) >= N_SEED,
+      home.get("series", {}).get("new_listings"))
+check("/api/home idle: events carry t/kind/who/tone/text",
+      all({"t", "kind", "who", "tone", "text"} <= set(e) and e["t"].endswith("Z")
+          for e in home.get("events") or []) and bool(home.get("events")))
+
 check("crawl starts", webapp._start_job(["bakoven"], ["fake"], pages=1, use_ai=False,
                                         listing_types=("rent",)))
 pollers = [threading.Thread(target=poller, args=(p,), daemon=True)
@@ -202,6 +232,11 @@ for t in pollers:
     t.start()
 
 client = webapp.app.test_client()
+home = check_home("mid-crawl", client)
+check("/api/home mid-crawl: crawl.running and a live Crawling event",
+      (home.get("crawl") or {}).get("running") is True
+      and any(e.get("kind") == "crawl" and e.get("text", "").startswith("Crawling")
+              for e in home.get("events") or []))
 t_start = time.monotonic()
 while webapp.job["running"] and time.monotonic() - t_start < 90:
     for path in ENDPOINTS:

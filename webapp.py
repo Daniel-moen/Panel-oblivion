@@ -20,7 +20,7 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 from flask import Flask, Response, jsonify, redirect, request, send_from_directory
@@ -1641,33 +1641,418 @@ def api_chat_say():
                                 "body": body, "at": at}})
 
 
+def _stats_dict(conn: sqlite3.Connection) -> dict:
+    """The /api/stats headline counts (also embedded in /api/home)."""
+    def one(sql):
+        return conn.execute(sql).fetchone()[0]
+    return {
+        # The headline stat has always meant "for-sale listings"; keeping
+        # it that way stops a rental crawl from silently inflating it.
+        "listings": one("SELECT COUNT(*) FROM listings"
+                        " WHERE listing_type='sale'"),
+        "rentals": one("SELECT COUNT(*) FROM listings"
+                       " WHERE listing_type='rent'"),
+        "properties": one("SELECT COUNT(DISTINCT group_id) FROM property_groups"),
+        "sellable": one("SELECT COUNT(DISTINCT g.group_id) FROM scores s"
+                        " JOIN property_groups g ON g.listing_key=s.listing_key"
+                        " WHERE COALESCE(s.sellable,1)=1"),
+        "sole": one("SELECT COUNT(DISTINCT g.group_id) FROM scores s"
+                    " JOIN property_groups g ON g.listing_key=s.listing_key"
+                    " WHERE s.sellable=0"),
+        "multi_agency": one("SELECT COUNT(DISTINCT group_id) FROM"
+                            " property_groups WHERE agency_count>1"),
+        "erf_ready": one("SELECT COUNT(DISTINCT group_id) FROM erf_lookup"
+                         " WHERE status IN ('ok','check','confirmed')"),
+        "by_source": {r[0]: r[1] for r in conn.execute(
+            "SELECT source, COUNT(*) FROM listings"
+            " WHERE listing_type='sale' GROUP BY source")},
+    }
+
+
 @app.get("/api/stats")
 def api_stats():
     with db.connect() as conn:
-        def one(sql):
-            return conn.execute(sql).fetchone()[0]
-        return jsonify({
-            # The headline stat has always meant "for-sale listings"; keeping
-            # it that way stops a rental crawl from silently inflating it.
-            "listings": one("SELECT COUNT(*) FROM listings"
-                            " WHERE listing_type='sale'"),
-            "rentals": one("SELECT COUNT(*) FROM listings"
-                           " WHERE listing_type='rent'"),
-            "properties": one("SELECT COUNT(DISTINCT group_id) FROM property_groups"),
-            "sellable": one("SELECT COUNT(DISTINCT g.group_id) FROM scores s"
-                            " JOIN property_groups g ON g.listing_key=s.listing_key"
-                            " WHERE COALESCE(s.sellable,1)=1"),
-            "sole": one("SELECT COUNT(DISTINCT g.group_id) FROM scores s"
-                        " JOIN property_groups g ON g.listing_key=s.listing_key"
-                        " WHERE s.sellable=0"),
-            "multi_agency": one("SELECT COUNT(DISTINCT group_id) FROM"
-                                " property_groups WHERE agency_count>1"),
-            "erf_ready": one("SELECT COUNT(DISTINCT group_id) FROM erf_lookup"
-                             " WHERE status IN ('ok','check','confirmed')"),
-            "by_source": {r[0]: r[1] for r in conn.execute(
-                "SELECT source, COUNT(*) FROM listings"
-                " WHERE listing_type='sale' GROUP BY source")},
-        })
+        return jsonify(_stats_dict(conn))
+
+
+# ---------------------------------------------------------------- /api/home
+#
+# One cheap payload the Home page paints from: the Hot count, the stats, the
+# lead counts, 14-day series and a merged activity feed. The built payload is
+# cached for _HOME_TTL seconds; the crawl block (and the live "Crawling" event)
+# is read from `job` on every call, so progress is never stale. Every stored
+# timestamp is read as UTC and sent as ISO-8601 with a trailing Z — except the
+# app_state auto-crawl stamps, which are local datetime.now().isoformat() and
+# are converted before they become events.
+_HOME_TTL = 15.0
+_HOME_DAYS = 14
+_home_cache: dict = {}
+_home_lock = threading.Lock()
+# (id(prospects entry), hot count): counting 15k rows is cheap, but not free
+# on every 5 s poll during a crawl.
+_home_hot_memo: list = [None, None]
+
+
+def _utc_z(ts) -> str | None:
+    """'2026-09-25 02:06:52' (SQLite datetime('now'), UTC) -> ISO-8601 Z."""
+    if not ts:
+        return None
+    s = str(ts).strip().replace(" ", "T")
+    return (s[:19] if len(s) >= 19 else s) + "Z"
+
+
+def _local_stamp_z(ts) -> str | None:
+    """A naive local-time ISO stamp (app_state auto-crawl) -> UTC ISO Z."""
+    if not ts:
+        return None
+    try:
+        d = datetime.fromisoformat(str(ts))
+    except ValueError:
+        return None
+    if d.tzinfo is None:
+        d = d.astimezone()          # naive = this process's local time
+    return d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _fmt_rand(v) -> str:
+    """R34.95m / R850k — a price the way an agent says it."""
+    if not v:
+        return "POA"
+    v = int(v)
+    if v >= 1_000_000:
+        return "R" + f"{v / 1e6:.2f}".rstrip("0").rstrip(".") + "m"
+    if v >= 1_000:
+        return f"R{round(v / 1000)}k"
+    return f"R{v}"
+
+
+def _home_hot_cached() -> int | None:
+    """Hot rows in the warm for-sale prospect list — exactly the /prospects
+    Hot tile — or None when that cache is cold. Never builds it (a cold build
+    is seconds of work); the dict read is lock-free."""
+    entry = _prospects_cache.get((False, "sale"))
+    if entry is None:
+        return None
+    if _home_hot_memo[0] is not entry:
+        n = sum(1 for r in entry["rows"] if r.get("tier") == "hot")
+        _home_hot_memo[:] = [entry, n]
+    return _home_hot_memo[1]
+
+
+def _home_hot_sql(conn: sqlite3.Connection) -> int:
+    """The Hot count straight from SQL, for a cold prospects cache."""
+    return conn.execute(
+        "SELECT COUNT(DISTINCT g.group_id) FROM scores s"
+        " JOIN property_groups g ON g.listing_key = s.listing_key"
+        " JOIN listings l ON l.listing_key = s.listing_key"
+        " WHERE s.tier = 'hot' AND l.listing_type = 'sale'"
+        " AND COALESCE(s.sellable, 1) = 1").fetchone()[0]
+
+
+def _home_days() -> tuple[list[str], str]:
+    """The 14 local calendar days ending today, and the UTC cutoff (local
+    midnight of the first day) as a SQLite datetime string."""
+    today = datetime.now().date()
+    days = [today - timedelta(days=i) for i in range(_HOME_DAYS - 1, -1, -1)]
+    start = datetime.combine(days[0], datetime.min.time()).astimezone()
+    cutoff = start.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return [d.isoformat() for d in days], cutoff
+
+
+def _home_series(conn, days: list[str], cutoff: str) -> dict:
+    def per_day(sql):
+        counts = {}
+        try:
+            counts = {r[0]: r[1] for r in conn.execute(sql, (cutoff,))}
+        except sqlite3.Error:
+            pass
+        return [counts.get(d, 0) for d in days]
+    # date(..., 'localtime') buckets by the same local days as `days`.
+    return {
+        "days": days,
+        "new_listings": per_day(
+            "SELECT date(first_seen, 'localtime'), COUNT(*) FROM listings"
+            " WHERE listing_type = 'sale' AND first_seen >= ?"
+            " GROUP BY 1"),
+        "price_cuts": per_day(
+            "SELECT date(p.observed_at, 'localtime'), COUNT(*)"
+            " FROM price_history p WHERE p.observed_at >= ?"
+            " AND p.listing_key NOT LIKE '%:rent:%'"
+            " AND (SELECT q.price_zar FROM price_history q"
+            "      WHERE q.listing_key = p.listing_key"
+            "      AND q.observed_at < p.observed_at"
+            "      ORDER BY q.observed_at DESC LIMIT 1) > p.price_zar"
+            " GROUP BY 1"),
+        "scored": per_day(
+            "SELECT date(scored_at, 'localtime'), COUNT(*) FROM scores"
+            " WHERE scored_at >= ? AND listing_key NOT LIKE '%:rent:%'"
+            " GROUP BY 1"),
+    }
+
+
+def _addr(r) -> str:
+    """'2 Glen Avenue, Constantia' — the address as printed, else the title."""
+    head = (r["street_address_raw"] or "").strip() if r else ""
+    if head.islower():              # some portals print '2 glen avenue'
+        head = head.title()
+    head = head or ((r["title"] or "").strip() if r else "")
+    sub = (r["suburb"] or "").strip() if r else ""
+    if sub and sub.lower() not in head.lower():
+        return f"{head}, {sub}" if head else sub
+    return head or "a property"
+
+
+def _title_suburb(r, sep: str = ", ") -> str:
+    """'{title}, {suburb}', minus the suburb when the title already says it
+    ("4 Bedroom House for Sale in Bantry Bay")."""
+    title = (r["title"] or "").strip()
+    sub = (r["suburb"] or "").strip()
+    if sub and sub.lower() not in title.lower():
+        return f"{title}{sep}{sub}" if title else sub
+    return title or "a listing"
+
+
+def _group_listing(conn, gid: str):
+    """The best listing of a panel group id (numeric, or 'solo-<key>')."""
+    gid = str(gid)
+    if gid.startswith("solo-"):
+        return conn.execute(
+            "SELECT street_address_raw, title, suburb FROM listings"
+            " WHERE listing_key = ?", (gid[5:],)).fetchone()
+    try:
+        num = int(gid)
+    except ValueError:
+        return None
+    return conn.execute(
+        "SELECT l.street_address_raw, l.title, l.suburb FROM property_groups g"
+        " JOIN listings l ON l.listing_key = g.listing_key"
+        " WHERE g.group_id = ? AND l.listing_type = 'sale'"
+        " ORDER BY l.street_address_raw IS NULL, l.last_seen DESC LIMIT 1",
+        (num,)).fetchone()
+
+
+def _home_events(conn, cutoff: str) -> list[dict]:
+    events: list[dict] = []
+
+    def ev(t, kind, who, tone, text, href=None):
+        if t:
+            events.append({"t": t, "kind": kind, "who": who, "tone": tone,
+                           "text": text, "href": href})
+
+    def source(fn):
+        # An old database may lack a table; one source failing must not
+        # take the feed (or the endpoint) down with it.
+        try:
+            fn()
+        except sqlite3.Error:
+            pass
+
+    def listings_():
+        for r in conn.execute(
+                "SELECT strftime('%Y-%m-%d %H:00', first_seen) AS b,"
+                " COUNT(*) AS n, COUNT(DISTINCT suburb) AS k,"
+                " MAX(first_seen) AS t, MAX(suburb) AS suburb,"
+                " MAX(title) AS title, MAX(listing_key) AS key"
+                " FROM listings WHERE listing_type = 'sale'"
+                " AND first_seen >= ? GROUP BY b ORDER BY b DESC LIMIT 12",
+                (cutoff,)):
+            if r["n"] == 1:
+                ev(_utc_z(r["t"]), "listing", "Crawler", "ok",
+                   f"New listing · {_title_suburb(r, ' · ')}",
+                   f"/prospects?open={quote(r['key'], safe=':')}")
+            elif r["k"] <= 1:
+                ev(_utc_z(r["t"]), "listing", "Crawler", "ok",
+                   f"{r['n']} new listings in {r['suburb'] or 'one suburb'}")
+            else:
+                ev(_utc_z(r["t"]), "listing", "Crawler", "ok",
+                   f"{r['n']} new listings across {r['k']} suburbs")
+
+    def cuts():
+        for r in conn.execute(
+                # The inner LIMIT keeps the planner from driving the join
+                # from all ~20k sale listings (4 ms instead of 25 ms).
+                "SELECT c.*, l.street_address_raw, l.title, l.suburb FROM ("
+                "  SELECT * FROM ("
+                "   SELECT p.listing_key, p.price_zar, p.observed_at,"
+                "    (SELECT q.price_zar FROM price_history q"
+                "     WHERE q.listing_key = p.listing_key"
+                "     AND q.observed_at < p.observed_at"
+                "     ORDER BY q.observed_at DESC LIMIT 1) AS prev"
+                "   FROM price_history p WHERE p.observed_at >= ?"
+                "   AND p.listing_key NOT LIKE '%:rent:%')"
+                "  WHERE prev > price_zar ORDER BY observed_at DESC LIMIT 40) c"
+                " JOIN listings l ON l.listing_key = c.listing_key"
+                " WHERE l.listing_type = 'sale'"
+                " ORDER BY c.observed_at DESC LIMIT 12", (cutoff,)):
+            ev(_utc_z(r["observed_at"]), "cut", "Engine", "crit",
+               f"Price cut {_fmt_rand(r['prev'])} → {_fmt_rand(r['price_zar'])}"
+               f" · {_addr(r)}",
+               f"/prospects?open={quote(r['listing_key'], safe=':')}")
+
+    def sold():
+        for r in conn.execute(
+                # Stamped at the disappearance (delisted_at), not at the
+                # lifecycle recompute (updated_at), which re-stamps every
+                # row at once and would crowd the feed with one time.
+                "SELECT c.listing_key, c.likely_sold_price, l.title, l.suburb,"
+                " COALESCE(c.delisted_at, c.updated_at) AS at"
+                " FROM listing_lifecycle c"
+                " JOIN listings l ON l.listing_key = c.listing_key"
+                " WHERE c.status = 'delisted' AND c.likely_sold = 1"
+                " AND l.listing_type = 'sale'"
+                " AND COALESCE(c.delisted_at, c.updated_at) >= ?"
+                " ORDER BY at DESC LIMIT 8", (cutoff,)):
+            where = _title_suburb(r)
+            ev(_utc_z(r["at"]), "sold", "Engine", "",
+               f"Likely sold · {where} · {_fmt_rand(r['likely_sold_price'])}"
+               " asking at disappearance",
+               f"/prospects?open={quote(r['listing_key'], safe=':')}")
+
+    def relists():
+        for r in conn.execute(
+                "SELECT c.listing_key, c.relisted_at, c.note, l.title,"
+                " l.suburb FROM listing_lifecycle c"
+                " JOIN listings l ON l.listing_key = c.listing_key"
+                " WHERE c.status = 'relisted' AND l.listing_type = 'sale'"
+                " AND c.relisted_at >= ?"
+                " ORDER BY c.relisted_at DESC LIMIT 6", (cutoff,)):
+            where = _title_suburb(r)
+            failed = "failed mandate" in (r["note"] or "")
+            ev(_utc_z(r["relisted_at"]), "relist", "Engine", "warn",
+               f"Relisted · {where}"
+               + (" · possible failed mandate" if failed else ""),
+               f"/prospects?open={quote(r['listing_key'], safe=':')}")
+
+    def scored():
+        for r in conn.execute(
+                "SELECT strftime('%Y-%m-%d %H:00', scored_at) AS b,"
+                " COUNT(*) AS n, MAX(scored_at) AS t,"
+                " SUM(mandate_verdict IN ('open', 'probably_open')) AS m"
+                " FROM scores WHERE scored_at >= ?"
+                " AND listing_key NOT LIKE '%:rent:%'"
+                " GROUP BY b ORDER BY b DESC LIMIT 8", (cutoff,)):
+            n, m = r["n"], r["m"] or 0
+            ev(_utc_z(r["t"]), "scored", "Engine", "ok",
+               f"{n} {'property' if n == 1 else 'properties'} scored"
+               + (f" · {m} open mandate{'' if m == 1 else 's'}" if m else ""))
+
+    def leads():
+        rows = conn.execute(
+            "SELECT group_id, kind, payload, occurred_at, actor"
+            " FROM activities WHERE occurred_at >= datetime('now', '-30 days')"
+            " ORDER BY occurred_at DESC, id DESC LIMIT 10").fetchall()
+        for r in rows:
+            try:
+                p = json.loads(r["payload"] or "{}")
+            except ValueError:
+                p = {}
+            p = p if isinstance(p, dict) else {}
+            addr = _addr(_group_listing(conn, r["group_id"]))
+            kind, tone = r["kind"], ""
+            if kind == "stage_change":
+                to = str(p.get("to") or "?")
+                frm = str(p.get("from") or "?")
+                text = (f"Lead moved {frm.replace('_', ' ')} →"
+                        f" {to.replace('_', ' ')} · {addr}")
+                if to in ("meeting", "valuation_sent", "mandate"):
+                    tone = "ok"
+            elif kind == "tracked":
+                text = f"Tracked · {addr}"
+            elif kind == "contact_added":
+                text = f"Owner contact found · {addr}"
+            else:
+                text = f"{kind.replace('_', ' ')} · {addr}"
+            ev(_utc_z(r["occurred_at"]), "lead", r["actor"] or "Leads", tone,
+               text, f"/leads/properties/{quote(str(r['group_id']))}")
+
+    def crawls():
+        for key, text in ((_AUTO_LAST_FULL, "Nightly full pass finished"),
+                          (_AUTO_LAST_SWEEP, "Freshness sweep finished")):
+            ev(_local_stamp_z(db.get_state(conn, key)), "crawl", "Crawler",
+               "ok", text)
+
+    for fn in (listings_, cuts, sold, relists, scored, leads, crawls):
+        source(fn)
+    return events
+
+
+def _home_tracked(conn) -> tuple[int, int]:
+    try:
+        rows = conn.execute(
+            "SELECT stage, COUNT(*) FROM tracked_property"
+            " WHERE archived_at IS NULL GROUP BY stage").fetchall()
+    except sqlite3.Error:
+        return 0, 0
+    return (sum(r[1] for r in rows),
+            sum(r[1] for r in rows if r[0] in panel.ACTIVE_STAGES))
+
+
+def _build_home() -> dict:
+    days, cutoff = _home_days()
+    with db.connect() as conn:
+        tracked, active = _home_tracked(conn)
+        try:
+            last_full = db.get_state(conn, _AUTO_LAST_FULL)
+            last_sweep = db.get_state(conn, _AUTO_LAST_SWEEP)
+        except sqlite3.Error:
+            last_full = last_sweep = None
+        return {
+            "hot_sql": (None if _home_hot_cached() is not None
+                        else _home_hot_sql(conn)),
+            "stats": _stats_dict(conn),
+            "tracked": tracked,
+            "tracked_active": active,
+            "series": _home_series(conn, days, cutoff),
+            "events": _home_events(conn, cutoff),
+            "last_full": last_full,
+            "last_sweep": last_sweep,
+        }
+
+
+@app.get("/api/home")
+def api_home():
+    with job_lock:
+        live = {k: job[k] for k in ("running", "phase", "done", "total")}
+    now = time.monotonic()
+    with _home_lock:
+        hit = _home_cache.get("payload")
+        # A crawl starting or ending invalidates at once: the feed and the
+        # series should show what it did without waiting out the TTL.
+        if hit is not None and (now - hit[0] >= _HOME_TTL
+                                or hit[1] != live["running"]):
+            hit = None
+    if hit is None:
+        hit = (now, live["running"], _build_home())
+        with _home_lock:
+            _home_cache["payload"] = hit
+    base = hit[2]
+    events = list(base["events"])
+    if live["running"]:
+        pages = (f" · {live['done']}/{live['total']} pages"
+                 if live["total"] else "")
+        events.append({
+            "t": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "kind": "crawl", "who": "Crawler", "tone": "warn",
+            "text": f"Crawling · {live['phase']}{pages}", "href": None})
+    events.sort(key=lambda e: e["t"], reverse=True)
+    hot = _home_hot_cached()
+    if hot is None:
+        hot = base["hot_sql"]
+    if hot is None:                 # the cache emptied since the build
+        with db.connect() as conn:
+            hot = _home_hot_sql(conn)
+    return jsonify({
+        "hot": hot,
+        "stats": base["stats"],
+        "tracked": base["tracked"],
+        "tracked_active": base["tracked_active"],
+        "series": base["series"],
+        "events": events[:40],
+        "crawl": {"running": live["running"], "phase": live["phase"],
+                  "done": live["done"], "total": live["total"],
+                  "last_full": base["last_full"],
+                  "last_sweep": base["last_sweep"]},
+    })
 
 
 # ---------------------------------------------------------------- dashboard

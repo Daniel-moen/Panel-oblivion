@@ -420,6 +420,14 @@ def _setup(conn: sqlite3.Connection) -> None:
                      " ON listings(listing_type)")
     except sqlite3.OperationalError:
         pass
+    # /api/home counts new for-sale listings per day over two weeks; this
+    # makes that an index-only range scan instead of ~20k row lookups.
+    # first_seen is written once at insert, so it costs the crawl nothing.
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_listings_type_first"
+                     " ON listings(listing_type, first_seen)")
+    except sqlite3.OperationalError:
+        pass
     if "content_changed" not in listing_cols:
         try:
             conn.execute(
