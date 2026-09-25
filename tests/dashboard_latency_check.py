@@ -133,6 +133,34 @@ config.AUTO_SWEEP_HOURS = 0
 check("sweep never due when AUTO_SWEEP_HOURS=0", webapp._sweep_due(now, None, None) is False)
 config.AUTO_SWEEP_HOURS = _saved
 
+# --- first-boot bootstrap of the sweep stamp -----------------------------------
+# No stamp yet on a populated database: the last for-sale sighting (seeded
+# rows were just seen) becomes the last sweep, so a deploy does not sweep.
+with db.connect() as conn:
+    conn.execute("DELETE FROM app_state WHERE key LIKE 'auto_%'")
+    conn.commit()
+st = webapp._auto_stamps()
+real_now = datetime.now()
+check("bootstrap derives a sweep stamp from last_seen", st["auto_last_sweep"] is not None)
+check("bootstrap stamp is local time, not UTC",
+      st["auto_last_sweep"] is not None
+      and abs((real_now - st["auto_last_sweep"]).total_seconds()) < 600,
+      st["auto_last_sweep"])
+check("after bootstrap no sweep is due",
+      webapp._sweep_due(real_now, st["auto_last_sweep"], st["auto_last_full"]) is False)
+with db.connect() as conn:
+    check("bootstrap stamp is persisted", db.get_state(conn, "auto_last_sweep") is not None)
+# An empty listings table leaves it unset, so a brand-new database sweeps.
+empty_db = os.path.join(data, "empty-bootstrap.db")
+with db.connect(empty_db) as conn:
+    webapp._bootstrap_sweep_stamp(conn)
+    empty_stamp = db.get_state(conn, "auto_last_sweep")
+check("empty database: no bootstrap stamp", empty_stamp is None, empty_stamp)
+check("empty database: a sweep stays due", webapp._sweep_due(real_now, None, None) is True)
+with db.connect() as conn:
+    conn.execute("DELETE FROM app_state WHERE key LIKE 'auto_%'")
+    conn.commit()
+
 # --- latency while a crawl runs ----------------------------------------------
 BASIC = {"Authorization": "Basic " + base64.b64encode(b"owner:check-pass").decode()}
 

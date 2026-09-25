@@ -420,9 +420,36 @@ def _parse_stamp(value):
         return None
 
 
+def _bootstrap_sweep_stamp(conn) -> None:
+    """First boot of the persisted stamps: with no auto_last_sweep yet, a
+    sweep would be due at once and fire 60 s after the deploy — the redeploy
+    crawl the stamps exist to stop. Take the database's own last for-sale
+    sighting as the last sweep instead, once (it is persisted). An empty
+    listings table leaves it unset: a brand-new database should sweep.
+    """
+    if db.get_state(conn, _AUTO_LAST_SWEEP) is not None:
+        return
+    row = conn.execute("SELECT MAX(last_seen) FROM listings"
+                       " WHERE listing_type = 'sale'").fetchone()
+    if not row or not row[0]:
+        return
+    try:
+        # last_seen is SQLite datetime('now'): UTC "YYYY-MM-DD HH:MM:SS".
+        # The stamps are local naive datetime.now().isoformat().
+        seen = datetime.fromisoformat(str(row[0])).replace(
+            tzinfo=timezone.utc).astimezone().replace(tzinfo=None)
+    except ValueError:
+        return
+    db.set_state(conn, _AUTO_LAST_SWEEP, seen.isoformat())
+    print("auto-crawl: no sweep stamp yet, taking last listing sighting "
+          f"{seen.isoformat(timespec='seconds')} as the last sweep",
+          flush=True)
+
+
 def _auto_stamps() -> dict:
     """The four auto-crawl stamps as datetimes (None when never)."""
     with db.connect() as conn:
+        _bootstrap_sweep_stamp(conn)
         return {k: _parse_stamp(db.get_state(conn, k)) for k in (
             _AUTO_LAST_FULL_STARTED, _AUTO_LAST_FULL,
             _AUTO_LAST_SWEEP_STARTED, _AUTO_LAST_SWEEP)}

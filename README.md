@@ -554,7 +554,9 @@ The loop's stamps are **persisted in the database** (`app_state`:
 needs its last *start* to be at least `AUTO_FULL_MIN_HOURS` (default 20) old
 — a redeploy during `AUTO_CRAWL_HOUR` no longer re-runs it — and a sweep needs
 the newer of the last *finished* sweep and full pass to be `AUTO_SWEEP_HOURS`
-old. A sweep that started but never finished is retried no sooner than 30
+old. On the first boot with no sweep stamp, the newest for-sale `last_seen`
+is taken as the last sweep (once, persisted), so deploying this does not
+sweep either; an empty database still sweeps. A sweep that started but never finished is retried no sooner than 30
 minutes after it started. Each boot logs `auto-crawl: last full pass finished
 …, last sweep …`, and `/api/status` reports both plus `auto_full_min_hours`.
 Crawls run in a separate `crawler.py` process by default (see Deployment);
