@@ -1,1 +1,0 @@
-import{n as a}from"./Be0VthnY.js";import{api as n}from"./C7psEH0o.js";const e=a({loaded:!1,id:null,username:"",display_name:"",role:"owner",privileges:[],is_owner:!0,via:"",passkeys:0});async function t(){try{const r=await n.me();Object.assign(e,r,{loaded:!0})}catch{}return e}function i(r){return e.loaded?e.privileges.includes(r):!0}export{i as c,t as l,e as m};
