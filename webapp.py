@@ -1422,6 +1422,12 @@ def account_page():
     return send_from_directory(_UI_BUILD, "account.html")
 
 
+@app.get("/online")
+def online_page():
+    """Who is signed in and what they are busy with. Prerendered like /prospects."""
+    return send_from_directory(_UI_BUILD, "online.html")
+
+
 @app.get("/leads")
 def leads_page():
     return send_from_directory(_UI_BUILD, "leads.html")
@@ -1554,12 +1560,14 @@ import cma_web        # noqa: E402
 import owners         # noqa: E402
 import panel          # noqa: E402
 import share_page     # noqa: E402
+import team           # noqa: E402
 import valuations     # noqa: E402
 
 app.register_blueprint(auth.bp)
 app.register_blueprint(panel.bp)
 app.register_blueprint(caller.bp)
 app.register_blueprint(share_page.bp)
+app.register_blueprint(team.bp)
 caller.start_autopilot()   # no-op unless CALLER_AUTOPILOT=1
 
 # The call-brief cache, created once at boot rather than per request: unlike
@@ -1572,6 +1580,8 @@ with db.connect() as _boot_conn:
     # deployment adopts its existing passkeys and sessions before anyone
     # knocks — including a browser that is already holding a cookie.
     auth.ensure_schema(_boot_conn)
+    # Per-person tasks and the presence heartbeat table (team.py).
+    team.ensure_schema(_boot_conn)
 
 # The media library, adapted from ASGI and hung off this same WSGI stack at
 # /zerko. Last, because DispatcherMiddleware wraps whatever wsgi_app is at the

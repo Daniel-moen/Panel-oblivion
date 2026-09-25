@@ -6,7 +6,7 @@ const config = {
     adapter: adapter({ fallback: '200.html' }),
     prerender: {
       entries: [
-        '/', '/map', '/prospects', '/agent', '/account',
+        '/', '/map', '/prospects', '/agent', '/account', '/online',
         '/leads', '/leads/pipeline', '/leads/properties', '/leads/contacts',
         /* Media. Each one is emitted as ui/build/media/<name>.html, which is
            what webapp.py's /media/<path> route looks for before falling back
