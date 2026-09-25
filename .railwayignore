@@ -30,6 +30,9 @@ ui/.svelte-kit/
 
 # The media library: zerko/ MUST ship (media.py imports it), but the state it
 # writes locally must not — the deployed copy keeps its own on the volume.
+# The CLI also applies .gitignore, which lists /zerko/, so re-include it here
+# (this file takes precedence); the exclusions below still apply inside it.
+!/zerko/
 /media-data/
 /files/
 /zerko/.env
