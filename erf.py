@@ -557,9 +557,13 @@ def resolve_group(members: list[dict]) -> dict:
                                note="pin was on a neighbour; nearest "
                                     "size-matching parcel chosen — verify")
         if near:
+            # size_ok() accepts every parcel when the listing has no erf
+            # size, so `near` can be non-empty with erf_size None: sort on
+            # 0 then (same as the metro branch above) instead of raising.
             cands = sorted(
                 (_candidate_row(p, lat_hint) for p in near),
-                key=lambda c: abs(c["area_m2"] - erf_size))[:MAX_CANDIDATES]
+                key=lambda c: abs(c["area_m2"] - (erf_size or 0))
+                )[:MAX_CANDIDATES]
             return _resolution("candidates", "point",
                                note=f"{len(near)} size-matching parcels near "
                                     "the map pin", candidates=cands,
