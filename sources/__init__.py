@@ -10,6 +10,9 @@ Three kinds of source feed the crawl:
     agencies are marketing a property.
 """
 
+import importlib
+import os
+
 from sources.base import Source  # noqa: F401
 from sources.immoafrica import ImmoAfrica
 from sources.myproperty import MyProperty
@@ -38,6 +41,13 @@ _CLASSES = (
 )
 
 REGISTRY: dict[str, type] = {cls.name: cls for cls in _CLASSES}
+
+# Test hook. CRAWL_SOURCES_PLUGIN names a module whose register(REGISTRY)
+# adds sources — tests/fake_source.py uses it to crawl a portal that does
+# not exist, with real parse cost and no network. Unset in production.
+_plugin = os.environ.get("CRAWL_SOURCES_PLUGIN")
+if _plugin:
+    importlib.import_module(_plugin).register(REGISTRY)
 
 
 def build(name: str, logger=None):
