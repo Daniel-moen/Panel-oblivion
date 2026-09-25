@@ -73,7 +73,7 @@
 
   const tracked = $derived(stats?.tracked ?? today?.counts?.tracked ?? null);
   const tiles = $derived([
-    { k: 'Hot prospects', v: hot, tone: hot ? 'crit' : '', sub: 'call these first', href: '/prospects', live: crawling },
+    { k: 'Hot prospects', v: app.loaded ? hot : null, tone: hot ? 'crit' : '', sub: 'call these first', href: '/prospects', live: crawling },
     { k: 'Sellable', v: app.stats?.sellable ?? null, sub: 'scored and deduped', href: '/prospects' },
     { k: 'Tracked leads', v: tracked, sub: 'in lead management', href: '/leads/pipeline' },
     { k: 'Follow-ups due', v: dueCount, tone: overdue ? 'crit' : dueCount ? 'warn' : '', sub: overdue ? `${overdue} overdue` : 'today', href: '/leads' }
