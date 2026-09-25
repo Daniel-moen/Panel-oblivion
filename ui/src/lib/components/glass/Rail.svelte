@@ -16,7 +16,7 @@
 
   const ITEMS = $derived([...SECTIONS, ...slots.nav].filter((it) => !it.need || can(it.need)));
   const path = $derived(page.url.pathname);
-  const active = $derived(ITEMS.reduce((best, it) => (inSection(it.href, path) ? it.href : best), '/'));
+  const active = $derived(ITEMS.reduce((best, it) => (inSection(it.href, path) ? it.href : best), null));
   const status = $derived(shell.status || engineStatus(app.status));
   const who = $derived(me.display_name || me.username || 'Signed in');
   const initial = $derived((who[0] || 'O').toUpperCase());
