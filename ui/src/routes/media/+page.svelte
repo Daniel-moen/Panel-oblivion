@@ -243,7 +243,7 @@
   /* ————————————————————————————————————————————————————————— stage ——— */
   .stage {
     position: relative; isolation: isolate; overflow: hidden;
-    border-radius: var(--mc-r); border: 1px solid var(--mc-line); box-shadow: var(--mc-sh-1);
+    border-radius: var(--mc-r); border: 1px solid var(--mc-line);
     min-height: clamp(200px, 30vh, 340px); margin-bottom: 12px;
     display: flex; flex-direction: column; justify-content: flex-end;
     padding: clamp(16px, 2.4vw, 24px);

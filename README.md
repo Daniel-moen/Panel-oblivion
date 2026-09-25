@@ -54,16 +54,30 @@ request. `npm run dev` needs `webapp.py` running alongside it for the API.
 
 ### Look and feel
 
-The UI speaks the Mission Control panel's design language ("Studio": warm
-graphite planes, hairline borders, Inter for UI and IBM Plex Mono for numbers,
-one green accent, colour reserved for state). It is dark only. The whole
-vocabulary lives in `ui/src/lib/mc.css` — tokens (`--mc-*`, aliased as
-`--mg-*`) and the `.mg-*` classes every route uses (panels, buttons, inputs,
-chips, tables, lists, strips, tiles, dialogs) — plus the shared components in
-`ui/src/lib/components/glass/` (Sheet, Seg, Icon, Empty, StatusStrip, Dock,
-Rail, PrimaryButton) and the Svelte transitions in `ui/src/lib/motion.js`
+The UI speaks the Mission Control panel's "Studio Glass" language (the panel
+served from `widget-claude/remote/app`): the app floats over a full-bleed
+photograph (`ui/src/lib/components/glass/Backdrop.svelte`, the hero of the
+hour from `ui/static/hero-*.jpg`, drifting 1.0 → 1.06 over 90 s), and every
+surface is frosted glass rather than an opaque plane — warm graphite fills at
+52 % (panes) and 74 % (sheets, drawers, the strip and dock), white hairlines at
+12 % / 22 %, `blur(28px) saturate(150%)`, Inter for UI, IBM Plex Mono for
+numbers, one green accent, colour reserved for state. It is dark only. The
+whole vocabulary lives in `ui/src/lib/mc.css` — tokens (`--mc-*`, aliased as
+`--mg-*`) and the `.mg-*` classes every route uses (pills, inputs, chips,
+tables, lists, strips, tiles, dialogs) — plus the shared components in
+`ui/src/lib/components/glass/` (Backdrop, Sheet, Seg, Icon, Empty, StatusStrip,
+Dock, Rail, PrimaryButton) and the Svelte transitions in `ui/src/lib/motion.js`
 (`fade`, `slide`, `pop`, `rise`: transform/opacity only, 150–320 ms, all
 honouring `prefers-reduced-motion`).
+
+Blur is the expensive thing on an iPad, so the app keeps to a budget of four
+blurred surfaces: the strip, the dock or the rail, ONE content pane and one
+sheet or drawer. The pane (`.mg-pane`) is a fixed sheet of glass under the
+page column that the document scrolls over — drawn once by the root layout,
+never by a page — and everything inside it (sections, tiles, cards, chips,
+inputs, rows) is `glass-soft`: a white 6 % lift with a 12 % hairline and no
+blur of its own. Blur never animates. The map is its own scene: Leaflet fills
+the rectangle unblurred and only the floating chrome is glass.
 
 The shell is one root layout: a sticky status strip on top, a tab-bar dock
 along the bottom on phones and an iPad held upright (below 1024 px), and a

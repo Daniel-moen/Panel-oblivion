@@ -69,15 +69,15 @@
   .scroll { max-height: 320px; overflow-y: auto; }
   .ev {
     display: flex; align-items: baseline; gap: 12px; min-height: 40px; width: 100%;
-    padding: 8px 16px; border-bottom: 1px solid rgba(38, 38, 43, 0.5); color: inherit;
+    padding: 8px 16px; border-bottom: 1px solid var(--mc-line-soft); color: inherit;
     transition: background var(--mc-t-fast);
   }
   @media (min-width: 640px) { .ev { padding: 8px 20px; } }
   .ev:last-child { border-bottom: 0; }
   .ev.sk { align-items: center; }
   .ev.link { cursor: pointer; }
-  .ev.link:hover { background: rgba(255, 255, 255, 0.02); }
-  .ev.link:active { background: rgba(255, 255, 255, 0.04); }
+  .ev.link:hover { background: rgba(255, 255, 255, 0.07); }
+  .ev.link:active { background: rgba(255, 255, 255, 0.1); }
 
   .clock { flex: none; min-width: 34px; font: 400 11px/1.4 var(--mc-mono); font-variant-numeric: tabular-nums; color: var(--mc-ink3); }
   .who {

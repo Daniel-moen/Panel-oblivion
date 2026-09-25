@@ -70,8 +70,7 @@
      under a hairline — so a pick reads as one object, not three. */
   .pick {
     display: flex; flex-direction: column; min-width: 0; overflow: hidden;
-    background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: 14px;
-    box-shadow: var(--mc-sh-1);
+    background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-r);
     transition: border-color var(--mc-t-fast);
   }
   .pick:hover { border-color: var(--mc-line2); }

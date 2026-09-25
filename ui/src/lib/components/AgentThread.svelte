@@ -221,7 +221,7 @@
   .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
   .ex {
     display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px 14px;
-    background: var(--mc-raised); border: 1px solid var(--mc-line); border-radius: var(--mc-r-md);
+    background: var(--mc-glass-soft); border: 1px solid var(--mc-line); border-radius: var(--mc-r-md);
     color: var(--mc-ink2); font: 500 13px/1.4 var(--mc-font); text-align: left; cursor: pointer;
     transition: border-color var(--mc-t-fast), color var(--mc-t-fast);
   }
@@ -229,10 +229,10 @@
   .ex:hover { border-color: var(--mc-line2); color: var(--mc-ink); }
 
   /* ——— composer: pinned to the foot of the panel ——— */
-  .composer { flex: none; padding: 12px; border-top: 1px solid var(--mc-line); background: var(--mc-surface); }
+  .composer { flex: none; padding: 12px; border-top: 1px solid var(--mc-line); background: rgba(255, 255, 255, 0.03); }
   .field {
     display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 14px;
-    background: var(--mc-inset); border: 1px solid var(--mc-line); border-radius: 14px;
+    background: var(--mc-glass-soft); border: 1px solid var(--mc-line); border-radius: 14px;
     transition: border-color var(--mc-t-fast), box-shadow var(--mc-t-fast);
   }
   .field:hover { border-color: var(--mc-line2); }

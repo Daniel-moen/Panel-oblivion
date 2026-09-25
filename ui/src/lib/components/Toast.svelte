@@ -27,9 +27,10 @@
   .toast {
     display: flex; align-items: center; gap: 10px;
     max-width: min(560px, calc(100vw - 32px));
-    padding: 11px 16px; border-radius: 12px;
-    background: var(--mc-raised); border: 1px solid var(--mc-line2);
-    box-shadow: var(--mc-sh-2);
+    padding: 11px 18px; border-radius: 9999px;
+    background: var(--mc-glass-strong); border: 1px solid var(--mc-glass-line);
+    box-shadow: var(--mc-sh-2), var(--mc-lit);
+    -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
     font: 500 13.5px/1.4 var(--mc-font); color: var(--mc-ink);
   }
   .msg { min-width: 0; overflow-wrap: anywhere; }

@@ -56,14 +56,14 @@
   .seg {
     position: relative; display: inline-flex; align-items: center; gap: 2px;
     padding: 3px; flex: none; max-width: 100%;
-    background: var(--mc-inset); border: 1px solid var(--mc-line); border-radius: 10px;
+    background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line); border-radius: 9999px;
   }
 
   /* The one highlight. Parked at width 0 until the first measurement lands, so
      it never flashes at the left edge on the first paint. */
   .pill {
-    position: absolute; left: 3px; top: 3px; bottom: 3px; width: 0; border-radius: 7px;
-    background: var(--mc-raised); border: 1px solid var(--mc-line2); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    position: absolute; left: 3px; top: 3px; bottom: 3px; width: 0; border-radius: 9999px;
+    background: var(--mc-glass-on); border: 0; box-shadow: none;
     opacity: 0;
     transition: transform 0.28s var(--mc-ease), width 0.28s var(--mc-ease), opacity 0.2s;
     will-change: transform, width;
@@ -73,7 +73,7 @@
   button {
     position: relative; z-index: 1;
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    height: 30px; padding: 0 12px; border: 0; background: none; border-radius: 7px;
+    height: 32px; padding: 0 14px; border: 0; background: none; border-radius: 9999px;
     color: var(--mc-ink3); font: 500 12.5px/1 var(--mc-font); white-space: nowrap;
     cursor: pointer; transition: color var(--mc-t-fast);
   }

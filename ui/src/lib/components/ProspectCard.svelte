@@ -70,12 +70,11 @@
   .card {
     position: relative; display: flex; flex-direction: column; overflow: hidden; cursor: pointer;
     background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-r);
-    box-shadow: var(--mc-sh-1);
     transition: border-color var(--mc-t-fast), transform var(--mc-t) var(--mc-ease), box-shadow var(--mc-t);
   }
-  .card:hover { border-color: var(--mc-line2); transform: translateY(-2px); box-shadow: var(--mc-sh-2); }
+  .card:hover { border-color: var(--mc-line2); background: var(--mc-glass-hover); transform: translateY(-2px); }
   .card:active { transform: scale(0.99); }
-  .card.sel { border-color: var(--mc-accent); box-shadow: 0 0 0 1px var(--mc-accent), var(--mc-sh-1); }
+  .card.sel { border-color: var(--mc-accent); box-shadow: 0 0 0 1px var(--mc-accent); }
   .card:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
 
   .ph { position: relative; aspect-ratio: 16 / 10; background: var(--mc-inset); border-bottom: 1px solid var(--mc-line); }
@@ -83,11 +82,10 @@
   .card:hover .ph :global(img) { transform: scale(1.03); }
 
   .over { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: flex-start; }
-  .over .tier { background: rgba(12, 12, 14, 0.78); border-color: rgba(255, 255, 255, 0.12); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+  .over .tier { background: rgba(12, 12, 14, 0.82); border-color: rgba(255, 255, 255, 0.12); }
   .score {
     display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 26px; padding: 0 8px;
-    background: rgba(12, 12, 14, 0.78); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px;
-    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    background: rgba(12, 12, 14, 0.82); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 9999px;
     font: 700 13px/1 var(--mc-mono); color: var(--mc-ink);
   }
   .score.wait { color: var(--mc-accent); }
@@ -95,8 +93,7 @@
   .trk {
     position: absolute; left: 10px; bottom: 10px; z-index: 2;
     display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(12, 12, 14, 0.78); color: #fff;
-    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(12, 12, 14, 0.82); color: #fff;
     font: 600 11.5px/1 var(--mc-font); text-transform: capitalize;
     opacity: 0; transition: opacity var(--mc-t-fast), background var(--mc-t-fast), border-color var(--mc-t-fast);
   }

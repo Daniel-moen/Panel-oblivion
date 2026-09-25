@@ -126,7 +126,7 @@
 
 <style>
   .lr { container-type: inline-size; transition: background var(--mc-t-fast); }
-  .lr:hover { background: rgba(255, 255, 255, 0.02); }
+  .lr:hover { background: rgba(255, 255, 255, 0.05); }
   .in { display: flex; gap: 12px; padding: 12px 16px; align-items: flex-start; position: relative; }
   .lr.late .in::before, .lr.warn .in::before {
     content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0;

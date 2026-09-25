@@ -162,7 +162,7 @@
   .hits > button.cur { background: rgba(255, 255, 255, 0.06); color: var(--mc-ink); }
   .hic {
     flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
-    background: var(--mc-inset); border: 1px solid var(--mc-line); color: var(--mc-ink3);
+    background: var(--mc-glass-soft); border: 1px solid var(--mc-line); color: var(--mc-ink3);
   }
   .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
   .t b { font: 500 13px/1.35 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

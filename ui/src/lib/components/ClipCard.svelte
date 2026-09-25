@@ -105,7 +105,7 @@
      two lines under it are the only chrome. */
   .card {
     position: relative; border-radius: var(--mc-r); padding: 5px;
-    background: var(--mc-surface); border: 1px solid var(--mc-line); box-shadow: var(--mc-sh-1);
+    background: var(--mc-surface); border: 1px solid var(--mc-line);
     transition: border-color var(--mc-t-fast), transform var(--mc-t) var(--mc-ease);
   }
   .card:hover { transform: translateY(-2px); border-color: var(--mc-line2); z-index: 2; }

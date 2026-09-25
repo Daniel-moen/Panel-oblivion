@@ -342,6 +342,8 @@
   .home { display: flex; flex-direction: column; gap: 16px; }
 
   .hello { margin: 4px 0 2px; align-items: flex-end; }
+  .hello .mg-h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
+  @media (min-width: 640px) { .hello .mg-h1 { font-size: 34px; } }
   @media (max-width: 640px) { .hello .mg-actions { flex-basis: 100%; margin-left: 0; } .hello .mg-actions :global(.mg-btn) { flex: 1; } }
   .titles { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .skline { display: block; padding: 4px 0 3px; }
@@ -397,6 +399,6 @@
   .slot { display: flex; flex-direction: column; gap: 16px; }
   .slot:empty { display: none; }
 
-  .lic { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--mc-raised); border: 1px solid var(--mc-line); color: var(--mc-ink2); }
+  .lic { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line); color: var(--mc-ink2); }
   .links :global(.chev) { color: var(--mc-ink3); flex: none; }
 </style>

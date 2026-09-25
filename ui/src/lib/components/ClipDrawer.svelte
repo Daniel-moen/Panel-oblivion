@@ -348,8 +348,9 @@
     position: fixed; inset: clamp(8px, 2.5vh, 22px) clamp(8px, 2.5vw, 22px);
     z-index: 91; overflow: hidden; outline: none; will-change: transform;
     display: flex; flex-direction: column;
-    background: var(--mc-raised); border: 1px solid var(--mc-line2);
-    border-radius: var(--mc-r-lg); box-shadow: var(--mc-sh-2);
+    background: var(--mc-glass-strong); border: 1px solid var(--mc-glass-line);
+    border-radius: var(--mc-r-lg); box-shadow: var(--mc-sh-3), var(--mc-lit);
+    -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
   }
   /* Below 720px: a near-full-height sheet that rises from the bottom edge. */
   .box.phone {
@@ -412,7 +413,7 @@
 
   .side {
     border-left: 1px solid var(--mc-line); padding: 18px; overflow-y: auto; overscroll-behavior: contain;
-    background: var(--mc-surface);
+    background: rgba(255, 255, 255, 0.03);
   }
   .side section { margin-bottom: 22px; }
   .side section .mg-label { margin-bottom: 8px; }

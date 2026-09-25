@@ -20,8 +20,7 @@
   {#if label}<span class="hud">{label}</span>{/if}
   <div class="track" style:width={width == null ? null : width + 'px'} style:height="{height}px"
        style:background="color-mix(in oklab, {color} 16%, transparent)">
-    <i style:width="{clamped}%" style:background={color}
-       style:box-shadow="0 0 8px color-mix(in oklab, {color} 55%, transparent)"></i>
+    <i style:width="{clamped}%" style:background={color}></i>
   </div>
   {#if showPct}<span class="pct">{shown}%</span>{/if}
 </div>

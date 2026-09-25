@@ -325,15 +325,16 @@
   .drawer {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 81;
     width: min(560px, 100vw); display: flex; flex-direction: column; outline: none;
-    background: var(--mc-raised); border-left: 1px solid var(--mc-line2);
-    box-shadow: -24px 0 64px -24px rgba(0, 0, 0, 0.8);
+    background: var(--mc-glass-strong); border-left: 1px solid var(--mc-glass-line);
+    box-shadow: -24px 0 64px -24px rgba(0, 0, 0, 0.65);
+    -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
     padding-top: var(--sat); will-change: transform;
   }
   .drawer.phone {
     top: auto; left: 0; width: 100%; height: 94dvh;
-    border-left: 0; border-top: 1px solid var(--mc-line2);
+    border-left: 0; border-top: 1px solid var(--mc-glass-line);
     border-radius: var(--mc-r-lg) var(--mc-r-lg) 0 0;
-    box-shadow: 0 -24px 64px -24px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 -24px 64px -24px rgba(0, 0, 0, 0.65), var(--mc-lit);
     padding-top: 0;
   }
   .grab { flex: none; display: grid; place-items: center; padding: 10px 0 2px; cursor: grab; touch-action: none; }
@@ -376,7 +377,7 @@
   .listings { display: flex; flex-direction: column; gap: 6px; }
   .listing {
     display: grid; grid-template-columns: 92px 1fr auto auto; gap: 10px; align-items: center;
-    min-height: 44px; padding: 8px 12px; border: 1px solid var(--mc-line); border-radius: 10px;
+    min-height: 44px; padding: 8px 12px; border: 1px solid var(--mc-line); border-radius: var(--mc-r-md);
     background: var(--mc-surface); color: var(--mc-ink); transition: border-color var(--mc-t-fast), background var(--mc-t-fast);
   }
   .listing:hover { border-color: var(--mc-line2); background: var(--mc-glass-hover); }

@@ -1,10 +1,11 @@
 /* ————————————————————————— Oblivion · document basics ————————————————————
-   Everything visual lives in `lib/mc.css` — the Mission Control vocabulary
+   Everything visual lives in `lib/mc.css` — the Studio Glass vocabulary
    (`.mg-*` classes, `--mc-*` / `--mg-*` tokens), imported once by the root
    layout. What is left here is the document itself and the engine's state
    marks, which read as DATA rather than chrome.
 
-   The app is always dark. There is no `data-theme`, no light palette. */
+   The app is always dark: it floats over a photograph, and a light pane
+   over a photograph is unreadable. There is no `data-theme`. */
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -12,7 +13,11 @@ html, body { height: 100%; }
 body {
   margin: 0;
   color-scheme: dark;
+  /* Deep graphite behind the backdrop photo — if the image is slow, missing
+     or still decoding, the app never shows a white flash. */
   background: #111113;
+  background-image: radial-gradient(120% 90% at 50% 0%, #1b1b21 0%, #111113 45%, #0a0a0c 100%);
+  background-attachment: fixed;
   color: #f3f3f4;
   font: 400 14px/1.5 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;

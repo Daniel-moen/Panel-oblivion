@@ -310,10 +310,11 @@
     bottom: calc(var(--mc-dock-h) + var(--sab));
     top: calc(var(--sat) + var(--mc-strip-h) + 8px);
     display: flex; flex-direction: column; overflow: hidden;
-    background: var(--mc-raised);
-    border: 1px solid var(--mc-line2); border-bottom: 0;
+    background: var(--mc-glass-strong);
+    border: 1px solid var(--mc-glass-line); border-bottom: 0;
     border-radius: var(--mc-r-lg) var(--mc-r-lg) 0 0;
-    box-shadow: var(--mc-sh-3);
+    box-shadow: var(--mc-sh-3), var(--mc-lit);
+    -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
     will-change: transform, opacity;
   }
   /* from 720px: a 380px panel, bottom-right, clear of the dock */
@@ -322,7 +323,7 @@
       left: auto; right: 16px; top: auto; width: 380px;
       bottom: calc(var(--mc-dock-h) + var(--sab) + 12px);
       height: min(600px, calc(100dvh - var(--sat) - var(--mc-strip-h) - var(--mc-dock-h) - var(--sab) - 28px));
-      border-bottom: 1px solid var(--mc-line2);
+      border-bottom: 1px solid var(--mc-glass-line);
       border-radius: var(--mc-r-lg);
       box-shadow: var(--mc-sh-2);
     }
@@ -366,7 +367,7 @@
     flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
     display: flex; flex-direction: column; gap: 4px;
     padding: 12px 14px 10px;
-    background: var(--mc-surface);
+    background: transparent;
   }
   .loading { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
   .skrow { display: flex; }
@@ -397,7 +398,7 @@
     margin: 0; padding: 8px 12px;
     font: 400 13.5px/1.5 var(--mc-font); color: var(--mc-ink);
     white-space: pre-wrap; overflow-wrap: anywhere;
-    background: var(--mc-raised); border: 1px solid var(--mc-line2);
+    background: var(--mc-raised); border: 1px solid var(--mc-line);
     border-radius: 16px 16px 16px 6px;
   }
   /* your own lines are the green ones — the one accent, tinted */
@@ -417,7 +418,7 @@
   .err { flex: none; margin: 8px 12px 0; padding: 8px 12px; align-items: center; }
 
   /* ——— composer ——— */
-  .composer { flex: none; padding: 10px 12px 12px; border-top: 1px solid var(--mc-line); background: var(--mc-raised); }
+  .composer { flex: none; padding: 10px 12px 12px; border-top: 1px solid var(--mc-line); background: rgba(255, 255, 255, 0.03); }
   .ask { margin: 0 2px 8px; }
   .field { display: flex; align-items: flex-end; gap: 8px; }
   .field .mg-input { flex: 1; min-width: 0; }

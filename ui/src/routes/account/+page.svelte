@@ -670,7 +670,7 @@
   .namer { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
   .namer .mg-btn { flex: none; }
   .namer .mg-input { flex: 1 1 200px; max-width: 22rem; }
-  .adding { background: var(--mc-inset); }
+  .adding { background: rgba(255, 255, 255, 0.03); }
 
   .item .ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
               background: var(--mc-raised); border: 1px solid var(--mc-line); color: var(--mc-ink3); }

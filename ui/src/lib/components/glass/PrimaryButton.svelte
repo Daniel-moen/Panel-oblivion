@@ -65,7 +65,7 @@
 <style>
   .wide { width: 100%; }
   .go {
-    flex: none; width: 40px; height: 40px; border-radius: 12px; border: 0; padding: 0;
+    flex: none; width: 40px; height: 40px; border-radius: 9999px; border: 0; padding: 0;
     display: grid; place-items: center; cursor: pointer;
     background: var(--mc-ink); color: var(--mc-bg);
     box-shadow: 0 6px 18px -6px rgba(0, 0, 0, 0.6);

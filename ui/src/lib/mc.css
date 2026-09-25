@@ -1,37 +1,59 @@
-/* ————————————————————————————— Oblivion · Mission Control language ————————
+/* ————————————————————————————— Oblivion · Studio Glass ————————————————————
    The shared design system for the WHOLE app — every route, every overlay.
 
-   It is the Mission Control panel's "Studio" language (widget-claude/remote/
-   panel/src/app.css) transplanted: warm graphite planes, hairline borders,
-   Inter for UI, IBM Plex Mono only where text IS a number or a path, and ONE
-   accent (live green). Colour is reserved for state — green = live/working,
-   amber = needs you, red = failed/hot, violet = agent/AI. No photograph, no
-   frosted glass, no glows.
+   It is the Mission Control panel's "Studio Glass" language (the panel served
+   from widget-claude/remote/app: src/app.css "STUDIO MOTION" + the Studio
+   Glass block) transplanted. The app floats over a full-bleed photograph
+   (components/glass/Backdrop.svelte), so every surface is frosted glass, not
+   an opaque plane: warm graphite fills at 52–74 % over the photo, hairlines
+   in white at 12 % / 22 %, blur(28px) saturate(150%). Inter for UI, IBM Plex
+   Mono only where text IS a number or a path, ONE accent (live green); colour
+   is reserved for state — green = live, amber = needs you, red = failed/hot,
+   violet = agent/AI. Depth comes from shadow + spacing + motion — never from
+   glows or gradients.
 
-   Vocabulary. Every class is `mg-*` and every token has an `--mg-*` name —
-   the prefix the app has always used, kept so nothing had to be renamed
-   (it no longer means "media glass"; it just means "the app vocabulary").
-   The canonical tokens are `--mc-*` (the panel's names) and `--mg-*` are
-   aliases of them; write whichever reads better, they are the same values.
+   The blur budget (iPad): backdrop-filter is the expensive thing, so the app
+   keeps to at most four blurred surfaces stacked on screen: the strip, the
+   dock or the rail, ONE content pane (`.mg-pane`, a fixed sheet of glass the
+   page scrolls over) and one sheet / drawer. Everything inside the pane —
+   sections, tiles, cards, chips, inputs, rows — is `glass-soft`: a white 6 %
+   lift with a 12 % hairline, no blur of its own. Blur never animates.
 
-   Compatibility. A handful of older sections still write the prospect
-   dashboard's first-generation tokens (`--bg-2`, `--line`, `--ink-3`,
-   `--accent-soft`, …). Those are defined here too, mapped onto the same
-   palette, so NOTHING in the app can ever render on a missing variable
-   again (that is exactly how the property drawer lost its background).
+   Vocabulary. Every class is `mg-*` and every token has an `--mg-*` alias;
+   the canonical tokens are `--mc-*` (the panel's names). A handful of older
+   sections still write the prospect dashboard's first-generation tokens
+   (`--bg-2`, `--line`, `--ink-3`, …); those are defined here too, mapped
+   onto the same materials, so nothing in the app can render on a missing
+   variable.
 
    Imported ONCE, by `routes/+layout.svelte`.
    ———————————————————————————————————————————————————————————————————————— */
 
 :root {
-  /* — planes (Mission Control) ————————————————————————————————————————— */
+  /* — the graphite under the photo (and the ink on a white button) ———— */
   --mc-bg: #111113;
-  --mc-surface: #18181b;
-  --mc-raised: #202024;
-  --mc-inset: #0c0c0e;
-  --mc-line: #26262b;
-  --mc-line2: #37373e;
-  --mc-line3: #4a4a53;
+
+  /* — glass ————————————————————————————————————————————————————————— */
+  --mc-glass: rgba(18, 18, 22, 0.52);          /* panes                     */
+  --mc-glass-strong: rgba(14, 14, 18, 0.74);   /* sheets, drawers, popovers */
+  --mc-glass-soft: rgba(255, 255, 255, 0.06);  /* chips, inputs, insets     */
+  --mc-glass-hover: rgba(255, 255, 255, 0.1);  /* the same, under a pointer */
+  --mc-glass-on: rgba(255, 255, 255, 0.14);    /* the selected pill         */
+  --mc-glass-line: rgba(255, 255, 255, 0.12);  /* hairline on glass         */
+  --mc-glass-line2: rgba(255, 255, 255, 0.22); /* hairline, lit             */
+  --mc-term: rgba(8, 8, 10, 0.86);             /* near-opaque: code, logs   */
+  --mc-blur: 28px;
+  --blur: var(--mc-blur);
+  --mc-lit: inset 0 1px 0 rgba(255, 255, 255, 0.07); /* the lit top edge    */
+
+  /* — planes, mapped onto the glass (one step up, two steps up, a well) — */
+  --mc-surface: var(--mc-glass-soft);
+  --mc-raised: var(--mc-glass-hover);
+  --mc-inset: rgba(8, 8, 10, 0.6);
+  --mc-line: var(--mc-glass-line);
+  --mc-line2: var(--mc-glass-line2);
+  --mc-line3: rgba(255, 255, 255, 0.32);
+  --mc-line-soft: rgba(255, 255, 255, 0.07);   /* rows inside a section     */
 
   /* — ink ——————————————————————————————————————————————————————————— */
   --mc-ink: #f3f3f4;
@@ -44,32 +66,33 @@
   --mc-accent-ink: #06281a;
   --mc-ok: #3ecf8e;
   --mc-warn: #f0b429;
+  --mc-warn-ink: #241a02;
   --mc-crit: #f26d64;
   --mc-mgr: #a78bfa;
 
   /* tints: the state colours at surface strength, for chips and strips */
   --mc-ok-soft: rgba(62, 207, 142, 0.12);
-  --mc-ok-line: rgba(62, 207, 142, 0.32);
-  --mc-warn-soft: rgba(240, 180, 41, 0.13);
-  --mc-warn-line: rgba(240, 180, 41, 0.32);
-  --mc-crit-soft: rgba(242, 109, 100, 0.13);
-  --mc-crit-line: rgba(242, 109, 100, 0.32);
+  --mc-ok-line: rgba(62, 207, 142, 0.25);
+  --mc-warn-soft: rgba(240, 180, 41, 0.14);
+  --mc-warn-line: rgba(240, 180, 41, 0.3);
+  --mc-crit-soft: rgba(242, 109, 100, 0.14);
+  --mc-crit-line: rgba(242, 109, 100, 0.3);
   --mc-mgr-soft: rgba(167, 139, 250, 0.14);
-  --mc-mgr-line: rgba(167, 139, 250, 0.32);
+  --mc-mgr-line: rgba(167, 139, 250, 0.3);
 
   /* — type ————————————————————————————————————————————————————————— */
   --mc-font: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, 'SF Pro Text', 'Segoe UI', sans-serif;
   --mc-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   /* — shape and depth ——————————————————————————————————————————————— */
-  --mc-r-lg: 18px;   /* dialogs, sheets                    */
-  --mc-r: 16px;      /* panels (rounded-2xl)               */
-  --mc-r-md: 12px;   /* buttons, inputs, tiles (rounded-xl)*/
-  --mc-r-sm: 8px;    /* tags, small tiles                  */
-  --mc-sh-1: 0 1px 2px rgba(0, 0, 0, 0.25);
-  --mc-sh-2: 0 12px 32px -8px rgba(0, 0, 0, 0.6);
-  --mc-sh-3: 0 24px 64px -16px rgba(0, 0, 0, 0.75);
-  --mc-scrim: rgba(0, 0, 0, 0.62);
+  --mc-r-lg: 22px;   /* panes, sheets, drawers (the panel's glass)     */
+  --mc-r: 18px;      /* sections, cards, tiles (rounded-xl3)           */
+  --mc-r-md: 14px;   /* inputs, rows, small tiles (rounded-xl2)        */
+  --mc-r-sm: 8px;    /* tags, thumbnails                               */
+  --mc-sh-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --mc-sh-2: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  --mc-sh-3: 0 24px 64px -16px rgba(0, 0, 0, 0.65);
+  --mc-scrim: rgba(6, 6, 8, 0.6);
 
   /* — motion ——————————————————————————————————————————————————————— */
   --mc-ease: cubic-bezier(0.2, 0.8, 0.2, 1);          /* rise, glide          */
@@ -88,19 +111,21 @@
   --mc-strip-h: 52px;   /* the status strip                */
   --mc-dock-h: 64px;    /* the phone dock, without the inset */
   --mc-rail-w: 300px;   /* the iPad / desktop rail          */
+  --mc-gutter: 0px;     /* the gap between the pane and the screen edge */
+  --mc-pane-top: calc(var(--sat) + var(--mc-strip-h)); /* where the pane starts */
 
   /* ————————————————————————————————————— `--mg-*` aliases (the app) ——— */
   --mg-bg: var(--mc-bg);
   --mg-surface: var(--mc-surface);
   --mg-raised: var(--mc-raised);
   --mg-inset: var(--mc-inset);
-  --mg-glass: var(--mc-surface);               /* was frosted; now a panel  */
-  --mg-glass-strong: var(--mc-raised);         /* dialogs, sheets, toasts   */
-  --mg-glass-soft: var(--mc-raised);           /* chips, inputs, cards      */
-  --mg-glass-hover: #26262b;
-  --mg-line: var(--mc-line);
-  --mg-line2: var(--mc-line2);
-  --mg-term: var(--mc-inset);
+  --mg-glass: var(--mc-glass);
+  --mg-glass-strong: var(--mc-glass-strong);
+  --mg-glass-soft: var(--mc-glass-soft);
+  --mg-glass-hover: var(--mc-glass-hover);
+  --mg-line: var(--mc-glass-line);
+  --mg-line2: var(--mc-glass-line2);
+  --mg-term: var(--mc-term);
   --mg-i: var(--mc-ink);
   --mg-i2: var(--mc-ink2);
   --mg-i3: var(--mc-ink3);
@@ -113,13 +138,13 @@
   --mg-scrim: var(--mc-scrim);
   --mg-font: var(--mc-font);
   --mg-mono: var(--mc-mono);
-  --mg-r: var(--mc-r);
-  --mg-r-card: 14px;
+  --mg-r: var(--mc-r-lg);
+  --mg-r-card: var(--mc-r);
   --mg-r-in: var(--mc-r-md);
-  --mg-blur: 0px;
-  --mg-sh: var(--mc-sh-2);
-  --mg-sh-2: var(--mc-sh-1);
-  --mg-lit: 0 0 0 0 transparent;
+  --mg-blur: var(--mc-blur);
+  --mg-sh: var(--mc-sh-3);
+  --mg-sh-2: var(--mc-sh-2);
+  --mg-lit: var(--mc-lit);
   --mg-sat: var(--sat);
   --mg-sab: var(--sab);
 
@@ -127,7 +152,7 @@
   --bg: var(--mc-bg);
   --bg-2: var(--mc-surface);
   --bg-3: var(--mc-raised);
-  --bg-4: #26262b;
+  --bg-4: var(--mc-glass-on);
   --line: var(--mc-line);
   --line-2: var(--mc-line2);
   --line-3: var(--mc-line3);
@@ -162,23 +187,29 @@
   --hot-soft: var(--mc-crit-soft);
   --cold-ink: var(--mc-ink2);
   --cold-soft: rgba(255, 255, 255, 0.06);
-  --hover: rgba(255, 255, 255, 0.04);
-  --overlay: rgba(12, 12, 14, 0.78);
+  --hover: rgba(255, 255, 255, 0.07);
+  --overlay: var(--mc-glass-strong);
   --scrim: var(--mc-scrim);
   --shadow-1: var(--mc-sh-1);
   --shadow-2: var(--mc-sh-2);
-  --r: 12px;
-  --r-sm: 8px;
-  --r-lg: 16px;
+  --r: var(--mc-r-md);
+  --r-sm: var(--mc-r-sm);
+  --r-lg: var(--mc-r);
   --font-ui: var(--mc-font);
   --font-display: var(--mc-font);
   --font-mono: var(--mc-mono);
 }
 
+/* the pane's gutters follow the panel: flush on a phone, 16px from 640,
+   and clear of the rail from 1024 */
+@media (min-width: 640px) { :root { --mc-gutter: 16px; --mc-pane-top: calc(var(--sat) + var(--mc-strip-h) + 12px); } }
+
 /* ————————————————————————————————————————————————————— the scene ——— */
 /* `.mg-scene` is the app root; `.mg-portal` is what an overlay carries when
    it has been moved to the end of <body>, outside the scene. Both restate
-   the few things the document would otherwise not give them. */
+   the few things the document would otherwise not give them. The scene is
+   transparent: the photograph (Backdrop) and the graphite gradient on <body>
+   are what show through the glass. */
 .mg-scene,
 .mg-portal {
   color-scheme: dark;
@@ -188,7 +219,7 @@
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
-.mg-scene { background: var(--mc-bg); min-height: 100vh; min-height: 100dvh; position: relative; }
+.mg-scene { background: transparent; min-height: 100vh; min-height: 100dvh; position: relative; }
 
 .mg-scene a, .mg-portal a { color: inherit; text-decoration: none; }
 .mg-scene :focus-visible, .mg-portal :focus-visible {
@@ -197,58 +228,92 @@
 }
 .mg-scene *, .mg-portal * { -webkit-tap-highlight-color: transparent; }
 
-/* scrollbars: thin, dark, and hidden on anything that scrolls sideways */
-.mg-scene *, .mg-portal * { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.14) transparent; }
+/* scrollbars: thin, light on glass, and hidden on anything that scrolls sideways */
+.mg-scene *, .mg-portal * { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.16) transparent; }
 .mg-scene ::-webkit-scrollbar, .mg-portal ::-webkit-scrollbar { width: 8px; height: 8px; }
 .mg-scene ::-webkit-scrollbar-track, .mg-portal ::-webkit-scrollbar-track { background: transparent; }
-.mg-scene ::-webkit-scrollbar-thumb, .mg-portal ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 9999px; }
-.mg-scene ::-webkit-scrollbar-thumb:hover, .mg-portal ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }
+.mg-scene ::-webkit-scrollbar-thumb, .mg-portal ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 9999px; }
+.mg-scene ::-webkit-scrollbar-thumb:hover, .mg-portal ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); }
 .mg-noscroll { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .mg-noscroll::-webkit-scrollbar { display: none; }
 
-/* ——————————————————————————————————————————————————————— surfaces ——— */
+/* ——————————————————————————————————————————————————————— materials ——— */
 
-/* .mg-glass / .mg-panel — THE card: flat surface, hairline, a whisper of
-   depth. (The name survives from the glass era; it is an opaque panel now.) */
-.mg-glass, .mg-panel {
-  background: var(--mc-surface);
-  border: 1px solid var(--mc-line);
-  border-radius: var(--mc-r);
-  box-shadow: var(--mc-sh-1);
+/* .mg-glass — a pane of frosted glass floating over the photograph: the
+   content pane, the map's chrome, the dock. The inset top hairline is what
+   sells it: a lit edge where the pane catches the light. */
+.mg-glass {
+  background: var(--mc-glass);
+  border: 1px solid var(--mc-glass-line);
+  border-radius: var(--mc-r-lg);
+  box-shadow: var(--mc-sh-3), var(--mc-lit);
+  -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%);
+  backdrop-filter: blur(var(--mc-blur)) saturate(150%);
 }
 
-/* .mg-glass-strong / .mg-raised — one step up: dialogs, sheets, drawers,
-   popovers, toasts. Raised plane, lit hairline, real shadow. */
+/* .mg-glass-strong / .mg-raised — denser glass for anything that sits ON a
+   pane: sheets, the drawer, popovers, toasts, the chat panel. */
 .mg-glass-strong, .mg-raised {
-  background: var(--mc-raised);
-  border: 1px solid var(--mc-line2);
-  border-radius: var(--mc-r);
-  box-shadow: var(--mc-sh-2);
+  background: var(--mc-glass-strong);
+  border: 1px solid var(--mc-glass-line);
+  border-radius: var(--mc-r-lg);
+  box-shadow: var(--mc-sh-3), var(--mc-lit);
+  -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%);
+  backdrop-filter: blur(var(--mc-blur)) saturate(150%);
 }
 
-/* .mg-glass-soft / .mg-tile — a lift INSIDE a panel: chips, inputs, tiles. */
+/* .mg-glass-soft / .mg-tile — a lift, not a plane: chips, inputs, and every
+   card or section INSIDE the pane. No blur (that is the whole budget). */
 .mg-glass-soft, .mg-tile {
-  background: var(--mc-raised);
-  border: 1px solid var(--mc-line);
+  background: var(--mc-glass-soft);
+  border: 1px solid var(--mc-glass-line);
+}
+
+/* .mg-panel — THE section surface inside the pane: a soft inset, 18px. */
+.mg-panel {
+  background: var(--mc-glass-soft);
+  border: 1px solid var(--mc-glass-line);
+  border-radius: var(--mc-r);
 }
 
 /* .mg-inset — a well: code, paths, the terminal, a photo's backing. */
-.mg-inset { background: var(--mc-inset); border: 1px solid var(--mc-line); }
+.mg-inset { background: var(--mc-term); border: 1px solid var(--mc-glass-line); }
 
 /* .mg-hover — a surface that responds to the pointer. */
 .mg-hover { transition: background var(--mc-t-fast), border-color var(--mc-t-fast), transform var(--mc-t) var(--mc-ease); }
-.mg-hover:hover { background: var(--mg-glass-hover); border-color: var(--mc-line2); }
+.mg-hover:hover { background: var(--mc-glass-hover); border-color: var(--mc-glass-line2); }
 .mg-hover:active { transform: scale(0.985); }
 
 .mg-pill { border-radius: 9999px; }
 
+/* .mg-pane — the ONE content pane: a fixed sheet of glass under the page,
+   from the strip to the bottom edge, that the document scrolls over. Fixed
+   rather than in flow so the blur is computed once per frame for one
+   rectangle, never per scrolled section. Flush on a phone (where the panel's
+   windows are full-screen sheets), 16px gutters from 640, clear of the rail
+   from 1024. The layout draws it; pages never do. */
+.mg-pane {
+  position: fixed; z-index: 1; pointer-events: none;
+  top: var(--mc-pane-top); left: var(--mc-gutter); right: var(--mc-gutter); bottom: 0;
+  background: var(--mc-glass-strong);
+  border: 1px solid var(--mc-glass-line); border-bottom: 0;
+  border-radius: var(--mc-r-lg) var(--mc-r-lg) 0 0;
+  box-shadow: var(--mc-sh-3), var(--mc-lit);
+  -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%);
+  backdrop-filter: blur(var(--mc-blur)) saturate(150%);
+}
+@media (min-width: 640px) { .mg-pane { background: var(--mc-glass); } }
+@media (min-width: 1024px) {
+  .mg-pane { left: calc(var(--mc-rail-w) + var(--mc-gutter)); bottom: 16px; border-bottom: 1px solid var(--mc-glass-line); border-radius: var(--mc-r-lg); }
+}
+
 /* ———————————————————————————————————————————————————————— buttons ——— */
 
-/* .mg-btn — 40px, rounded-xl, the panel's button. Works on <button> and <a>. */
+/* .mg-btn — a pill, 40px: the panel's button. Works on <button> and <a>. */
 .mg-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: none;
-  height: 40px; padding: 0 16px;
-  border: 1px solid transparent; border-radius: var(--mc-r-md);
+  height: 40px; padding: 0 18px;
+  border: 1px solid transparent; border-radius: 9999px;
   background: none; color: var(--mc-ink);
   font: 500 13.5px/1 var(--mc-font); letter-spacing: -0.005em; white-space: nowrap;
   cursor: pointer; user-select: none; -webkit-user-select: none;
@@ -258,7 +323,7 @@
 .mg-btn:active:not(:disabled) { transform: scale(0.97); }
 .mg-btn:disabled, .mg-btn[aria-disabled='true'] { opacity: 0.4; pointer-events: none; }
 
-/* .primary — ink fill, dark text: the ONE signature action on screen. */
+/* .primary — white fill, dark text: the ONE signature action on screen. */
 .mg-btn.primary { background: var(--mc-ink); color: var(--mc-bg); font-weight: 600; }
 .mg-btn.primary:hover { background: #ffffff; }
 
@@ -266,26 +331,26 @@
 .mg-btn.accent { background: var(--mc-accent); color: var(--mc-accent-ink); font-weight: 600; }
 .mg-btn.accent:hover { background: var(--mc-accent-bright); }
 
-/* .secondary — raised with a hairline: the everyday button. */
-.mg-btn.secondary { background: var(--mc-raised); border-color: var(--mc-line); color: var(--mc-ink2); }
-.mg-btn.secondary:hover { border-color: var(--mc-line2); color: var(--mc-ink); }
+/* .secondary — frosted: the everyday button. */
+.mg-btn.secondary { background: var(--mc-glass-soft); border-color: var(--mc-glass-line); color: var(--mc-ink); }
+.mg-btn.secondary:hover { background: var(--mc-glass-hover); border-color: var(--mc-glass-line2); }
 
 /* .ghost — text only until hovered. */
 .mg-btn.ghost { color: var(--mc-ink2); }
-.mg-btn.ghost:hover { background: rgba(255, 255, 255, 0.05); color: var(--mc-ink); }
+.mg-btn.ghost:hover { background: rgba(255, 255, 255, 0.08); color: var(--mc-ink); }
 
-/* .danger — a red outline, never a red fill. */
-.mg-btn.danger { border-color: rgba(242, 109, 100, 0.4); color: var(--mc-crit); }
-.mg-btn.danger:hover { border-color: var(--mc-crit); background: var(--mc-crit-soft); }
+/* .danger — a red tint, never a red fill. */
+.mg-btn.danger { background: rgba(242, 109, 100, 0.15); border-color: var(--mc-crit-line); color: var(--mc-crit); }
+.mg-btn.danger:hover { background: rgba(242, 109, 100, 0.22); }
 
-/* .warn — amber tint: something needs you, nothing is broken. */
-.mg-btn.warn { background: var(--mc-warn-soft); border-color: var(--mc-warn-line); color: #f7d58a; font-weight: 600; }
-.mg-btn.warn:hover { background: rgba(240, 180, 41, 0.2); }
+/* .warn — amber fill: something needs you, nothing is broken. */
+.mg-btn.warn { background: var(--mc-warn); border-color: transparent; color: var(--mc-warn-ink); font-weight: 600; }
+.mg-btn.warn:hover { filter: brightness(1.1); }
 
-.mg-btn.on { background: var(--mc-raised); border-color: var(--mc-line2); color: var(--mc-ink); }
+.mg-btn.on { background: var(--mc-glass-on); border-color: transparent; color: var(--mc-ink); }
 
-.mg-btn.sm { height: 32px; padding: 0 12px; font-size: 12.5px; gap: 6px; border-radius: 10px; }
-.mg-btn.lg { height: 48px; padding: 0 22px; font-size: 15px; gap: 10px; border-radius: 14px; }
+.mg-btn.sm { height: 32px; padding: 0 14px; font-size: 12.5px; gap: 6px; }
+.mg-btn.lg { height: 48px; padding: 0 24px; font-size: 15px; gap: 10px; }
 .mg-btn.icon { width: 40px; padding: 0; }
 .mg-btn.icon.sm { width: 32px; }
 .mg-btn.icon.lg { width: 48px; }
@@ -293,61 +358,61 @@
 
 /* ————————————————————————————————————————————————————————— inputs ——— */
 
-/* .mg-input — an inset field, 40px, rounded-xl, green focus ring. */
+/* .mg-input — a frosted field, 40px, 14px corners, lit hairline on focus. */
 .mg-input {
-  width: 100%; height: 40px; padding: 0 12px;
-  background: var(--mc-inset); border: 1px solid var(--mc-line); border-radius: var(--mc-r-md);
+  width: 100%; height: 40px; padding: 0 14px;
+  background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line); border-radius: var(--mc-r-md);
   color: var(--mc-ink); font: 400 14px/1 var(--mc-font); outline: none;
-  transition: border-color var(--mc-t-fast), box-shadow var(--mc-t-fast);
+  transition: border-color var(--mc-t-fast), background var(--mc-t-fast), box-shadow var(--mc-t-fast);
 }
 .mg-input::placeholder { color: var(--mc-ink3); }
-.mg-input:hover { border-color: var(--mc-line2); }
-.mg-input:focus { border-color: rgba(62, 207, 142, 0.6); box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.18); }
-textarea.mg-input { height: auto; min-height: 84px; padding: 10px 12px; line-height: 1.55; resize: vertical; }
+.mg-input:hover { border-color: var(--mc-glass-line2); }
+.mg-input:focus { border-color: var(--mc-glass-line2); background: rgba(255, 255, 255, 0.08); box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.14); }
+textarea.mg-input { height: auto; min-height: 84px; padding: 10px 14px; line-height: 1.55; resize: vertical; }
 
 /* .mg-search — an .mg-input with a magnifier left and a clear button right. */
 .mg-search { position: relative; display: block; min-width: 0; }
-.mg-search .mg-input { padding-left: 36px; padding-right: 38px; }
-.mg-search > .ic { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--mc-ink3); pointer-events: none; display: flex; }
+.mg-search .mg-input { padding-left: 38px; padding-right: 38px; }
+.mg-search > .ic { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--mc-ink3); pointer-events: none; display: flex; }
 .mg-search > .clear {
   position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
-  width: 32px; height: 32px; border: 0; border-radius: 8px; padding: 0;
+  width: 32px; height: 32px; border: 0; border-radius: 9999px; padding: 0;
   display: grid; place-items: center; background: none; color: var(--mc-ink3); cursor: pointer;
   transition: background var(--mc-t-fast), color var(--mc-t-fast);
 }
-.mg-search > .clear:hover { background: rgba(255, 255, 255, 0.06); color: var(--mc-ink); }
+.mg-search > .clear:hover { background: rgba(255, 255, 255, 0.08); color: var(--mc-ink); }
 
 /* .mg-select — a native <select> dressed to match, chevron drawn on the right. */
 .mg-select { position: relative; display: inline-block; min-width: 0; }
 .mg-select > select {
   -webkit-appearance: none; appearance: none;
-  width: 100%; height: 40px; padding: 0 32px 0 12px;
-  background: var(--mc-raised); border: 1px solid var(--mc-line); border-radius: var(--mc-r-md);
-  color: var(--mc-ink); font: 500 13px/1 var(--mc-font); cursor: pointer; outline: none;
-  transition: border-color var(--mc-t-fast);
+  width: 100%; height: 40px; padding: 0 34px 0 14px;
+  background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line); border-radius: var(--mc-r-md);
+  color: var(--mc-ink); font: 500 13.5px/1 var(--mc-font); cursor: pointer; outline: none;
+  transition: border-color var(--mc-t-fast), background var(--mc-t-fast);
 }
-.mg-select > select:hover { border-color: var(--mc-line2); }
-.mg-select > select:focus { border-color: rgba(62, 207, 142, 0.6); box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.18); }
-.mg-select > select option { background: var(--mc-surface); color: var(--mc-ink); }
-.mg-select > .ic { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--mc-ink3); pointer-events: none; display: flex; }
+.mg-select > select:hover { border-color: var(--mc-glass-line2); }
+.mg-select > select:focus { border-color: var(--mc-glass-line2); box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.14); }
+.mg-select > select option { background: #18181b; color: var(--mc-ink); }
+.mg-select > .ic { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--mc-ink3); pointer-events: none; display: flex; }
 
-/* .mg-check — a row with a native checkbox / switch tinted to the accent. */
+/* native checkboxes / switches tinted to the accent */
 .mg-scene input[type='checkbox'], .mg-scene input[type='radio'],
 .mg-portal input[type='checkbox'], .mg-portal input[type='radio'] { accent-color: var(--mc-accent); }
 .mg-scene input[type='range'], .mg-portal input[type='range'] { accent-color: var(--mc-accent); }
 
 /* ———————————————————————————————————————————————— chips and cards ——— */
 
-/* .mg-chip — a small round tag / filter. Neutral unless it carries state. */
+/* .mg-chip — a small frosted pill / filter. Neutral unless it carries state. */
 .mg-chip {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
-  height: 30px; padding: 0 11px; border-radius: 9999px;
-  background: var(--mc-raised); border: 1px solid var(--mc-line);
+  height: 28px; padding: 0 12px; border-radius: 9999px;
+  background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line);
   color: var(--mc-ink2); font: 500 12px/1 var(--mc-font); white-space: nowrap; cursor: default;
   transition: background var(--mc-t-fast), border-color var(--mc-t-fast), color var(--mc-t-fast);
 }
 button.mg-chip, a.mg-chip { cursor: pointer; }
-button.mg-chip:hover, a.mg-chip:hover { border-color: var(--mc-line2); color: var(--mc-ink); }
+button.mg-chip:hover, a.mg-chip:hover { background: var(--mc-glass-hover); border-color: var(--mc-glass-line2); color: var(--mc-ink); }
 .mg-chip.on { background: var(--mc-ok-soft); border-color: var(--mc-ok-line); color: var(--mc-accent); }
 .mg-chip.ok   { background: var(--mc-ok-soft);   border-color: var(--mc-ok-line);   color: var(--mc-accent); }
 .mg-chip.warn { background: var(--mc-warn-soft); border-color: var(--mc-warn-line); color: var(--mc-warn); }
@@ -355,26 +420,27 @@ button.mg-chip:hover, a.mg-chip:hover { border-color: var(--mc-line2); color: va
 .mg-chip.mgr  { background: var(--mc-mgr-soft);  border-color: var(--mc-mgr-line);  color: var(--mc-mgr); }
 .mg-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
 
-/* .mg-card — a surface card inside the page. */
+/* .mg-card — a soft card inside the pane. */
 .mg-card {
-  display: block; background: var(--mc-surface); border: 1px solid var(--mc-line);
-  border-radius: var(--mg-r-card); padding: 16px; color: inherit; box-shadow: var(--mc-sh-1);
+  display: block; background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line);
+  border-radius: var(--mg-r-card); padding: 16px; color: inherit;
   transition: border-color var(--mc-t-fast), background var(--mc-t-fast), transform var(--mc-t) var(--mc-ease);
 }
-a.mg-card:hover, button.mg-card:hover { border-color: var(--mc-line2); }
+a.mg-card:hover, button.mg-card:hover { background: var(--mc-glass-hover); border-color: var(--mc-glass-line2); }
 a.mg-card:active, button.mg-card:active { transform: scale(0.985); }
 button.mg-card { width: 100%; text-align: left; cursor: pointer; font: inherit; }
 button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 
 /* ——————————————————————————————————————————————————————— typography ——— */
 
-/* .mg-label / .hud — the section label: small, quiet, uppercase, sans. */
+/* .mg-label / .hud — the section label: small, quiet, sans, sentence case
+   (the panel's `.label`; no mono, no shouting). */
 .mg-label, .hud {
-  display: block; font: 600 11px/1.4 var(--mc-font); letter-spacing: 0.05em;
-  text-transform: uppercase; color: var(--mc-ink3);
+  display: block; font: 500 11px/1.4 var(--mc-font); letter-spacing: 0.01em;
+  color: var(--mc-ink3);
 }
 /* .mg-h1 — a page title; .mg-h2 — a view header; .mg-h3 — a panel header. */
-.mg-h1 { margin: 0; font: 650 24px/1.2 var(--mc-font); letter-spacing: -0.015em; color: var(--mc-ink); }
+.mg-h1 { margin: 0; font: 650 24px/1.2 var(--mc-font); letter-spacing: -0.02em; color: var(--mc-ink); }
 .mg-h2 { margin: 0; font: 600 18px/1.25 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
 .mg-h3 { margin: 0; font: 600 13px/1.4 var(--mc-font); color: var(--mc-ink2); }
 .mg-count { font: 400 13px/1 var(--mc-font); color: var(--mc-ink3); font-variant-numeric: tabular-nums; }
@@ -383,11 +449,11 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 .mg-sub { margin: 0; font: 400 13.5px/1.5 var(--mc-font); color: var(--mc-ink2); }
 .mg-hint { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
 
-/* .mg-kv — a <dl> of details: label left, value right, 44px rows. */
+/* .mg-kv — a <dl> of details: label left, value right, 40px rows. */
 .mg-kv { margin: 0; display: flex; flex-direction: column; }
 .mg-kv > div {
   display: grid; grid-template-columns: minmax(96px, 36%) minmax(0, 1fr); gap: 12px; align-items: baseline;
-  min-height: 40px; padding: 8px 0; border-bottom: 1px solid var(--mc-line);
+  min-height: 40px; padding: 8px 0; border-bottom: 1px solid var(--mc-line-soft);
 }
 .mg-kv > div:last-child { border-bottom: 0; }
 .mg-kv dt { font: 400 13px/1.4 var(--mc-font); color: var(--mc-ink3); }
@@ -395,13 +461,17 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 
 /* ——————————————————————————————————————————————————————— structures ——— */
 
-/* .mg-page — a route's content column. Sides are the gutter, the bottom
-   clears the phone dock. The rail layout overrides the bottom. */
+/* .mg-page — a route's content column, laid over the pane. Sides are the
+   pane's inner padding plus its gutter, the bottom clears the phone dock.
+   The rail layout overrides the bottom. */
 .mg-page {
+  position: relative; z-index: 10;
   width: 100%; max-width: 1200px; margin: 0 auto;
   padding: 16px 16px calc(var(--mc-dock-h) + var(--sab) + 24px);
 }
-@media (min-width: 640px) { .mg-page { padding-left: 24px; padding-right: 24px; padding-top: 20px; } }
+@media (min-width: 640px) {
+  .mg-page { padding: 32px calc(var(--mc-gutter) + 20px) calc(var(--mc-dock-h) + var(--sab) + 24px); max-width: calc(1200px + 2 * var(--mc-gutter)); }
+}
 
 /* .mg-row — a view's header row: title left, actions right, wraps on a phone. */
 .mg-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
@@ -424,9 +494,9 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 /* .mg-stack — a column of panels with the standard gap. */
 .mg-stack { display: flex; flex-direction: column; gap: 16px; }
 
-/* .mg-section — a panel with a titled header row and hairline-divided body. */
-.mg-section { background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-r); box-shadow: var(--mc-sh-1); overflow: hidden; }
-.mg-section > .head { display: flex; align-items: baseline; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--mc-line); }
+/* .mg-section — a soft inset with a titled header row and hairline-divided body. */
+.mg-section { background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line); border-radius: var(--mc-r); overflow: hidden; }
+.mg-section > .head { display: flex; align-items: baseline; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--mc-glass-line); }
 .mg-section > .head > h2, .mg-section > .head > h3 { margin: 0; font: 600 13px/1.4 var(--mc-font); color: var(--mc-ink2); }
 .mg-section > .head > .mg-count { font-size: 13px; }
 .mg-section > .head > .mg-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
@@ -434,15 +504,15 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 
 /* .mg-empty — the centred nothing-here state. Holds .ic / h3 / p / .act. */
 .mg-empty { display: grid; place-items: center; text-align: center; padding: 48px 24px; }
-.mg-empty > .ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; color: var(--mc-ink3); background: var(--mc-surface); border: 1px solid var(--mc-line); }
-.mg-empty > h3 { margin: 12px 0 0; font: 600 14.5px/1.3 var(--mc-font); color: var(--mc-ink2); }
-.mg-empty > p { margin: 4px 0 0; max-width: 42ch; font: 400 13px/1.5 var(--mc-font); color: var(--mc-ink3); }
+.mg-empty > .ic { width: 44px; height: 44px; border-radius: var(--mc-r-md); display: grid; place-items: center; color: var(--mc-ink2); background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line); }
+.mg-empty > h3 { margin: 14px 0 0; font: 500 14px/1.3 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
+.mg-empty > p { margin: 4px 0 0; max-width: 42ch; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
 .mg-empty > .act { margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
 /* .mg-strip — a slim notice. `.warn` amber, `.crit` red, `.ok` green. */
 .mg-strip {
   display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px; margin-bottom: 12px;
-  border-radius: var(--mc-r-md); background: var(--mc-surface); border: 1px solid var(--mc-line);
+  border-radius: var(--mc-r-md); background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line);
   font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink2);
 }
 .mg-strip b { color: var(--mc-ink); font-weight: 600; }
@@ -453,31 +523,31 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 .mg-strip.crit { background: var(--mc-crit-soft); border-color: var(--mc-crit-line); } .mg-strip.crit > .ic { color: var(--mc-crit); }
 
 /* .mg-bar — a meter: the fill carries severity, the track is the same hue. */
-.mg-bar { height: 6px; border-radius: 9999px; background: rgba(62, 207, 142, 0.14); overflow: hidden; }
+.mg-bar { height: 6px; border-radius: 9999px; background: rgba(62, 207, 142, 0.16); overflow: hidden; }
 .mg-bar > i { display: block; height: 100%; width: 0; border-radius: 9999px; background: var(--mc-accent); transition: width 0.7s var(--mc-ease); }
-.mg-bar.warn { background: rgba(240, 180, 41, 0.14); } .mg-bar.warn > i { background: var(--mc-warn); }
-.mg-bar.crit { background: rgba(242, 109, 100, 0.14); } .mg-bar.crit > i { background: var(--mc-crit); }
-.mg-bar.neutral { background: var(--mc-inset); }
+.mg-bar.warn { background: rgba(240, 180, 41, 0.16); } .mg-bar.warn > i { background: var(--mc-warn); }
+.mg-bar.crit { background: rgba(242, 109, 100, 0.16); } .mg-bar.crit > i { background: var(--mc-crit); }
+.mg-bar.neutral { background: rgba(255, 255, 255, 0.07); }
 .mg-bar.indeterminate > i { width: 36%; animation: mg-slide 1.5s ease-in-out infinite; }
 
 /* .mg-stat — a figure with its label above it. `.pill` puts them side by side. */
 .mg-stat { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .mg-stat > .v { font: 600 26px/1 var(--mc-font); letter-spacing: -0.02em; color: var(--mc-ink); font-variant-numeric: tabular-nums; }
 .mg-stat > .v.lg { font-size: 32px; }
-.mg-stat > .k { font: 600 11px/1.4 var(--mc-font); letter-spacing: 0.05em; text-transform: uppercase; color: var(--mc-ink3); }
+.mg-stat > .k { font: 500 11px/1.4 var(--mc-font); letter-spacing: 0.01em; color: var(--mc-ink3); }
 .mg-stat > .v.ok { color: var(--mc-accent); }
 .mg-stat > .v.warn { color: var(--mc-warn); }
 .mg-stat > .v.crit, .mg-stat > .v.hot { color: var(--mc-crit); }
 .mg-stat.pill {
   flex-direction: row; align-items: baseline; gap: 7px; flex: none;
   height: 32px; padding: 0 12px; border-radius: 9999px;
-  background: var(--mc-raised); border: 1px solid var(--mc-line);
+  background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line);
 }
 .mg-stat.pill > .v { font-size: 13px; font-weight: 600; }
-.mg-stat.pill > .k { font-size: 11px; letter-spacing: 0.02em; text-transform: none; font-weight: 500; }
+.mg-stat.pill > .k { font-size: 11px; letter-spacing: 0.01em; font-weight: 500; }
 
-/* .mg-tile — the Overview stat tile: label · big number · caption. */
-.mg-stat-tile { position: relative; overflow: hidden; background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-r); box-shadow: var(--mc-sh-1); padding: 16px; }
+/* .mg-stat-tile — the Overview stat tile: label · big number · caption. */
+.mg-stat-tile { position: relative; overflow: hidden; background: var(--mc-glass-soft); border: 1px solid var(--mc-glass-line); border-radius: var(--mc-r); padding: 16px; }
 .mg-stat-tile > .hud { display: flex; align-items: center; gap: 8px; }
 .mg-stat-tile > .v { margin-top: 8px; display: flex; align-items: baseline; gap: 6px; font: 600 26px/1 var(--mc-font); letter-spacing: -0.02em; color: var(--mc-ink); font-variant-numeric: tabular-nums; }
 .mg-stat-tile > .v > .u { font: 400 13px/1 var(--mc-font); color: var(--mc-ink3); }
@@ -502,30 +572,30 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 .mg-table { width: 100%; border-collapse: separate; border-spacing: 0; font: 400 13.5px/1.45 var(--mc-font); }
 .mg-table th {
   position: sticky; top: 0; z-index: 2; text-align: left; white-space: nowrap;
-  padding: 10px 12px; font: 600 11px/1.4 var(--mc-font); letter-spacing: 0.05em; text-transform: uppercase;
-  color: var(--mc-ink3); background: var(--mc-surface); border-bottom: 1px solid var(--mc-line);
+  padding: 10px 12px; font: 500 11px/1.4 var(--mc-font); letter-spacing: 0.01em;
+  color: var(--mc-ink3); background: rgba(22, 22, 26, 0.92); border-bottom: 1px solid var(--mc-glass-line);
 }
 .mg-table th.r, .mg-table td.r, .mg-table th.num, .mg-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
-.mg-table td { padding: 11px 12px; border-bottom: 1px solid var(--mc-line); color: var(--mc-ink2); vertical-align: middle; }
+.mg-table td { padding: 11px 12px; border-bottom: 1px solid var(--mc-line-soft); color: var(--mc-ink2); vertical-align: middle; }
 .mg-table tbody tr { transition: background var(--mc-t-fast); }
-.mg-table tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
-.mg-table tbody tr.sel { background: var(--mc-ok-soft); }
+.mg-table tbody tr:hover { background: rgba(255, 255, 255, 0.05); }
+.mg-table tbody tr.sel { background: var(--mc-glass-on); }
 .mg-table tbody tr:last-child td { border-bottom: 0; }
 .mg-table td.b { color: var(--mc-ink); font-weight: 500; }
 .mg-table tr.click, .mg-table tbody tr[role='button'] { cursor: pointer; }
 .mg-table > .tr {
   display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px;
-  padding: 10px 12px; border: 0; border-bottom: 1px solid var(--mc-line);
+  padding: 10px 12px; border: 0; border-bottom: 1px solid var(--mc-line-soft);
   background: none; color: var(--mc-ink2); font: 400 13.5px/1.45 var(--mc-font); text-align: left;
   transition: background var(--mc-t-fast);
 }
 .mg-table > a.tr, .mg-table > button.tr { cursor: pointer; }
-.mg-table > .tr:hover { background: rgba(255, 255, 255, 0.03); }
+.mg-table > .tr:hover { background: rgba(255, 255, 255, 0.05); }
 .mg-table > .tr:last-child { border-bottom: 0; }
 
 /* .mg-list — a panel of rows divided by hairlines; each row ≥ 44px. */
 .mg-list { display: flex; flex-direction: column; }
-.mg-list > * { border-bottom: 1px solid var(--mc-line); }
+.mg-list > * { border-bottom: 1px solid var(--mc-line-soft); }
 .mg-list > *:last-child { border-bottom: 0; }
 .mg-listrow {
   display: flex; align-items: center; gap: 12px; min-height: 48px; width: 100%;
@@ -533,18 +603,18 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
   transition: background var(--mc-t-fast), transform var(--mc-t) var(--mc-ease);
 }
 a.mg-listrow, button.mg-listrow { cursor: pointer; }
-a.mg-listrow:hover, button.mg-listrow:hover { background: rgba(255, 255, 255, 0.03); }
-a.mg-listrow:active, button.mg-listrow:active { background: rgba(255, 255, 255, 0.05); transform: scale(0.985); }
-a.mg-stat-tile { transition: border-color var(--mc-t-fast), transform var(--mc-t) var(--mc-ease); }
-a.mg-stat-tile:hover { border-color: var(--mc-line2); }
+a.mg-listrow:hover, button.mg-listrow:hover { background: rgba(255, 255, 255, 0.07); }
+a.mg-listrow:active, button.mg-listrow:active { background: rgba(255, 255, 255, 0.1); transform: scale(0.985); }
+a.mg-stat-tile { transition: border-color var(--mc-t-fast), background var(--mc-t-fast), transform var(--mc-t) var(--mc-ease); }
+a.mg-stat-tile:hover { background: var(--mc-glass-hover); border-color: var(--mc-glass-line2); }
 a.mg-stat-tile:active { transform: scale(0.985); }
-.mg-listrow.sel { background: var(--mc-ok-soft); }
+.mg-listrow.sel { background: var(--mc-glass-on); }
 .mg-listrow > .t { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .mg-listrow > .t > b { font: 600 13.5px/1.35 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mg-listrow > .t > span { font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* .mg-tabs — underline tabs inside a panel or drawer. */
-.mg-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--mc-line); }
+.mg-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--mc-glass-line); }
 .mg-tabs > button {
   position: relative; height: 40px; padding: 0 12px; border: 0; background: none;
   color: var(--mc-ink3); font: 600 13px/1 var(--mc-font); cursor: pointer;
@@ -561,32 +631,37 @@ a.mg-stat-tile:active { transform: scale(0.985); }
 /* .mg-dialog — the inside of a Sheet: grab handle, title row, body, footer. */
 .mg-dialog { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .mg-dialog > .grab { flex: none; display: grid; place-items: center; padding: 10px 0 2px; cursor: grab; touch-action: none; }
-.mg-dialog > .grab > i { display: block; width: 36px; height: 4px; border-radius: 9999px; background: var(--mc-line3); }
-.mg-dialog > .head { flex: none; display: flex; align-items: center; gap: 12px; padding: 14px 16px 12px; border-bottom: 1px solid var(--mc-line); }
+.mg-dialog > .grab > i { display: block; width: 36px; height: 4px; border-radius: 9999px; background: rgba(255, 255, 255, 0.25); }
+.mg-dialog > .head { flex: none; display: flex; align-items: center; gap: 12px; padding: 16px 20px 12px; }
 .mg-dialog > .head > h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 16px/1.3 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
-.mg-dialog > .body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; overscroll-behavior: contain; }
-.mg-dialog > .foot { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 16px calc(12px + var(--sab)); border-top: 1px solid var(--mc-line); }
+.mg-dialog > .body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 20px 20px; overscroll-behavior: contain; }
+.mg-dialog > .foot { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 14px 20px calc(14px + var(--sab)); border-top: 1px solid var(--mc-glass-line); }
 .mg-dialog > .foot > .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
 /* .mg-scrim — the veil under a dialog. Dims; does not blur (a full-screen
-   blur is the one thing that drops frames on an iPad). */
+   blur over the pane would be a fifth blurred layer, and it drops frames on
+   an iPad). */
 .mg-scrim { position: fixed; inset: 0; z-index: 90; display: flex; justify-content: center; background: var(--mc-scrim); }
 
-/* .mg-popover — a small raised menu anchored to a control. */
-.mg-popover { background: var(--mc-raised); border: 1px solid var(--mc-line2); border-radius: var(--mc-r-md); box-shadow: var(--mc-sh-2); padding: 6px; }
+/* .mg-popover — a small pane of strong glass anchored to a control. */
+.mg-popover {
+  background: var(--mc-glass-strong); border: 1px solid var(--mc-glass-line); border-radius: var(--mc-r-md);
+  box-shadow: var(--mc-sh-2), var(--mc-lit); padding: 6px;
+  -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
+}
 .mg-popover > button, .mg-popover > a {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 10px;
-  border: 0; border-radius: 8px; background: none; color: var(--mc-ink2); font: 500 13px/1.3 var(--mc-font); text-align: left; cursor: pointer;
+  border: 0; border-radius: 9px; background: none; color: var(--mc-ink2); font: 500 13px/1.3 var(--mc-font); text-align: left; cursor: pointer;
   transition: background var(--mc-t-fast), color var(--mc-t-fast);
 }
-.mg-popover > button:hover, .mg-popover > a:hover { background: rgba(255, 255, 255, 0.05); color: var(--mc-ink); }
+.mg-popover > button:hover, .mg-popover > a:hover { background: rgba(255, 255, 255, 0.08); color: var(--mc-ink); }
 
 /* .mg-skel — a skeleton block; pair with the Skeleton component. */
-.mg-skel { display: block; background: var(--mc-raised); border-radius: 8px; position: relative; overflow: hidden; }
-.mg-skel::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent); animation: mg-sweep 1.4s infinite; }
+.mg-skel { display: block; background: rgba(255, 255, 255, 0.08); border-radius: 8px; position: relative; overflow: hidden; }
+.mg-skel::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent); animation: mg-sweep 1.4s infinite; }
 
-/* .mg-code — a path or a command. */
-.mg-code { font: 12.5px/1.6 var(--mc-mono); color: var(--mc-ink2); background: var(--mc-inset); border: 1px solid var(--mc-line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; }
+/* .mg-code — a path or a command, on the near-opaque terminal plane. */
+.mg-code { font: 12.5px/1.6 var(--mc-mono); color: var(--mc-ink2); background: var(--mc-term); border: 1px solid var(--mc-glass-line); border-radius: 10px; padding: 10px 12px; overflow-x: auto; }
 
 /* Mission Control proportions from 640px: 20px section gutters, 20px first/last
    table columns (phones keep 16px). Placed after the base rules so it wins. */
@@ -600,7 +675,8 @@ a.mg-stat-tile:active { transform: scale(0.985); }
 
 /* ——————————————————————————————————————————————————————————— motion ——— */
 /* Small on purpose: rise for entry (staggered by --i), slide-in for panels,
-   ping for liveness, spin for loading, sweep for skeletons. Nothing else. */
+   ping for liveness, spin for loading, sweep for skeletons, and the 90-second
+   drift of the backdrop photo. Blur never animates. */
 
 .mg-rise, .mg-fadeup, .anim-rise { animation: mg-rise var(--mc-t-slow) var(--mc-ease) both; animation-delay: calc(var(--i, 0) * 28ms); }
 .mg-slide, .anim-slide { animation: mg-slide-in 260ms var(--mc-ease) both; }
@@ -616,6 +692,8 @@ a.mg-stat-tile:active { transform: scale(0.985); }
 @keyframes mg-slide { 0% { transform: translateX(-120%); } 100% { transform: translateX(340%); } }
 @keyframes mg-sweep { 100% { transform: translateX(100%); } }
 @keyframes mg-fadeup { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+/* The backdrop photo breathes — 90s, barely perceptible. Not a slideshow. */
+@keyframes mg-drift { from { transform: scale(1); } to { transform: scale(1.06); } }
 
 /* ————————————————————————————————————————————————— reduced motion ——— */
 @media (prefers-reduced-motion: reduce) {

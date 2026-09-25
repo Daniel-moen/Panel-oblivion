@@ -165,8 +165,9 @@
 
   .box {
     width: 100%; max-height: min(92dvh, calc(100dvh - 48px)); outline: none;
-    background: var(--mc-raised); border: 1px solid var(--mc-line2);
-    border-radius: var(--mc-r-lg); box-shadow: var(--mc-sh-3);
+    background: var(--mc-glass-strong); border: 1px solid var(--mc-glass-line);
+    border-radius: var(--mc-r-lg); box-shadow: var(--mc-sh-3), var(--mc-lit);
+    -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
     will-change: transform, opacity;
   }
   .box.phone {

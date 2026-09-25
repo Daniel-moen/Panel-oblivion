@@ -89,9 +89,9 @@
   .strip {
     position: sticky; top: 0; z-index: 40;
     padding-top: var(--sat);
-    background: rgba(17, 17, 19, 0.86);
-    -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-    border-bottom: 1px solid var(--mc-line);
+    background: var(--mc-glass-strong);
+    -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
+    border-bottom: 1px solid var(--mc-glass-line);
   }
   .in { display: flex; align-items: center; gap: 6px; height: var(--mc-strip-h); padding: 0 12px 0 16px; min-width: 0; overflow: hidden; }
 
@@ -110,12 +110,12 @@
   a.readout:hover .st { text-decoration: underline; text-underline-offset: 3px; }
 
   .ib {
-    position: relative; flex: none; width: 40px; height: 40px; border: 0; border-radius: 10px; padding: 0;
+    position: relative; flex: none; width: 40px; height: 40px; border: 0; border-radius: 9999px; padding: 0;
     display: grid; place-items: center; background: none; color: var(--mc-ink3); cursor: pointer;
     transition: background var(--mc-t-fast), color var(--mc-t-fast);
   }
-  .ib:hover { background: var(--mc-raised); color: var(--mc-ink2); }
-  .ib.on { background: var(--mc-raised); color: var(--mc-ink); }
+  .ib:hover { background: rgba(255, 255, 255, 0.08); color: var(--mc-ink2); }
+  .ib.on { background: var(--mc-glass-on); color: var(--mc-ink); }
   .count {
     position: absolute; top: 4px; right: 4px; min-width: 16px; height: 16px; padding: 0 4px;
     display: inline-flex; align-items: center; justify-content: center; border-radius: 9999px;

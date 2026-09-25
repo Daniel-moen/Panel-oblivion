@@ -7,6 +7,10 @@
      The switch is a CSS breakpoint at 1024px, the panel's own, so the two
      never fight over the same pixels.
 
+     The scene is the photograph (Backdrop) with ONE fixed sheet of glass
+     (`.mg-pane`, mc.css) under the page column; the page scrolls over it.
+     That keeps the blur budget at strip + dock/rail + pane + one sheet.
+
      The page scrolls the document (not an inner pane): sticky table heads,
      iOS's rubber-banding and the home-screen app's status bar all behave
      when the body is the scroller. Two exceptions:
@@ -27,6 +31,7 @@
   import { startChat } from '$lib/chat.svelte.js';
   import { loadMe } from '$lib/me.svelte.js';
   import { installTeam } from '$lib/team.svelte.js';
+  import Backdrop from '$lib/components/glass/Backdrop.svelte';
   import StatusStrip from '$lib/components/glass/StatusStrip.svelte';
   import Dock from '$lib/components/glass/Dock.svelte';
   import Rail from '$lib/components/glass/Rail.svelte';
@@ -70,6 +75,10 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="mg-scene" class:map={isMap}>
+  <!-- The photograph, and the one sheet of glass the page scrolls over. The
+       map is its own scene: Leaflet fills the rectangle, so no pane. -->
+  <Backdrop />
+  {#if !isMap}<div class="mg-pane" aria-hidden="true"></div>{/if}
   <Rail />
 
   <div class="col">
@@ -99,7 +108,7 @@
 <style>
   .mg-scene { display: flex; flex-direction: column; }
   .col { flex: 1; min-height: 0; display: flex; flex-direction: column; min-width: 0; }
-  main { position: relative; }
+  main { position: relative; z-index: 10; }
   .view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
   main.mg-page { flex: 1; display: flex; flex-direction: column; }
 
@@ -112,6 +121,6 @@
      bottom clearance is no longer needed */
   @media (min-width: 1024px) {
     .col { padding-left: var(--mc-rail-w); }
-    main.mg-page { padding-bottom: calc(var(--sab) + 32px); }
+    main.mg-page { padding-bottom: calc(var(--sab) + 48px); }
   }
 </style>

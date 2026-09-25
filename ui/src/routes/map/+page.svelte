@@ -424,7 +424,7 @@
 
   <!-- ———————————————————————————————————————————————— floating chrome — -->
   <div class="chrome" class:open={panelOpen}>
-    <div class="bar mg-raised">
+    <div class="bar mg-glass">
       <div class="barrow">
         <label class="mg-search find">
           <span class="ic"><Icon name="search" size={15} /></span>
@@ -459,7 +459,7 @@
     </div>
 
     {#if panelOpen}
-      <div class="panel mg-raised" transition:slide={{ y: -10, duration: 220 }}>
+      <div class="panel mg-glass" transition:slide={{ y: -10, duration: 220 }}>
         <div class="filters">
           <div class="tiers" role="group" aria-label="Tiers">
             {#each TIERS as [t, label, tone] (t)}
@@ -757,6 +757,8 @@
     border-radius: 9999px;
     font: 500 11.5px/1 var(--mc-font); color: var(--mc-ink2);
     pointer-events: none;
+    /* small and on the map's floor: dark fill, no blur (the budget) */
+    background: rgba(14, 14, 18, 0.8); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--mc-sh-1);
   }
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .pin { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(12, 12, 14, 0.85); }
@@ -805,15 +807,16 @@
   .stage :global(.leaflet-control-attribution a) { color: var(--mc-ink2); }
 
   .stage :global(.leaflet-control-zoom.leaflet-bar) {
-    border: 1px solid var(--mc-line2);
+    border: 1px solid var(--mc-glass-line);
     border-radius: var(--mc-r-md);
-    background: var(--mc-raised);
+    background: var(--mc-glass-strong);
     box-shadow: var(--mc-sh-2);
+    -webkit-backdrop-filter: blur(16px) saturate(150%); backdrop-filter: blur(16px) saturate(150%);
     overflow: hidden;
   }
   .stage :global(.leaflet-control-zoom a) {
     width: 40px; height: 40px; line-height: 40px;
-    background: var(--mc-raised);
+    background: transparent;
     color: var(--mc-ink2);
     font: 400 20px/40px var(--mc-font);
     border-radius: 0;
@@ -821,19 +824,20 @@
     transition: background var(--mc-t-fast), color var(--mc-t-fast);
   }
   .stage :global(.leaflet-control-zoom a:last-child) { border-bottom: 0; }
-  .stage :global(.leaflet-control-zoom a:hover) { background: #26262b; color: var(--mc-ink); }
-  .stage :global(.leaflet-control-zoom a.leaflet-disabled) { background: var(--mc-raised); color: var(--mc-line3); }
+  .stage :global(.leaflet-control-zoom a:hover) { background: rgba(255, 255, 255, 0.1); color: var(--mc-ink); }
+  .stage :global(.leaflet-control-zoom a.leaflet-disabled) { background: transparent; color: var(--mc-line3); }
   @media (pointer: coarse) {
     .stage :global(.leaflet-control-zoom a) { width: 44px; height: 44px; line-height: 44px; }
   }
 
   /* ————————————————————————————————————————————— popups — raised card — */
   .stage :global(.ob-pop .leaflet-popup-content-wrapper) {
-    background: var(--mc-raised);
+    background: var(--mc-glass-strong);
     color: var(--mc-ink);
-    border: 1px solid var(--mc-line2);
+    border: 1px solid var(--mc-glass-line);
     border-radius: var(--mc-r);
-    box-shadow: var(--mc-sh-2);
+    box-shadow: var(--mc-sh-2), var(--mc-lit);
+    -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
     padding: 0;
     overflow: hidden;
   }
@@ -843,8 +847,8 @@
   }
   .stage :global(.ob-pop .leaflet-popup-content p) { margin: 0; }
   .stage :global(.ob-pop .leaflet-popup-tip) {
-    background: var(--mc-raised);
-    border: 1px solid var(--mc-line2);
+    background: rgba(14, 14, 18, 0.92);
+    border: 1px solid var(--mc-glass-line);
     box-shadow: none;
   }
   .stage :global(.ob-pop .leaflet-popup-close-button) {

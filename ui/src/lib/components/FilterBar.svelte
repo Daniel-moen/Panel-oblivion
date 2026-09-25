@@ -57,7 +57,7 @@
     </label>
 
     {#if !rent}
-      <span class="tier"><Seg options={TIER} value={filters.tier} onchange={(v) => (filters.tier = v)} label="Tier" /></span>
+      <span class="tierseg"><Seg options={TIER} value={filters.tier} onchange={(v) => (filters.tier = v)} label="Tier" /></span>
     {/if}
 
     <span class="mg-select sort">
@@ -155,7 +155,7 @@
   .sole { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; font: 500 13px/1 var(--mc-font); color: var(--mc-ink2); cursor: pointer; }
   .sole input { width: 16px; height: 16px; margin: 0; }
 
-  .deal, .tier, .view { display: inline-flex; flex: none; max-width: 100%; }
+  .deal, .tierseg, .view { display: inline-flex; flex: none; max-width: 100%; }
 
   /* a phone: search on top, then the two small segs side by side, the tier
      seg full width, sort + filters on one row, the count last */
@@ -164,9 +164,9 @@
     .mg-search { flex-basis: 100%; max-width: none; order: 0; }
     .deal { order: 1; }
     .view { order: 2; margin-left: auto; }
-    .tier { order: 3; flex-basis: 100%; }
-    .tier :global(.seg) { display: flex; width: 100%; }
-    .tier :global(.seg > button) { flex: 1; }
+    .tierseg { order: 3; flex-basis: 100%; }
+    .tierseg :global(.seg) { display: flex; width: 100%; }
+    .tierseg :global(.seg > button) { flex: 1; }
     .sort { order: 4; flex: 1 1 auto; }
     .more { order: 5; }
     .count { flex-basis: 100%; margin-left: 0; order: 6; }

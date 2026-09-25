@@ -52,11 +52,11 @@
   .av:last-child { margin-right: 0; }
   .ini {
     width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
-    background: var(--mc-raised); border: 2px solid var(--mc-surface);
+    background: var(--mc-raised); border: 2px solid rgba(20, 20, 24, 0.9);
     font: 600 10.5px/1 var(--mc-font); color: var(--mc-ink2); letter-spacing: 0.02em;
   }
   .av.online .ini { color: var(--mc-ink); }
   .av.more .ini { color: var(--mc-ink3); }
-  .dot { position: absolute; right: -1px; bottom: -1px; box-shadow: 0 0 0 2px var(--mc-surface); }
+  .dot { position: absolute; right: -1px; bottom: -1px; box-shadow: 0 0 0 2px rgba(20, 20, 24, 0.9); }
   .strip :global(.chev) { color: var(--mc-ink3); flex: none; }
 </style>

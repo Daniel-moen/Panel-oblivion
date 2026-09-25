@@ -141,7 +141,7 @@
     font: 600 13px/1 var(--mc-font); letter-spacing: 0.02em; color: var(--mc-ink2);
   }
   .online .ini { color: var(--mc-ink); border-color: var(--mc-ok-line); }
-  .dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; box-shadow: 0 0 0 2px var(--mc-surface); }
+  .dot { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; box-shadow: 0 0 0 2px rgba(20, 20, 24, 0.9); }
 
   .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .nm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
