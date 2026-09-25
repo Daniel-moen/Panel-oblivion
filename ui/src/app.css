@@ -1,14 +1,10 @@
 /* ————————————————————————— Oblivion · document basics ————————————————————
-   Almost everything visual now lives in `lib/glass.css` — the Studio Glass
-   vocabulary (`.mg-*` classes, `--mg-*` tokens), imported once by the root
-   layout. What is left here is what glass.css cannot own: the document
-   itself, and the handful of engine state marks that read as data rather
-   than as chrome.
+   Everything visual lives in `lib/mc.css` — the Mission Control vocabulary
+   (`.mg-*` classes, `--mc-*` / `--mg-*` tokens), imported once by the root
+   layout. What is left here is the document itself and the engine's state
+   marks, which read as DATA rather than chrome.
 
-   The app is ALWAYS dark. There is no `data-theme`, no light palette and no
-   toggle; the whole app floats over a photograph, and a light pane over a
-   photograph is unreadable.
-   ———————————————————————————————————————————————————————————————————————— */
+   The app is always dark. There is no `data-theme`, no light palette. */
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -16,122 +12,73 @@ html, body { height: 100%; }
 body {
   margin: 0;
   color-scheme: dark;
-  /* Deep graphite under the backdrop photo — if the image is slow, missing or
-     still decoding, the app never flashes white. */
   background: #111113;
-  background-image: radial-gradient(120% 90% at 50% 0%, #1b1b21 0%, #111113 45%, #0a0a0c 100%);
-  background-attachment: fixed;
   color: #f3f3f4;
-  font: 400 14px/1.55 'Inter', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
+  font: 400 14px/1.5 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
   /* A long unbroken token must never scroll the viewport sideways. `clip`
      (not `hidden`) keeps sticky positioning working. */
   overflow-x: clip;
 }
 
-/* Colour belongs to state, never to a link. */
 a { color: inherit; text-decoration: none; }
-
-button { font: inherit; color: inherit; cursor: pointer; }
+button { font: inherit; color: inherit; cursor: pointer; user-select: none; -webkit-user-select: none; }
 input, textarea, select { font: inherit; }
 
 ::selection { background: rgba(62, 207, 142, 0.3); }
 
-* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.16) transparent; }
-*::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 9999px; }
-*::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.24); }
-*::-webkit-scrollbar-track { background: transparent; }
-
-/* Legacy font aliases. A few sections still write `var(--font-ui)` inside a
-   `font:` shorthand; they are being restyled onto `--mg-font` section by
-   section, and these keep them legible until that lands. TODO(sections):
-   delete once no `--font-ui / --font-display / --font-mono` reference is
-   left in ui/src. */
-:root {
-  --font-ui: var(--mg-font);
-  --font-display: var(--mg-font);
-  --font-mono: var(--mg-mono);
-}
-
 /* ——————————————————————————————————————————————— engine state marks ————
-   These four are DATA, not chrome: they label a listing wherever it is shown
-   (card, row, drawer, map). Re-expressed in the glass tones — green = open,
-   amber = probably sole, red = sole / hot / a price cut, neutral otherwise —
-   and every one of them sits next to a word, never colour alone. */
+   These label a listing wherever it is shown (card, row, drawer, map):
+   green = open, amber = probably sole, red = sole / hot / a price cut,
+   neutral otherwise — and every one of them sits next to a word. */
 
-/* mandate verdict — soft tinted pill with a leading dot */
+/* mandate verdict — tinted pill with a leading dot */
 .mv {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  font: 600 11.5px/1.3 var(--mg-font); white-space: nowrap;
-  text-transform: capitalize;
-  padding: 3px 10px; border-radius: 999px;
-  color: var(--mvc, var(--mg-i2));
-  background: var(--mvbg, var(--mg-glass-soft));
-  border: 1px solid var(--mvln, var(--mg-line));
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 24px; padding: 0 9px; border-radius: 9999px;
+  font: 600 11.5px/1 var(--mc-font); white-space: nowrap; text-transform: capitalize;
+  color: var(--mvc, var(--mc-ink2));
+  background: var(--mvbg, var(--mc-raised));
+  border: 1px solid var(--mvln, var(--mc-line));
 }
-.mv::before {
-  content: ''; width: 6px; height: 6px; border-radius: 50%;
-  background: var(--mvc, var(--mg-i3)); flex: none;
-}
-.mv.open,
-.mv.probably_open {
-  --mvc: var(--mg-ok);
-  --mvbg: rgba(62, 207, 142, 0.12);
-  --mvln: rgba(62, 207, 142, 0.3);
-}
-.mv.probably_open { --mvbg: rgba(62, 207, 142, 0.08); }
-.mv.unknown { --mvc: var(--mg-i2); --mvbg: var(--mg-glass-soft); --mvln: var(--mg-line); }
-.mv.probably_sole {
-  --mvc: var(--mg-warn);
-  --mvbg: rgba(240, 180, 41, 0.13);
-  --mvln: rgba(240, 180, 41, 0.3);
-}
-.mv.sole {
-  --mvc: var(--mg-crit);
-  --mvbg: rgba(242, 109, 100, 0.13);
-  --mvln: rgba(242, 109, 100, 0.3);
-}
+.mv::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--mvc, var(--mc-ink3)); flex: none; }
+.mv.open, .mv.probably_open { --mvc: var(--mc-accent); --mvbg: var(--mc-ok-soft); --mvln: var(--mc-ok-line); }
+.mv.probably_open { --mvbg: rgba(62, 207, 142, 0.07); }
+.mv.unknown { --mvc: var(--mc-ink2); --mvbg: var(--mc-raised); --mvln: var(--mc-line); }
+.mv.probably_sole { --mvc: var(--mc-warn); --mvbg: var(--mc-warn-soft); --mvln: var(--mc-warn-line); }
+.mv.sole { --mvc: var(--mc-crit); --mvbg: var(--mc-crit-soft); --mvln: var(--mc-crit-line); }
 
 /* tier badge — hot is red because it is the one you drop everything for */
 .tier {
-  display: inline-flex; align-items: center;
-  font: 600 11px/1.3 var(--mg-font); letter-spacing: 0.01em;
-  text-transform: capitalize;
-  padding: 3px 9px; border-radius: 8px;
-  color: var(--mg-i2); background: var(--mg-glass-soft);
-  border: 1px solid var(--mg-line);
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px;
+  font: 600 11px/1 var(--mc-font); letter-spacing: 0.02em; text-transform: uppercase;
+  color: var(--mc-ink2); background: var(--mc-raised); border: 1px solid var(--mc-line);
 }
-.tier.hot  { color: var(--mg-crit); background: rgba(242, 109, 100, 0.14); border-color: rgba(242, 109, 100, 0.3); }
-.tier.warm { color: var(--mg-warn); background: rgba(240, 180, 41, 0.14); border-color: rgba(240, 180, 41, 0.3); }
-.tier.cold { color: var(--mg-i2); background: var(--mg-glass-soft); border-color: var(--mg-line); }
+.tier.hot  { color: var(--mc-crit); background: var(--mc-crit-soft); border-color: var(--mc-crit-line); }
+.tier.warm { color: var(--mc-warn); background: var(--mc-warn-soft); border-color: var(--mc-warn-line); }
+.tier.cold { color: var(--mc-ink2); }
 
-/* deal-signal badges — neutral glass chips; only `multi` (proof the mandate
-   is open) and `cut` (a price drop, the moment to call) earn a colour */
+/* deal-signal badges — neutral chips; only `multi` (proof the mandate is
+   open) and `cut` (a price drop, the moment to call) earn a colour */
 .sig {
-  display: inline-flex; align-items: center; gap: 4px;
-  font: 500 11.5px/1.3 var(--mg-font); white-space: nowrap;
-  padding: 3px 10px; border-radius: 999px;
-  color: var(--mg-i2); background: var(--mg-glass-soft);
-  border: 1px solid var(--mg-line);
+  display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 9999px;
+  font: 500 11.5px/1 var(--mc-font); white-space: nowrap;
+  color: var(--mc-ink2); background: var(--mc-raised); border: 1px solid var(--mc-line);
 }
-.sig.multi { color: var(--mg-ok); background: rgba(62, 207, 142, 0.12); border-color: rgba(62, 207, 142, 0.3); font-weight: 600; }
-.sig.cut   { color: var(--mg-crit); background: rgba(242, 109, 100, 0.13); border-color: rgba(242, 109, 100, 0.3); font-weight: 600; }
-.sig.uo, .sig.rel, .sig.dev, .sig.trk { color: var(--mg-i2); }
+.sig.multi { color: var(--mc-accent); background: var(--mc-ok-soft); border-color: var(--mc-ok-line); font-weight: 600; }
+.sig.cut   { color: var(--mc-crit); background: var(--mc-crit-soft); border-color: var(--mc-crit-line); font-weight: 600; }
 
 /* price — the number you read first, so it is the brightest ink on the card */
-.price {
-  font-weight: 600; letter-spacing: -0.015em;
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-  color: var(--mg-i);
-}
-.price .poa { color: var(--mg-i3); font-weight: 500; }
+.price { font-weight: 600; letter-spacing: -0.015em; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--mc-ink); }
+.price .poa { color: var(--mc-ink3); font-weight: 500; }
 
-/* the inline spinner the older sections use; `.mg-spin` is the glass one */
+/* the inline spinner the older sections use; `.mg-spin` is the new one */
 .spin {
   width: 13px; height: 13px; border-radius: 50%; display: inline-block; flex: none;
-  border: 2px solid rgba(255, 255, 255, 0.2); border-top-color: var(--mg-i);
+  border: 2px solid rgba(255, 255, 255, 0.18); border-top-color: var(--mc-ink);
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }

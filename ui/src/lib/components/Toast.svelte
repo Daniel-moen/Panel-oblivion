@@ -1,39 +1,40 @@
 <script>
   /* One line, bottom-centre, above the dock: what just happened.
 
-     Strong glass so it reads over a photograph, `pointer-events: none` so it
-     can never eat the tap that was meant for the dock underneath it, and a
-     red dot rather than a red slab when something failed — the message is
-     the message. It clears itself (see toast() in $lib/state.svelte.js). */
+     A raised plane with a lit hairline, `pointer-events: none` so it can
+     never eat the tap that was meant for the dock underneath it, and a red
+     dot rather than a red slab when something failed — the message is the
+     message. It clears itself (see toast() in $lib/state.svelte.js). */
   import { app } from '$lib/state.svelte.js';
+  import { rise, fade } from '$lib/motion.js';
 </script>
 
 {#if app.toast}
-  <div class="toast mg-glass-strong mg-pill" class:error={app.toast.kind === 'error'} role="status">
-    <span class="mg-dot {app.toast.kind === 'error' ? 'crit' : 'ok'} sm"></span>
-    <span class="msg">{app.toast.msg}</span>
+  <div class="host">
+    <div class="toast" class:error={app.toast.kind === 'error'} role="status"
+         in:rise={{ y: 12, duration: 280 }} out:fade={{ duration: 160 }}>
+      <span class="mg-dot {app.toast.kind === 'error' ? 'crit' : 'ok'} sm"></span>
+      <span class="msg">{app.toast.msg}</span>
+    </div>
   </div>
 {/if}
 
 <style>
+  .host {
+    position: fixed; left: 0; right: 0; bottom: calc(var(--sab) + var(--mc-dock-h) + 16px);
+    z-index: 95; pointer-events: none; display: flex; justify-content: center; padding: 0 16px;
+  }
   .toast {
-    position: fixed; left: 50%; bottom: calc(var(--mg-sab, 0px) + 88px);
-    transform: translateX(-50%);
-    z-index: 80; pointer-events: none;
-    display: flex; align-items: center; gap: 9px;
+    display: flex; align-items: center; gap: 10px;
     max-width: min(560px, calc(100vw - 32px));
-    padding: 10px 18px;
-    font: 500 13px/1.4 var(--mg-font); color: var(--mg-i);
-    animation: toast-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    padding: 11px 16px; border-radius: 12px;
+    background: var(--mc-raised); border: 1px solid var(--mc-line2);
+    box-shadow: var(--mc-sh-2);
+    font: 500 13.5px/1.4 var(--mc-font); color: var(--mc-ink);
   }
-  .msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .toast.error { border-color: rgba(242, 109, 100, 0.35); }
-
-  @keyframes toast-in {
-    from { opacity: 0; transform: translate(-50%, 8px); }
-    to { opacity: 1; transform: translate(-50%, 0); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .toast { animation: none; }
+  .msg { min-width: 0; overflow-wrap: anywhere; }
+  .toast.error { border-color: var(--mc-crit-line); }
+  @media (min-width: 1024px) {
+    .host { left: var(--mc-rail-w); bottom: calc(var(--sab) + 24px); }
   }
 </style>

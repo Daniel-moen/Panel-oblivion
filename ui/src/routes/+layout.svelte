@@ -1,37 +1,34 @@
 <script>
-  /* The scene — one shell for the whole app.
+  /* The shell — one for the whole app.
 
-     Every route lands inside the same three pieces of furniture: the
-     photograph behind everything, the TopBar above it, the Dock over the
-     bottom edge. There is no second navigation anywhere: no sidebar, no
-     sticky header, no back links. A page draws its own header row INSIDE the
-     pane and nothing outside it.
+     Every route lands inside the same furniture: the StatusStrip along the
+     top, and either the Dock over the bottom edge (a phone, an iPad held
+     upright) or the Rail down the left (an iPad on its side, a desktop).
+     The switch is a CSS breakpoint at 1024px, the panel's own, so the two
+     never fight over the same pixels.
 
-     Two exceptions, both structural:
+     The page scrolls the document (not an inner pane): sticky table heads,
+     iOS's rubber-banding and the home-screen app's status bar all behave
+     when the body is the scroller. Two exceptions:
 
-       /      Home is the resting state. It gets no pane — the greeting, the
-              one sentence and the attention cards float straight on the
-              photograph.
-       /map   Leaflet needs the whole rectangle, so its pane is edge to edge,
-              full height, zero padding and no glass (the tiles cover it
-              anyway, and a viewport-sized blur is an expensive way to draw
-              nothing).
+       /map   Leaflet needs the whole rectangle, so the scene is locked to
+              the viewport and the page fills what the strip leaves.
 
      Page transitions fade on the SECTION, not the exact path: sub-navigation
      inside Media or Leads must not remount their segmented rows, or the
      highlight would jump instead of gliding. Those layouts fade their own
      children. */
   import '../app.css';
-  import '$lib/glass.css';
+  import '$lib/mc.css';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
-  import { fade } from 'svelte/transition';
+  import { fade } from '$lib/motion.js';
   import { app, startPolling, stopPolling } from '$lib/state.svelte.js';
   import { startChat } from '$lib/chat.svelte.js';
   import { loadMe } from '$lib/me.svelte.js';
-  import Backdrop from '$lib/components/glass/Backdrop.svelte';
-  import TopBar from '$lib/components/glass/TopBar.svelte';
+  import StatusStrip from '$lib/components/glass/StatusStrip.svelte';
   import Dock from '$lib/components/glass/Dock.svelte';
+  import Rail from '$lib/components/glass/Rail.svelte';
   import RunPanel from '$lib/components/RunPanel.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import ChatWidget from '$lib/components/ChatWidget.svelte';
@@ -40,13 +37,12 @@
 
   const path = $derived(page.url.pathname);
   const section = $derived('/' + (path.split('/')[1] || ''));
-  const isHome = $derived(path === '/');
   const isMap = $derived(path.startsWith('/map'));
 
   onMount(() => {
-    /* Who is signed in, once for the whole app: the Dock and the TopBar read
-       it to decide which buttons are worth drawing. Fire and forget — the
-       chrome renders complete until the answer lands (me.svelte.js). */
+    /* Who is signed in, once for the whole app: the Dock, the Rail and the
+       strip read it to decide which buttons are worth drawing. Fire and
+       forget — the chrome renders complete until the answer lands. */
     loadMe();
     startPolling();
     const stopChat = startChat();
@@ -56,8 +52,8 @@
     };
   });
 
-  /* One Escape handler for the app's own overlays; Sheet and ChatWidget own
-     theirs, and stop the event before it reaches here. */
+  /* One Escape handler for the app's own overlays; Sheet, Drawer and
+     ChatWidget own theirs, and stop the event before it reaches here. */
   function onKey(e) {
     if (e.key === 'Escape') {
       if (app.selectedKey) app.selectedKey = null;
@@ -68,31 +64,28 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="mg-scene" class:full={isMap}>
-  <Backdrop />
-  <TopBar />
+<div class="mg-scene" class:map={isMap}>
+  <Rail />
 
-  {#if isHome}
-    <main class="open">
-      {#key section}
-        <div class="fill" in:fade={{ duration: 180, delay: 60 }}>{@render children()}</div>
-      {/key}
-    </main>
-  {:else if isMap}
-    <!-- edge to edge: the map is the page -->
-    <main class="edge">{@render children()}</main>
-  {:else}
-    <main class="pane mg-glass mg-page">
-      {#key section}
-        <div in:fade={{ duration: 180, delay: 60 }}>{@render children()}</div>
-      {/key}
-    </main>
-  {/if}
+  <div class="col">
+    <StatusStrip />
+
+    {#if isMap}
+      <!-- edge to edge: the map is the page -->
+      <main class="edge">{@render children()}</main>
+    {:else}
+      <main class="mg-page">
+        {#key section}
+          <div class="view" in:fade={{ duration: 180, delay: 40 }}>{@render children()}</div>
+        {/key}
+      </main>
+    {/if}
+  </div>
 
   <Dock />
 
-  <!-- Global, on every route: the crawl setup slide-over, the one-line toast
-       and the team-chat panel (its launcher lives in the TopBar). -->
+  <!-- Global, on every route: the crawl setup sheet, the one-line toast and
+       the team-chat panel (its launcher lives in the strip). -->
   <RunPanel />
   <Toast />
   <ChatWidget />
@@ -100,21 +93,20 @@
 
 <style>
   .mg-scene { display: flex; flex-direction: column; }
-  /* the map route does not scroll: the pane owns the viewport */
-  .mg-scene.full { height: 100vh; height: 100svh; overflow: hidden; }
+  .col { flex: 1; min-height: 0; display: flex; flex-direction: column; min-width: 0; }
+  main { position: relative; z-index: 1; }
+  .view { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+  main.mg-page { flex: 1; display: flex; flex-direction: column; }
 
-  main { position: relative; z-index: 10; }
+  /* the map route does not scroll: the page owns the viewport */
+  .mg-scene.map { height: 100vh; height: 100dvh; overflow: hidden; }
+  .mg-scene.map .col { height: 100%; }
+  .edge { flex: 1; min-height: 0; width: 100%; position: relative; overflow: hidden; }
 
-  .open, .fill { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-
-  .pane {
-    width: calc(100% - clamp(32px, 6vw, 64px));
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-
-  .edge {
-    flex: 1; min-height: 0; width: 100%;
-    position: relative; overflow: hidden;
+  /* from the rail breakpoint the column clears the rail and the dock's
+     bottom clearance is no longer needed */
+  @media (min-width: 1024px) {
+    .col { padding-left: var(--mc-rail-w); }
+    main.mg-page { padding-bottom: calc(var(--sab) + 32px); }
   }
 </style>

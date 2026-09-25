@@ -1,11 +1,14 @@
 <script>
   /* One sheet, two shapes.
 
-     From 640px up it is a centred dialog of strong glass; below that it rises
-     from the bottom edge with a grab handle you can throw downwards, because
-     that is where a thumb is. Both sit on a scrim that BLURS the scene rather
-     than only dimming it — otherwise Home's huge headline stays legible
-     straight through the dialog's glass.
+     From 640px up it is a centred dialog on a raised plane; below that it
+     rises from the bottom edge with a grab handle you can throw downwards,
+     because that is where a thumb is. Both sit on a dimming scrim.
+
+     Motion: the scrim fades (200ms), the dialog pops (260ms, settle curve)
+     and the phone sheet slides up its full height (320ms, settle curve) —
+     transform and opacity only, and both directions animate, so closing is
+     as smooth as opening. Reduced motion collapses all of it to a fade.
 
      It renders through a portal: the node is moved to the end of <body> on
      mount, so no ancestor's `overflow`, `transform` or stacking context can
@@ -27,6 +30,7 @@
      that opens a Sheet has nothing to remember. */
   import { tick } from 'svelte';
   import Icon from './Icon.svelte';
+  import { fade, pop, slide } from '$lib/motion.js';
 
   let { open = false, title = '', size = 'md', onclose, children, footer } = $props();
 
@@ -52,8 +56,7 @@
     return () => mq.removeEventListener('change', sync);
   });
 
-  /* Open: lock the page behind, take focus, and keep Tab inside — a dialog
-     you can tab out of is a dialog you can lose. */
+  /* Open: lock the page behind, take focus, and keep Tab inside. */
   $effect(() => {
     if (!open) return;
     drag = 0;
@@ -61,7 +64,7 @@
     document.body.style.overflow = 'hidden';
     tick().then(() => {
       const first = box?.querySelector('[autofocus], input, textarea, select, button, a[href]');
-      (first || box)?.focus?.();
+      (first || box)?.focus?.({ preventScroll: true });
     });
 
     const onKey = (e) => {
@@ -87,8 +90,7 @@
     };
   });
 
-  /* ——— the phone throw: only the grab handle starts it, or every scroll
-         inside the sheet would try to fling it off the screen ——— */
+  /* ——— the phone throw: only the grab handle starts it ——— */
   let from = 0;
   let held = $state(null);
 
@@ -112,61 +114,64 @@
 
 {#if open}
   <div class="mg-portal" use:portal>
-    <div class="mg-scrim" class:bottom={!wide} onclick={() => onclose?.()} role="presentation">
-      <div class="box mg-glass-strong mg-dialog" class:phone={!wide}
-           bind:this={box} role="dialog" aria-modal="true" aria-label={title || 'Dialog'}
-           tabindex="-1"
-           style:max-width={wide ? max + 'px' : null}
-           style:transform={drag ? `translateY(${drag}px)` : null}
-           style:transition={held == null ? 'transform 0.24s cubic-bezier(0.2,0.8,0.2,1)' : 'none'}
-           onclick={(e) => e.stopPropagation()}>
-        {#if !wide}
+    <div class="mg-scrim" class:bottom={!wide} onclick={() => onclose?.()} role="presentation"
+         transition:fade={{ duration: 200 }}></div>
+    <div class="host" class:bottom={!wide} role="presentation">
+      {#if wide}
+        <div class="box mg-dialog" bind:this={box} role="dialog" aria-modal="true"
+             aria-label={title || 'Dialog'} tabindex="-1" style:max-width="{max}px"
+             transition:pop={{ duration: 260 }}>
+          {#if title}
+            <div class="head">
+              <h2>{title}</h2>
+              <button type="button" class="mg-btn secondary icon sm" onclick={() => onclose?.()}
+                      aria-label="Close" title="Close (Esc)"><Icon name="close" size={15} /></button>
+            </div>
+          {/if}
+          <div class="body">{@render children?.()}</div>
+          {#if footer}<div class="foot">{@render footer()}</div>{/if}
+        </div>
+      {:else}
+        <div class="box phone mg-dialog" bind:this={box} role="dialog" aria-modal="true"
+             aria-label={title || 'Dialog'} tabindex="-1"
+             style:transform={drag ? `translate3d(0,${drag}px,0)` : null}
+             style:transition={held == null ? 'transform 0.28s var(--mc-ease-out)' : 'none'}
+             transition:slide={{ y: 560, duration: 320, opacity: 1 }}>
           <div class="grab" onpointerdown={grabStart} onpointermove={grabMove}
-               onpointerup={grabEnd} onpointercancel={grabEnd} role="presentation">
-            <i></i>
-          </div>
-        {/if}
-
-        {#if title}
-          <div class="head">
-            <h2>{title}</h2>
-            <button type="button" class="mg-btn secondary icon sm" onclick={() => onclose?.()}
-                    aria-label="Close" title="Close">
-              <Icon name="close" size={15} />
-            </button>
-          </div>
-        {/if}
-
-        <div class="body">{@render children?.()}</div>
-
-        {#if footer}<div class="foot">{@render footer()}</div>{/if}
-      </div>
+               onpointerup={grabEnd} onpointercancel={grabEnd} role="presentation"><i></i></div>
+          {#if title}
+            <div class="head">
+              <h2>{title}</h2>
+              <button type="button" class="mg-btn secondary icon sm" onclick={() => onclose?.()}
+                      aria-label="Close" title="Close"><Icon name="close" size={15} /></button>
+            </div>
+          {/if}
+          <div class="body">{@render children?.()}</div>
+          {#if footer}<div class="foot">{@render footer()}</div>{/if}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
 
 <style>
-  /* .mg-scrim / .mg-dialog come from glass.css; what is here is the two
-     shapes and the way in. */
-  .mg-scrim { align-items: center; padding: 24px; animation: veil 0.2s ease both; }
-  .mg-scrim.bottom { align-items: flex-end; padding: 0; }
-  @keyframes veil { from { opacity: 0; } to { opacity: 1; } }
+  /* .mg-scrim / .mg-dialog come from mc.css; what is here is the two shapes. */
+  .host {
+    position: fixed; inset: 0; z-index: 91; display: flex; justify-content: center; align-items: center;
+    padding: 24px; pointer-events: none;
+  }
+  .host.bottom { align-items: flex-end; padding: 0; }
+  .host > .box { pointer-events: auto; }
 
   .box {
-    width: 100%; max-height: 92dvh; outline: none;
-    animation: rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    width: 100%; max-height: min(92dvh, calc(100dvh - 48px)); outline: none;
+    background: var(--mc-raised); border: 1px solid var(--mc-line2);
+    border-radius: var(--mc-r-lg); box-shadow: var(--mc-sh-3);
+    will-change: transform, opacity;
   }
-  @keyframes rise { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: none; } }
-
   .box.phone {
     max-width: none; max-height: 92dvh;
-    border-radius: var(--mg-r) var(--mg-r) 0 0; border-bottom: 0;
-    padding-bottom: var(--mg-sab, 0px);
-    animation: up 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  }
-  @keyframes up { from { transform: translateY(100%); } to { transform: none; } }
-
-  @media (prefers-reduced-motion: reduce) {
-    .mg-scrim, .box, .box.phone { animation: none; }
+    border-radius: var(--mc-r-lg) var(--mc-r-lg) 0 0; border-bottom: 0;
+    padding-bottom: var(--sab);
   }
 </style>
