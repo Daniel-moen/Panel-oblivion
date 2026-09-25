@@ -12,6 +12,8 @@
            pickedRows } from '$lib/finder.svelte.js';
   import ProspectCard from './ProspectCard.svelte';
   import { fmtM, fmtR } from '$lib/format.js';
+  import Icon from './glass/Icon.svelte';
+  import { slide } from '$lib/motion.js';
 
   const SALE_EXAMPLES = [
     '2 bedroom in a quiet area under R3m',
@@ -78,25 +80,27 @@
   function fitClass(f) { return f >= 85 ? 'hi' : f >= 60 ? 'mid' : 'lo'; }
 </script>
 
-<section class="finder panel" class:answered={!!res}>
+<section class="finder mg-panel" class:answered={!!res}>
   <form class="ask" onsubmit={submit}>
-    <span class="spark" aria-hidden="true">✦</span>
-    <input type="text" class="brief" {placeholder}
-           bind:value={finder.brief} disabled={finder.busy}
-           aria-label="What are you looking for?" />
-    <button type="submit" class="btn primary" disabled={finder.busy || finder.brief.trim().length < 3}>
-      {#if finder.busy}<span class="spin light"></span>&nbsp; Thinking…{:else}Find{/if}
+    <label class="mg-search">
+      <span class="ic spark"><Icon name="sparkles" size={16} /></span>
+      <input type="text" class="mg-input brief" {placeholder}
+             bind:value={finder.brief} disabled={finder.busy}
+             aria-label="What are you looking for?" />
+    </label>
+    <button type="submit" class="mg-btn primary" disabled={finder.busy || finder.brief.trim().length < 3}>
+      {#if finder.busy}<span class="mg-spin"></span> Thinking…{:else}Find{/if}
     </button>
     {#if res}
-      <button type="button" class="btn" onclick={clearFinder}>Clear</button>
+      <button type="button" class="mg-btn secondary" onclick={clearFinder}>Clear</button>
     {/if}
   </form>
 
   {#if !res && !finder.busy}
-    <div class="examples">
-      <span>Try:</span>
+    <div class="examples mg-noscroll">
+      <span class="try">Try</span>
       {#each examples as ex (ex)}
-        <button type="button" class="ex" onclick={() => runFinder(ex)}>{ex}</button>
+        <button type="button" class="mg-chip" onclick={() => runFinder(ex)}>{ex}</button>
       {/each}
     </div>
   {/if}
@@ -107,24 +111,24 @@
   {/if}
 
   {#if res && !finder.busy}
-    <div class="answer">
+    <div class="answer" in:slide={{ y: 8, duration: 240 }}>
       <p class="summary">{res.summary}</p>
 
       {#if critChips.length}
         <div class="crit">
-          <span class="lbl">Understood as</span>
-          {#each critChips as c (c)}<span class="chip">{c}</span>{/each}
-          {#if res.relaxed}<span class="chip warn" title="Too few strict matches — suburb and bedroom limits were loosened">loosened</span>{/if}
+          <span class="hud">Understood as</span>
+          {#each critChips as c (c)}<span class="mg-chip">{c}</span>{/each}
+          {#if res.relaxed}<span class="mg-chip warn" title="Too few strict matches — suburb and bedroom limits were loosened">loosened</span>{/if}
         </div>
       {/if}
 
       {#if res.areas.length}
         <div class="areas">
-          <span class="lbl">Areas that fit</span>
+          <span class="hud">Areas that fit</span>
           <ul>
             {#each res.areas as a (a.suburb)}
               <li>
-                <button type="button" class="area" class:on={filters.suburb === a.suburb}
+                <button type="button" class="mg-chip ok area" class:on={filters.suburb === a.suburb}
                         onclick={() => pickArea(a.suburb)} title="Filter the list to {a.suburb}">
                   {a.suburb}
                 </button>
@@ -136,14 +140,14 @@
       {/if}
 
       {#if picks.length}
-        <div class="lbl picks-lbl">
+        <div class="hud picks-lbl">
           Best fits · {picks.length}
           <span class="src">{res.ai ? 'ranked by AI' : 'keyword match — no AI credentials set'}</span>
         </div>
         <div class="grid">
-          {#each picks as { pick, r } (pick.listing_key)}
+          {#each picks as { pick, r }, i (pick.listing_key)}
             <div class="pick">
-              <ProspectCard {r} />
+              <ProspectCard {r} {i} />
               <div class="reason">
                 <b class="fit {fitClass(pick.fit)}">{pick.fit}</b>
                 <span>{pick.why}</span>
@@ -167,53 +171,42 @@
 </section>
 
 <style>
-  .finder { margin-top: 1.2rem; padding: 0.9rem 1rem; }
-  .finder.answered { border-color: var(--accent-line); }
+  .finder { margin-bottom: 14px; padding: 12px 14px; }
+  .finder.answered { border-color: var(--mc-ok-line); }
 
-  .ask { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-  .spark { color: var(--accent); font-size: 1.05rem; }
-  .brief { flex: 1 1 320px; font-size: 0.92rem; padding: 0.55rem 0.8rem; }
-  .spin.light { border-top-color: #fff; border-color: rgba(255,255,255,0.35); border-top-color: #fff; }
+  .ask { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ask .mg-search { flex: 1 1 260px; }
+  .spark { color: var(--mc-accent); }
 
-  .examples { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
-              margin-top: 0.6rem; font-size: 0.76rem; color: var(--ink-3); }
-  .ex { background: var(--bg-3); border: 1px solid var(--line); color: var(--ink-2);
-        border-radius: 999px; padding: 0.2rem 0.65rem; font: 500 0.75rem/1.4 var(--font-ui); }
-  .ex:hover { color: var(--accent-2); border-color: var(--accent-line); background: var(--accent-soft); }
+  .examples { display: flex; align-items: center; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px; }
+  .try { flex: none; font: 500 12px/1 var(--mc-font); color: var(--mc-ink3); margin-right: 2px; }
+  .examples .mg-chip { height: 28px; }
 
-  .working { margin: 0.7rem 0 0; font-size: 0.82rem; color: var(--ink-2); }
+  .working { margin: 10px 0 0; font: 400 13px/1.5 var(--mc-font); color: var(--mc-ink2); }
 
-  .answer { margin-top: 0.9rem; display: flex; flex-direction: column; gap: 0.8rem; }
-  .summary { margin: 0; font-size: 0.9rem; line-height: 1.5; color: var(--ink); }
+  .answer { margin-top: 14px; display: flex; flex-direction: column; gap: 14px; }
+  .summary { margin: 0; font: 400 14px/1.55 var(--mc-font); color: var(--mc-ink); }
 
-  .lbl { font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
-         letter-spacing: 0.04em; color: var(--ink-3); }
-  .crit { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
-  .crit .chip { text-transform: none; }
-  .chip.warn { background: var(--warm-soft); color: var(--warm-ink); }
+  .crit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .crit .hud { margin-right: 4px; }
+  .crit .mg-chip { height: 26px; text-transform: none; }
 
-  .areas ul { list-style: none; margin: 0.35rem 0 0; padding: 0;
-              display: flex; flex-direction: column; gap: 0.3rem; }
-  .areas li { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap;
-              font-size: 0.83rem; }
-  .area { background: var(--accent-soft); color: var(--accent-2); border: 1px solid var(--accent-line);
-          border-radius: 999px; padding: 0.18rem 0.7rem; font: 600 0.78rem/1.4 var(--font-ui);
-          white-space: nowrap; }
-  .area:hover, .area.on { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .why { color: var(--ink-2); flex: 1 1 280px; }
+  .areas ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .areas li { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+  .area { height: 28px; font-weight: 600; }
+  .area:hover, .area.on { background: var(--mc-accent); color: var(--mc-accent-ink); border-color: var(--mc-accent); }
+  .why { color: var(--mc-ink2); flex: 1 1 280px; font-size: 13px; line-height: 1.5; }
 
-  .picks-lbl { display: flex; align-items: baseline; gap: 0.6rem; }
+  .picks-lbl { display: flex; align-items: baseline; gap: 8px; }
   .src { font-weight: 500; text-transform: none; letter-spacing: 0; }
 
-  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); }
-  .pick { display: flex; flex-direction: column; gap: 0.45rem; }
-  .reason { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.8rem;
-            line-height: 1.45; color: var(--ink-2); padding: 0 0.15rem; }
-  .fit { flex: none; min-width: 2rem; text-align: center; border-radius: var(--r-sm);
-         padding: 0.05rem 0.35rem; font-variant-numeric: tabular-nums; font-size: 0.76rem; }
-  .fit.hi { background: var(--open-soft); color: var(--open); }
-  .fit.mid { background: var(--warm-soft); color: var(--warm-ink); }
-  .fit.lo { background: var(--cold-soft); color: var(--cold-ink); }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
+  .pick { display: flex; flex-direction: column; gap: 8px; }
+  .reason { display: flex; align-items: flex-start; gap: 8px; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink2); padding: 0 2px; }
+  .fit { flex: none; min-width: 34px; text-align: center; border-radius: 6px; padding: 2px 6px; font: 600 12px/1.4 var(--mc-mono); }
+  .fit.hi { background: var(--mc-ok-soft); color: var(--mc-accent); }
+  .fit.mid { background: var(--mc-warn-soft); color: var(--mc-warn); }
+  .fit.lo { background: var(--mc-raised); color: var(--mc-ink2); }
 
-  .none { margin: 0; font-size: 0.85rem; color: var(--ink-2); }
+  .none { margin: 0; font: 400 13px/1.55 var(--mc-font); color: var(--mc-ink2); }
 </style>

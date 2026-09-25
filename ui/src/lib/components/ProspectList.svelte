@@ -9,103 +9,87 @@
   /* The rent book carries none of the scored columns, so the last three
      become what a letting states: when it is free, and how it comes. */
   const rent = $derived(app.dealType === 'rent');
+  const pick = (r) => (app.selectedKey = r.listing_key);
 </script>
 
-<div class="list panel">
-  <div class="row head" class:rentcols={rent}>
-    <span></span><span>Property</span><span class="r">{rent ? 'Rent' : 'Price'}</span>
-    <span class="r">Days</span>
-    {#if rent}
-      <span>Available</span><span class="r">Furnished</span>
-    {:else}
-      <span>Mandate</span>
-      <span class="r" title="luxury fit · open-mandate confidence · marketing weakness">L · O · W</span>
-      <span class="r">Score</span>
-    {/if}
-  </div>
-  {#each rows as r (r.listing_key)}
-    <div class="row item" class:rentcols={rent} class:sel={r.listing_key === app.selectedKey}
-         onclick={() => (app.selectedKey = r.listing_key)}
-         onkeydown={(e) => e.key === 'Enter' && (app.selectedKey = r.listing_key)}
-         role="button" tabindex="0">
-      <div class="thumb"><Photo {r} /></div>
-      <div class="main">
-        <span class="title">{r.title || r.source_id}</span>
-        <span class="meta">
-          {r.suburb || ''}{r.bedrooms ? ` · ${r.bedrooms} bed` : ''}{addrOf(r) ? ` · ${addrOf(r)}` : ''}
-          {#if !rent && r.erf_number}&nbsp;· <b class="erf">erf {r.erf_number}</b>{/if}
-        </span>
-        <span class="ag">{(r.agencies || []).join(' · ') || '—'}</span>
-      </div>
-      <span class="r price">{priceShort(r)}</span>
-      <span class="r dom">{r.days_on_market != null ? r.days_on_market + 'd' : '—'}</span>
-      {#if rent}
-        <span class="avail">{r.available_from || '—'}</span>
-        <span class="r furn">{furnishedTxt(r.furnished) || '—'}</span>
-      {:else}
-        <span class="mand"><Signals {r} max={2} /></span>
-        <span class="r low">{r.prospect_score == null ? '—'
-          : `${r.luxury_fit} · ${r.open_mandate_confidence} · ${r.marketing_weakness}`}</span>
-        <span class="r score" class:wait={r.prospect_score == null}>{r.prospect_score ?? '…'}</span>
-      {/if}
-    </div>
-  {/each}
+<div class="mg-panel wrap">
+  <table class="mg-table list" class:rentcols={rent}>
+    <thead>
+      <tr>
+        <th class="th-ph"></th>
+        <th>Property</th>
+        <th class="r">{rent ? 'Rent' : 'Price'}</th>
+        <th class="r c-dom">Days</th>
+        {#if rent}
+          <th class="c-avail">Available</th>
+          <th class="r c-furn">Furnished</th>
+        {:else}
+          <th class="c-mand">Mandate</th>
+          <th class="r c-low" title="luxury fit · open-mandate confidence · marketing weakness">L · O · W</th>
+          <th class="r">Score</th>
+        {/if}
+      </tr>
+    </thead>
+    <tbody>
+      {#each rows as r (r.listing_key)}
+        <tr class="item" class:sel={r.listing_key === app.selectedKey} data-prospect={r.listing_key}
+            onclick={() => pick(r)} onkeydown={(e) => e.key === 'Enter' && pick(r)} role="button" tabindex="0">
+          <td class="td-ph"><div class="thumb"><Photo {r} /></div></td>
+          <td class="main">
+            <span class="title">{r.title || r.source_id}</span>
+            <span class="meta">
+              {r.suburb || ''}{r.bedrooms ? ` · ${r.bedrooms} bed` : ''}{addrOf(r) ? ` · ${addrOf(r)}` : ''}
+              {#if !rent && r.erf_number}&nbsp;· <b class="erf">erf {r.erf_number}</b>{/if}
+            </span>
+            <span class="ag">{(r.agencies || []).join(' · ') || '—'}</span>
+          </td>
+          <td class="r price">{priceShort(r)}</td>
+          <td class="r dom mg-mono c-dom">{r.days_on_market != null ? r.days_on_market + 'd' : '—'}</td>
+          {#if rent}
+            <td class="c-avail">{r.available_from || '—'}</td>
+            <td class="r c-furn">{furnishedTxt(r.furnished) || '—'}</td>
+          {:else}
+            <td class="c-mand"><span class="mand"><Signals {r} max={2} /></span></td>
+            <td class="r low mg-mono c-low">{r.prospect_score == null ? '—'
+              : `${r.luxury_fit} · ${r.open_mandate_confidence} · ${r.marketing_weakness}`}</td>
+            <td class="r score mg-mono" class:wait={r.prospect_score == null}>{r.prospect_score ?? '…'}</td>
+          {/if}
+        </tr>
+      {/each}
+    </tbody>
+  </table>
 </div>
 
 <style>
-  .list { overflow: hidden; }
-  .row {
-    display: grid; align-items: center; gap: 0.9rem;
-    grid-template-columns: 72px minmax(220px, 1fr) 90px 52px minmax(150px, 0.6fr) 92px 52px;
-    padding: 0.6rem 1rem;
-    border-bottom: 1px solid var(--line);
-  }
-  .row:last-child { border-bottom: none; }
+  .wrap { overflow: auto; -webkit-overflow-scrolling: touch; }
+  .list { min-width: 0; }
+  /* the sticky head clears the sticky strip above the page */
+  .list th { top: 0; }
 
-  .head {
-    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em;
-    text-transform: uppercase; color: var(--ink-3);
-    background: var(--bg-3); padding: 0.5rem 1rem;
-  }
-
-  .item { cursor: pointer; transition: background 0.15s ease; }
-  .item:hover { background: var(--hover); }
-  .item.sel { background: var(--accent-soft); }
-  .item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-
-  .thumb { width: 72px; height: 54px; overflow: hidden;
-           border-radius: var(--r-sm); background: var(--bg-3); }
-  .thumb :global(img) { transition: transform 0.3s ease; }
+  .th-ph, .td-ph { width: 72px; padding-right: 0; }
+  .thumb { width: 64px; height: 48px; overflow: hidden; border-radius: 8px; background: var(--mc-inset); }
+  .thumb :global(img) { transition: transform 0.3s var(--mc-ease); }
   .item:hover .thumb :global(img) { transform: scale(1.05); }
 
-  .main { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; }
-  .title { font-size: 0.84rem; font-weight: 500; line-height: 1.35; color: var(--ink);
-           display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
-           overflow: hidden; }
-  .meta { font-size: 0.74rem; color: var(--ink-3);
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .erf { font-weight: 600; color: var(--accent-2); }
-  .ag { font-size: 0.72rem; color: var(--ink-3);
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item { cursor: pointer; }
+  .item:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: -2px; }
 
-  .r { text-align: right; }
-  .price { font-size: 0.92rem; }
-  .dom { font-size: 0.78rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-  .mand { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; }
-  .low { font-size: 0.76rem; color: var(--ink-2);
-         font-variant-numeric: tabular-nums; white-space: nowrap; }
-  /* rent: one column fewer, and a wider price cell — R45 000/month does not
-     compress to R28.5m the way an asking price does */
-  .rentcols { grid-template-columns: 72px minmax(220px, 1fr) 140px 52px minmax(120px, 0.6fr) 100px; }
-  .avail, .furn { font-size: 0.78rem; color: var(--ink-2);
-                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .score { font-size: 1.05rem; font-weight: 700; color: var(--ink);
-           font-variant-numeric: tabular-nums; }
-  .score.wait { color: var(--accent); font-size: 0.9rem; }
+  .main { min-width: 200px; }
+  .main > span { display: block; }
+  .title { font: 500 13.5px/1.35 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46ch; }
+  .meta { margin-top: 2px; font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 52ch; }
+  .erf { font-weight: 600; color: var(--mc-accent); }
+  .ag { margin-top: 1px; font: 400 11.5px/1.4 var(--mc-font); color: var(--mc-ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 52ch; }
+
+  .price { font-size: 14px; white-space: nowrap; }
+  .dom { font-size: 12.5px; }
+  .mand { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .low { font-size: 12px; white-space: nowrap; }
+  .score { font-size: 15px; font-weight: 700; color: var(--mc-ink); }
+  .score.wait { color: var(--mc-accent); font-size: 13px; }
+  .c-avail, .c-furn { white-space: nowrap; font-size: 13px; }
 
   @media (max-width: 1000px) {
-    .row, .rentcols { grid-template-columns: 72px minmax(180px, 1fr) 110px 52px; }
-    .dom, .mand, .low, .avail, .furn { display: none; }
-    .head span:nth-child(4), .head span:nth-child(5), .head span:nth-child(6) { display: none; }
+    .c-dom, .c-mand, .c-low, .c-avail, .c-furn { display: none; }
   }
 </style>

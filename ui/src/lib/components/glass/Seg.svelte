@@ -38,8 +38,8 @@
   });
 </script>
 
-<div class="seg mg-glass-soft mg-pill" bind:this={wrap} role="group" aria-label={label}>
-  <span class="pill mg-pill" aria-hidden="true" class:ready={pill.ready}
+<div class="seg" bind:this={wrap} role="group" aria-label={label}>
+  <span class="pill" aria-hidden="true" class:ready={pill.ready}
         style:transform="translateX({pill.x}px)" style:width="{pill.w}px"></span>
 
   {#each options as o, i (o.value)}
@@ -55,16 +55,17 @@
 <style>
   .seg {
     position: relative; display: inline-flex; align-items: center; gap: 2px;
-    padding: 2px; flex: none; max-width: 100%;
+    padding: 3px; flex: none; max-width: 100%;
+    background: var(--mc-inset); border: 1px solid var(--mc-line); border-radius: 10px;
   }
 
   /* The one highlight. Parked at width 0 until the first measurement lands, so
      it never flashes at the left edge on the first paint. */
   .pill {
-    position: absolute; left: 2px; top: 2px; bottom: 2px; width: 0;
-    background: rgba(255, 255, 255, 0.14); opacity: 0;
-    transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
-                width 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s;
+    position: absolute; left: 3px; top: 3px; bottom: 3px; width: 0; border-radius: 7px;
+    background: var(--mc-raised); border: 1px solid var(--mc-line2); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transition: transform 0.28s var(--mc-ease), width 0.28s var(--mc-ease), opacity 0.2s;
     will-change: transform, width;
   }
   .pill.ready { opacity: 1; }
@@ -72,16 +73,15 @@
   button {
     position: relative; z-index: 1;
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    height: 32px; padding: 0 14px; border: 0; background: none; border-radius: 9999px;
-    color: var(--mg-i3); font: 500 12.5px/1 var(--mg-font); white-space: nowrap;
-    cursor: pointer; transition: color 0.18s;
+    height: 30px; padding: 0 12px; border: 0; background: none; border-radius: 7px;
+    color: var(--mc-ink3); font: 500 12.5px/1 var(--mc-font); white-space: nowrap;
+    cursor: pointer; transition: color var(--mc-t-fast);
   }
-  button:hover { color: var(--mg-i2); }
-  button.on { color: var(--mg-i); }
-  .ct { font-size: 11px; color: var(--mg-i3); }
-  button.on .ct { color: var(--mg-i2); }
+  button:hover { color: var(--mc-ink2); }
+  button.on { color: var(--mc-ink); }
+  .ct { font-size: 11px; color: var(--mc-ink3); font-variant-numeric: tabular-nums; }
+  button.on .ct { color: var(--mc-ink2); }
 
-  @media (prefers-reduced-motion: reduce) {
-    .pill { transition: opacity 0.06s; }
-  }
+  @media (pointer: coarse) { button { height: 36px; } }
+  @media (prefers-reduced-motion: reduce) { .pill { transition: opacity 0.06s; } }
 </style>

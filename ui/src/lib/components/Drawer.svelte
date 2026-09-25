@@ -6,10 +6,24 @@
 </script>
 
 <script>
+  /* The property detail.
+
+     From 720px up it is a panel that slides in from the right edge (560px,
+     full height, raised plane, hairline on the left, a deep shadow); below
+     that it rises from the bottom as a near-full-height sheet with a grab
+     handle. Both sit on a dimming scrim. Everything is transform + opacity,
+     both directions, on the settle curve.
+
+     Reads `app.selectedKey`; closing clears it (the root layout's Escape
+     handler does the same). The page that renders <Drawer /> has nothing
+     else to do. */
+  import { tick } from 'svelte';
   import Photo from './Photo.svelte';
   import CallBrief from './CallBrief.svelte';
   import Signals from './Signals.svelte';
   import ErfPanel from './ErfPanel.svelte';
+  import Icon from './glass/Icon.svelte';
+  import { fade, slide } from '$lib/motion.js';
   import { api } from '$lib/api.js';
   import { app, selected, actions, gidOf, trackProspect } from '$lib/state.svelte.js';
   import { fmtR, fmtM, fmtInt, fmtArea, addrOf, mvLabel,
@@ -52,8 +66,6 @@
 
   const facts = $derived.by(() => {
     if (!r) return [];
-    // A rent divided by floor area is a different number in a different unit,
-    // so the R/m² row belongs to the sale book only.
     const ppm2 = r.price_per_m2
       ? 'R' + fmtInt(r.price_per_m2)
       : r.price_zar && r.floor_size_m2 ? 'R' + fmtInt(r.price_zar / r.floor_size_m2) : '—';
@@ -89,244 +101,274 @@
 
   let tab = $state(lastTab);
   $effect(() => { lastTab = tab; });
-  /* Rentals have no score, no mandate and no group, so there is nothing to
-     brief a call on — the toggle simply isn't there for them. */
   const brief = $derived(!rent && tab === 'brief');
 
   const close = () => (app.selectedKey = null);
   const stage = $derived(r ? app.tracked[gidOf(r)] : null);
+
+  /* ——— shape: panel from the right, or a sheet from below ——— */
+  let wide = $state(true);
+  $effect(() => {
+    if (typeof matchMedia === 'undefined') return;
+    const mq = matchMedia('(min-width: 720px)');
+    const sync = () => (wide = mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  });
+
+  /* Open: lock the page behind, scroll the body to the top for a new
+     property, and take focus so Esc and Tab land here. */
+  let scroller = $state(null);
+  let box = $state(null);
+  $effect(() => {
+    const key = app.selectedKey;
+    if (!key) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    tick().then(() => { if (scroller) scroller.scrollTop = 0; box?.focus?.({ preventScroll: true }); });
+    return () => { document.body.style.overflow = prev; };
+  });
+
+  /* ——— the phone throw: only the grab handle starts it ——— */
+  let drag = $state(0);
+  let from = 0;
+  let held = $state(null);
+  function grabStart(e) { if (wide) return; from = e.clientY; held = e.currentTarget; held.setPointerCapture?.(e.pointerId); }
+  function grabMove(e) { if (held == null) return; drag = Math.max(0, e.clientY - from); }
+  function grabEnd() { if (held == null) return; held = null; if (drag > 120) close(); drag = 0; }
+
+  const barTone = (v) => (v >= 70 ? 'ok' : v >= 40 ? 'warn' : 'crit');
 </script>
 
 {#if r}
-  <div class="scrim" onclick={close} aria-hidden="true"></div>
-  <aside class="drawer" aria-label="Prospect detail">
-    <button class="close" onclick={close} title="close (Esc)">✕</button>
+  <div class="scrim" onclick={close} role="presentation" transition:fade={{ duration: 200 }}></div>
 
-    <div class="scroll">
-      <div class="hero">
-        <Photo {r} eager alt={r.title || ''} />
+  {#key wide}
+    <aside class="drawer" class:phone={!wide} aria-label="Property detail" role="dialog" aria-modal="true"
+           tabindex="-1" bind:this={box}
+           style:transform={drag ? `translate3d(0,${drag}px,0)` : null}
+           style:transition={held == null ? 'transform 0.28s var(--mc-ease-out)' : 'none'}
+           transition:slide={wide ? { x: 72, duration: 320 } : { y: 640, duration: 340, opacity: 1 }}>
+      {#if !wide}
+        <div class="grab" onpointerdown={grabStart} onpointermove={grabMove}
+             onpointerup={grabEnd} onpointercancel={grabEnd} role="presentation"><i></i></div>
+      {/if}
+
+      <div class="top">
+        <span class="hud">{rent ? 'Rental' : 'Prospect'}{r.suburb ? ` · ${r.suburb}` : ''}</span>
+        <button type="button" class="mg-btn secondary icon sm" onclick={close} aria-label="Close" title="Close (Esc)">
+          <Icon name="close" size={15} />
+        </button>
       </div>
 
-      <div class="pad head">
-        <div class="badges">
-          {#if rent}
-            <span class="scorepill">To rent</span>
-          {:else}
-            {#if r.tier}<span class="tier {r.tier}">{r.tier}</span>{/if}
-            <span class="mv {r.mandate_verdict || 'unknown'}">{mvLabel(r.mandate_verdict)}</span>
-            {#if r.prospect_score != null}
-              <span class="scorepill">Score {r.prospect_score}</span>
-            {/if}
-          {/if}
-        </div>
-        <p class="hprice price">{#if r.price_zar}{priceTxt(r)}{:else}<span class="poa">{rent ? 'Rent on application' : 'Price on application'}</span>{/if}</p>
-        <h2><a href={r.url} target="_blank" rel="noopener">{r.title || r.source_id} ↗</a></h2>
-        <p class="hsub">{[r.suburb, r.region].filter(Boolean).join(' · ')}{addrOf(r) ? ` · ${addrOf(r)}` : ''}{r.property_type ? ` · ${r.property_type}` : ''}</p>
+      <div class="scroll mg-noscroll" bind:this={scroller}>
+        {#key r.listing_key}
+          <div class="hero"><Photo {r} eager alt={r.title || ''} /></div>
 
-        {#if !rent}<div class="sigrow"><Signals {r} verdict={false} /></div>{/if}
-
-        <div class="actions">
-          {#if rent}
-            <a class="act" href={r.url} target="_blank" rel="noopener">Open on the portal ↗</a>
-          {:else if stage}
-            <a class="act cma" href="/leads/properties/{gidOf(r)}"
-               title="Open in the management panel">✓ Tracked · {stage.replace(/_/g, ' ')} →</a>
-          {:else}
-            <button class="act" onclick={() => trackProspect(r)}
-              title="Add to the management panel to log contacts, calls and mandates">+ Track property</button>
-          {/if}
-          {#if !rent}
-            {#if r.reevaluating}
-              <span class="act busy"><span class="spin"></span>&nbsp;Re-evaluating…</span>
-            {:else}
-              <button class="act" onclick={() => actions.reevaluate(r.listing_key)}
-                title="Refetch this listing live from the portal(s), re-score it and re-run the erf match">↻ Re-evaluate</button>
-            {/if}
-            <button class="act" class:cma={brief} onclick={() => (tab = 'brief')}
-              title="What to say when you phone the owner">Call brief</button>
-            <button class="act" onclick={() => actions.copyRow(String(r.group_id ?? r.listing_key))}
-              title="Copy as a spreadsheet row — paste into Excel or Google Sheets">Copy for sheet</button>
-            {#if r.cma_url}
-              <a class="act cma" href={r.cma_url}>CMA report →</a>
-              <a class="act" href="{r.cma_url}/download" download
-                title="Save the full CMA report as a standalone HTML file">↓ Download report</a>
-            {/if}
-          {/if}
-        </div>
-        {#if r.reeval_error}<p class="note bad">Re-eval failed — {r.reeval_error}</p>{/if}
-        {#if r.mandate_expiry_note}<p class="note">{r.mandate_expiry_note}</p>{/if}
-        {#if proofNote}<p class="note" class:ok={r.proof_age_hours < 72}>{proofNote}</p>{/if}
-
-        {#if !rent}
-          <div class="tabs" role="tablist">
-            <button role="tab" aria-selected={!brief} class:on={!brief}
-              onclick={() => (tab = 'details')}>Details</button>
-            <button role="tab" aria-selected={brief} class:on={brief}
-              onclick={() => (tab = 'brief')}>Call brief</button>
-          </div>
-        {/if}
-      </div>
-
-      {#if brief}
-        <section class="pad last"><CallBrief gid={gidOf(r)} /></section>
-      {:else}
-
-      {#if bars.length}
-        <section class="pad">
-          <h3>Score breakdown</h3>
-          {#each bars as [name, val] (name)}
-            <div class="bar">
-              <span class="bl">{name}</span>
-              <div class="bt"><i style:width="{Math.max(0, Math.min(100, val || 0))}%"></i></div>
-              <span class="bv">{val ?? '—'}</span>
+          <div class="head">
+            <div class="badges">
+              {#if rent}
+                <span class="mg-chip mgr">To rent</span>
+              {:else}
+                {#if r.tier}<span class="tier {r.tier}">{r.tier}</span>{/if}
+                <span class="mv {r.mandate_verdict || 'unknown'}">{mvLabel(r.mandate_verdict)}</span>
+                {#if r.prospect_score != null}<span class="mg-chip">Score <b class="mg-tnum">{r.prospect_score}</b></span>{/if}
+              {/if}
             </div>
-          {/each}
-          {#if r.scored_by}<p class="dim tiny">Scored by {String(r.scored_by).split(':')[0]}</p>{/if}
-        </section>
-      {/if}
+            <p class="hprice price">{#if r.price_zar}{priceTxt(r)}{:else}<span class="poa">{rent ? 'Rent on application' : 'Price on application'}</span>{/if}</p>
+            <h2><a href={r.url} target="_blank" rel="noopener">{r.title || r.source_id} <Icon name="external" size={13} /></a></h2>
+            <p class="hsub">{[r.suburb, r.region].filter(Boolean).join(' · ')}{addrOf(r) ? ` · ${addrOf(r)}` : ''}{r.property_type ? ` · ${r.property_type}` : ''}</p>
 
-      <section class="pad">
-        <h3>Key numbers</h3>
-        <div class="facts">
-          {#each facts as [k, v] (k)}
-            <div class="fact"><span>{k}</span><b>{v}</b></div>
-          {/each}
-        </div>
-      </section>
+            {#if !rent}<div class="sigrow"><Signals {r} verdict={false} /></div>{/if}
 
-      <section class="pad">
-        <h3>{rent ? 'Listing' : 'Listings'} · {r.brand_count > 1 ? `${r.brand_count} agency brands` : (r.agencies?.[0] || 'agency unknown')}</h3>
-        {#each r.listings || [] as l (l.url)}
-          <a class="listing" href={l.url} target="_blank" rel="noopener">
-            <span class="src">{l.source}</span>
-            <span class="lag">{l.agency || '—'}</span>
-            <span class="lp price">{rent ? fmtR(l.price_zar) : fmtM(l.price_zar)}</span>
-          </a>
-        {/each}
-        {#if r.evidence?.length}
-          <p class="ev">Matched on: {r.evidence.join('; ')}</p>
-        {/if}
-      </section>
+            <div class="actions">
+              {#if rent}
+                <a class="mg-btn sm secondary" href={r.url} target="_blank" rel="noopener"><Icon name="external" size={14} /> Open on the portal</a>
+              {:else if stage}
+                <a class="mg-btn sm accent" href="/leads/properties/{gidOf(r)}" title="Open in lead management">
+                  <Icon name="check" size={14} /> Tracked · {stage.replace(/_/g, ' ')}
+                </a>
+              {:else}
+                <button type="button" class="mg-btn sm primary" onclick={() => trackProspect(r)}
+                  title="Add to lead management to log contacts, calls and mandates"><Icon name="plus" size={14} /> Track property</button>
+              {/if}
+              {#if !rent}
+                {#if r.reevaluating}
+                  <span class="mg-btn sm ghost busy"><span class="mg-spin"></span> Re-evaluating…</span>
+                {:else}
+                  <button type="button" class="mg-btn sm secondary" onclick={() => actions.reevaluate(r.listing_key)}
+                    title="Refetch this listing live from the portal(s), re-score it and re-run the erf match"><Icon name="refresh" size={14} /> Re-evaluate</button>
+                {/if}
+                <button type="button" class="mg-btn sm secondary" onclick={() => actions.copyRow(String(r.group_id ?? r.listing_key))}
+                  title="Copy as a spreadsheet row — paste into Excel or Google Sheets"><Icon name="copy" size={14} /> Copy row</button>
+                {#if r.cma_url}
+                  <a class="mg-btn sm secondary" href={r.cma_url}><Icon name="list" size={14} /> CMA report</a>
+                  <a class="mg-btn sm ghost" href="{r.cma_url}/download" download title="Save the full CMA report as a standalone HTML file"><Icon name="download" size={14} /> Download</a>
+                {/if}
+              {/if}
+            </div>
 
-      {#if r.pitch_angle}
-        <section class="pad">
-          <h3>Pitch angle</h3>
-          <div class="pitch">{r.pitch_angle}</div>
-        </section>
-      {/if}
+            {#if r.reeval_error}<div class="mg-strip crit"><span class="ic"><Icon name="alert" size={14} /></span><span>Re-evaluate failed — {r.reeval_error}</span></div>{/if}
+            {#if r.mandate_expiry_note}<div class="mg-strip warn"><span class="ic"><Icon name="clock" size={14} /></span><span>{r.mandate_expiry_note}</span></div>{/if}
+            {#if proofNote}<div class="mg-strip" class:ok={r.proof_age_hours < 72} class:warn={r.proof_age_hours >= 72}><span class="ic"><Icon name="check" size={14} /></span><span>{proofNote}</span></div>{/if}
+          </div>
 
-      {#if r.reasoning}
-        <section class="pad">
-          <h3>Reasoning</h3>
-          <p class="prose">{r.reasoning}</p>
-        </section>
-      {/if}
+          {#if !rent}
+            <div class="mg-tabs tabs" role="tablist">
+              <button type="button" role="tab" aria-selected={!brief} onclick={() => (tab = 'details')}>Details</button>
+              <button type="button" role="tab" aria-selected={brief} onclick={() => (tab = 'brief')}>Call brief</button>
+            </div>
+          {/if}
 
-      {#if r.red_flags}
-        <section class="pad">
-          <h3>Red flags</h3>
-          <div class="flags">{r.red_flags}</div>
-        </section>
-      {/if}
+          {#if brief}
+            <section class="sec"><CallBrief gid={gidOf(r)} /></section>
+          {:else}
+            {#if bars.length}
+              <section class="sec">
+                <span class="hud">Score breakdown</span>
+                <div class="bars">
+                  {#each bars as [name, val] (name)}
+                    <div class="bar">
+                      <span class="bl">{name}</span>
+                      <div class="mg-bar {barTone(val || 0)}"><i style:width="{Math.max(0, Math.min(100, val || 0))}%"></i></div>
+                      <span class="bv mg-tnum">{val ?? '—'}</span>
+                    </div>
+                  {/each}
+                </div>
+                {#if r.scored_by}<p class="mg-hint">Scored by {String(r.scored_by).split(':')[0]}</p>{/if}
+              </section>
+            {/if}
 
-      {#if !rent}
-        <section class="pad last">
-          <h3>Erf · cadastre</h3>
-          <ErfPanel {r} />
-        </section>
-      {/if}
-      {/if}
-    </div>
-  </aside>
+            <section class="sec">
+              <span class="hud">Key numbers</span>
+              <dl class="mg-kv">
+                {#each facts as [k, v] (k)}
+                  <div><dt>{k}</dt><dd>{v}</dd></div>
+                {/each}
+              </dl>
+            </section>
+
+            <section class="sec">
+              <span class="hud">{rent ? 'Listing' : 'Listings'} · {r.brand_count > 1 ? `${r.brand_count} agency brands` : (r.agencies?.[0] || 'agency unknown')}</span>
+              <div class="listings">
+                {#each r.listings || [] as l (l.url)}
+                  <a class="listing" href={l.url} target="_blank" rel="noopener">
+                    <span class="src">{l.source}</span>
+                    <span class="lag">{l.agency || '—'}</span>
+                    <span class="lp price mg-tnum">{rent ? fmtR(l.price_zar) : fmtM(l.price_zar)}</span>
+                    <Icon name="external" size={13} class="lx" />
+                  </a>
+                {/each}
+              </div>
+              {#if r.evidence?.length}<p class="ev">Matched on: {r.evidence.join('; ')}</p>{/if}
+            </section>
+
+            {#if r.pitch_angle}
+              <section class="sec">
+                <span class="hud">Pitch angle</span>
+                <div class="mg-strip ok note"><span class="ic"><Icon name="sparkles" size={14} /></span><span>{r.pitch_angle}</span></div>
+              </section>
+            {/if}
+
+            {#if r.reasoning}
+              <section class="sec">
+                <span class="hud">Reasoning</span>
+                <p class="prose">{r.reasoning}</p>
+              </section>
+            {/if}
+
+            {#if r.red_flags}
+              <section class="sec">
+                <span class="hud">Red flags</span>
+                <div class="mg-strip crit note"><span class="ic"><Icon name="alert" size={14} /></span><span>{r.red_flags}</span></div>
+              </section>
+            {/if}
+
+            {#if !rent}
+              <section class="sec">
+                <span class="hud">Erf · cadastre</span>
+                <ErfPanel {r} />
+              </section>
+            {/if}
+          {/if}
+        {/key}
+      </div>
+    </aside>
+  {/key}
 {/if}
 
 <style>
-  .scrim { position: fixed; inset: 0; z-index: 45; background: var(--scrim); }
+  .scrim { position: fixed; inset: 0; z-index: 80; background: var(--mc-scrim); }
+
   .drawer {
-    position: fixed; top: 0; right: 0; bottom: 0; z-index: 46;
-    width: min(540px, 97vw); background: var(--bg-2);
-    border-left: 1px solid var(--line); box-shadow: var(--shadow-2);
-    animation: slidein 0.2s ease-out; display: flex;
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 81;
+    width: min(560px, 100vw); display: flex; flex-direction: column; outline: none;
+    background: var(--mc-raised); border-left: 1px solid var(--mc-line2);
+    box-shadow: -24px 0 64px -24px rgba(0, 0, 0, 0.8);
+    padding-top: var(--sat); will-change: transform;
   }
-  @keyframes slidein { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .scroll { flex: 1; overflow-y: auto; padding-bottom: 2.5rem; }
+  .drawer.phone {
+    top: auto; left: 0; width: 100%; height: 94dvh;
+    border-left: 0; border-top: 1px solid var(--mc-line2);
+    border-radius: var(--mc-r-lg) var(--mc-r-lg) 0 0;
+    box-shadow: 0 -24px 64px -24px rgba(0, 0, 0, 0.8);
+    padding-top: 0;
+  }
+  .grab { flex: none; display: grid; place-items: center; padding: 10px 0 2px; cursor: grab; touch-action: none; }
+  .grab > i { display: block; width: 36px; height: 4px; border-radius: 9999px; background: var(--mc-line3); }
 
-  .close { position: absolute; top: 0.8rem; right: 0.8rem; z-index: 5;
-           width: 32px; height: 32px; border-radius: 8px;
-           background: var(--overlay); border: 1px solid var(--line-2);
-           color: var(--ink-2); box-shadow: var(--shadow-1); }
-  .close:hover { color: var(--ink); border-color: var(--line-3); }
+  .top { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--mc-line); }
 
-  .hero { aspect-ratio: 16 / 9.5; background: var(--bg-3); }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(var(--sab) + 24px); }
 
-  .pad { padding: 1.1rem 1.4rem 0; }
-  .head { padding-top: 1rem; }
-  .badges { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
-  .scorepill { display: inline-flex; padding: 0.16rem 0.6rem; border-radius: 999px;
-               background: var(--accent-soft); color: var(--accent-2);
-               font-size: 0.72rem; font-weight: 700; }
-  .hprice { margin: 0.65rem 0 0; font-size: 1.55rem; letter-spacing: -0.02em; }
-  h2 { margin: 0.2rem 0 0; font-size: 0.95rem; font-weight: 500; line-height: 1.45; }
-  h2 a { color: var(--ink-2); }
-  h2 a:hover { color: var(--accent); }
-  .hsub { margin: 0.25rem 0 0; font-size: 0.8rem; color: var(--ink-3); }
+  .hero { aspect-ratio: 16 / 9; background: var(--mc-inset); border-bottom: 1px solid var(--mc-line); }
 
-  .sigrow { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.6rem; }
-  .actions { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap;
-             margin-top: 0.8rem; }
-  .act.busy { color: var(--accent-2); border-color: transparent; background: none; }
-  .act.cma { color: var(--accent-2); border-color: var(--accent-line); background: var(--accent-soft); }
-  .act.cma:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .head { padding: 16px 16px 4px; }
+  .badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .badges .mg-chip { height: 24px; padding: 0 9px; }
+  .badges .mg-chip b { color: var(--mc-ink); margin-left: 2px; }
+  .hprice { margin: 12px 0 0; font-size: 26px; line-height: 1.1; letter-spacing: -0.02em; }
+  h2 { margin: 6px 0 0; font: 500 14.5px/1.4 var(--mc-font); color: var(--mc-ink2); }
+  h2 a { display: inline-flex; align-items: center; gap: 5px; }
+  h2 a:hover { color: var(--mc-accent); }
+  .hsub { margin: 4px 0 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
+  .sigrow { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 
-  .tabs { display: flex; gap: 0.2rem; margin-top: 0.9rem;
-          border-bottom: 1px solid var(--line); }
-  .tabs button { background: none; border: 0; border-bottom: 2px solid transparent;
-                 padding: 0.4rem 0.7rem; margin-bottom: -1px; cursor: pointer;
-                 font: 600 0.8rem/1.3 var(--font-ui); color: var(--ink-3); }
-  .tabs button:hover { color: var(--ink); }
-  .tabs button.on { color: var(--accent-2); border-bottom-color: var(--accent); }
+  .actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 14px 0 12px; }
+  .busy { color: var(--mc-mgr); }
 
-  .note { margin: 0.6rem 0 0; font-size: 0.79rem; font-weight: 500; color: var(--psole); }
-  .note.ok { color: var(--open); }
-  .note.bad { color: var(--bad); }
+  .head .mg-strip { margin: 0 0 8px; }
 
-  section.pad { margin-top: 0.6rem; }
-  section.last { padding-bottom: 0.5rem; }
-  h3 { margin: 0 0 0.65rem; padding-top: 0.9rem; border-top: 1px solid var(--line);
-       font-size: 0.82rem; font-weight: 700; color: var(--ink); }
+  .tabs { margin: 4px 16px 0; }
 
-  .bar { display: grid; grid-template-columns: 105px 1fr 34px; gap: 0.7rem;
-         align-items: center; margin-bottom: 0.45rem; }
-  .bl { font-size: 0.76rem; font-weight: 500; color: var(--ink-2); }
-  .bt { height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
-  .bt i { display: block; height: 100%; border-radius: 3px;
-          background: var(--accent); transition: width 0.5s; }
-  .bv { font-size: 0.78rem; font-weight: 600; text-align: right;
-        font-variant-numeric: tabular-nums; }
-  .tiny { font-size: 0.72rem; margin: 0.35rem 0 0; }
-  .dim { color: var(--ink-3); }
+  .sec { padding: 18px 16px 0; }
+  .sec > .hud { margin-bottom: 10px; }
+  .sec > .mg-hint { margin-top: 8px; }
 
-  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem 1.2rem; }
-  .fact span { display: block; font-size: 0.72rem; color: var(--ink-3); }
-  .fact b { font-weight: 600; font-size: 0.86rem; }
+  .bars { display: flex; flex-direction: column; gap: 10px; }
+  .bar { display: grid; grid-template-columns: 104px 1fr 34px; gap: 12px; align-items: center; }
+  .bl { font: 500 12.5px/1.3 var(--mc-font); color: var(--mc-ink2); }
+  .bv { font: 600 12.5px/1 var(--mc-mono); text-align: right; color: var(--mc-ink); }
 
-  .listing { display: grid; grid-template-columns: 100px 1fr auto; gap: 0.7rem;
-             align-items: center; padding: 0.5rem 0.7rem;
-             border: 1px solid var(--line); border-radius: var(--r-sm);
-             margin-bottom: 0.4rem; color: var(--ink); transition: border-color 0.15s, background 0.15s; }
-  .listing:hover { border-color: var(--accent-line); background: var(--accent-soft); }
-  .src { font-size: 0.72rem; font-weight: 700; color: var(--accent-2);
-         text-transform: capitalize; }
-  .lag { font-size: 0.78rem; color: var(--ink-2);
-         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .lp { font-size: 0.84rem; }
-  .ev { margin: 0.4rem 0 0; font-size: 0.76rem; font-weight: 500; color: var(--open); }
+  .listings { display: flex; flex-direction: column; gap: 6px; }
+  .listing {
+    display: grid; grid-template-columns: 92px 1fr auto auto; gap: 10px; align-items: center;
+    min-height: 44px; padding: 8px 12px; border: 1px solid var(--mc-line); border-radius: 10px;
+    background: var(--mc-surface); color: var(--mc-ink); transition: border-color var(--mc-t-fast), background var(--mc-t-fast);
+  }
+  .listing:hover { border-color: var(--mc-line2); background: var(--mc-glass-hover); }
+  .src { font: 600 11.5px/1.3 var(--mc-font); color: var(--mc-accent); text-transform: capitalize; }
+  .lag { font: 400 12.5px/1.3 var(--mc-font); color: var(--mc-ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lp { font-size: 13px; }
+  .listing :global(.lx) { color: var(--mc-ink3); }
+  .ev { margin: 10px 0 0; font: 500 12px/1.5 var(--mc-font); color: var(--mc-accent); }
 
-  .pitch { background: var(--accent-soft); border: 1px solid var(--accent-line);
-           border-radius: var(--r); padding: 0.75rem 0.9rem;
-           font-size: 0.85rem; line-height: 1.6; color: var(--accent-ink); }
-  .prose { margin: 0; font-size: 0.84rem; line-height: 1.65; color: var(--ink-2); }
-  .flags { background: var(--red-soft); border: 1px solid var(--red-line);
-           border-radius: var(--r); padding: 0.7rem 0.9rem;
-           font-size: 0.82rem; line-height: 1.6; color: var(--bad-ink); }
+  .note { margin: 0; font-size: 13px; line-height: 1.6; color: var(--mc-ink); }
+  .prose { margin: 0; font: 400 13px/1.65 var(--mc-font); color: var(--mc-ink2); }
+
+  @media (max-width: 719px) {
+    .hero { aspect-ratio: 16 / 8; }
+    .top { padding: 6px 16px 10px; }
+  }
 </style>

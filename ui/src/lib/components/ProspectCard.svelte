@@ -1,10 +1,12 @@
 <script>
   import Photo from './Photo.svelte';
   import Signals from './Signals.svelte';
+  import Icon from './glass/Icon.svelte';
   import { app, gidOf, trackProspect } from '$lib/state.svelte.js';
   import { isRent, priceTxt, rentChips } from '$lib/format.js';
 
-  let { r } = $props();
+  /* `i` staggers the card's entrance in a grid (only the first dozen wait). */
+  let { r, i = 0 } = $props();
 
   /* A rental has no score, no tier, no mandate verdict and no GV — none of
      that is computed for the rent book — so the card drops those widgets and
@@ -25,22 +27,21 @@
   function track(e) { e.stopPropagation(); trackProspect(r); }
 </script>
 
-<article class="card" class:sel={r.listing_key === app.selectedKey}
+<article class="card mg-rise" class:sel={r.listing_key === app.selectedKey} style:--i={Math.min(i, 12)}
          onclick={open} onkeydown={(e) => e.key === 'Enter' && open()}
-         role="button" tabindex="0">
+         role="button" tabindex="0" data-prospect={r.listing_key}>
   <div class="ph">
     <Photo {r} alt={r.title || ''} />
     {#if !rent}
       <div class="over">
         {#if r.tier}<span class="tier {r.tier}">{r.tier}</span>{:else}<span></span>{/if}
-        <span class="score" class:wait={r.prospect_score == null}
-              title="prospect score">{r.prospect_score ?? '…'}</span>
+        <span class="score mg-tnum" class:wait={r.prospect_score == null} title="prospect score">{r.prospect_score ?? '…'}</span>
       </div>
       {#if stage}
         <a class="trk on" href="/leads/properties/{gidOf(r)}" onclick={(e) => e.stopPropagation()}
-           title="Tracked · {stage.replace(/_/g, ' ')}">✓ {stage.replace(/_/g, ' ')}</a>
+           title="Tracked · {stage.replace(/_/g, ' ')}"><Icon name="check" size={12} stroke={2.5} /> {stage.replace(/_/g, ' ')}</a>
       {:else}
-        <button class="trk" onclick={track} title="Add to the management panel">+ Track</button>
+        <button type="button" class="trk" onclick={track} title="Add to lead management"><Icon name="plus" size={12} stroke={2.5} /> Track</button>
       {/if}
     {/if}
   </div>
@@ -54,9 +55,7 @@
     {#if meta}<p class="meta">{meta}</p>{/if}
     <div class="chips">
       {#if rent}
-        {#each rentChips(r) as [text, title] (text)}
-          <span class="sig" {title}>{text}</span>
-        {/each}
+        {#each rentChips(r) as [text, title] (text)}<span class="sig" {title}>{text}</span>{/each}
       {:else}
         <Signals {r} max={3} />
       {/if}
@@ -68,58 +67,54 @@
 </article>
 
 <style>
-  .trk { position: absolute; left: 0.6rem; bottom: 0.6rem; z-index: 2;
-         font-size: 0.72rem; font-weight: 600; padding: 0.28rem 0.6rem;
-         border-radius: 999px; border: 1px solid rgba(255,255,255,0.35);
-         background: rgba(0,0,0,0.55); color: #fff; backdrop-filter: blur(4px);
-         opacity: 0; transition: opacity 0.15s; text-transform: capitalize; }
-  .card:hover .trk, .trk.on { opacity: 1; }
-  .trk:hover { background: var(--accent); border-color: var(--accent); }
-  .trk.on { background: var(--open); border-color: var(--open); }
   .card {
-    display: flex; flex-direction: column; overflow: hidden; cursor: pointer;
-    background: var(--bg-2); border: 1px solid var(--line);
-    border-radius: var(--r-lg); box-shadow: var(--shadow-1);
-    transition: transform 0.15s ease, box-shadow 0.15s, border-color 0.15s;
+    position: relative; display: flex; flex-direction: column; overflow: hidden; cursor: pointer;
+    background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-r);
+    box-shadow: var(--mc-sh-1);
+    transition: border-color var(--mc-t-fast), transform var(--mc-t) var(--mc-ease), box-shadow var(--mc-t);
   }
-  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
-  .card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-1); }
-  .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card:hover { border-color: var(--mc-line2); transform: translateY(-2px); box-shadow: var(--mc-sh-2); }
+  .card:active { transform: scale(0.99); }
+  .card.sel { border-color: var(--mc-accent); box-shadow: 0 0 0 1px var(--mc-accent), var(--mc-sh-1); }
+  .card:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
 
-  .ph { position: relative; aspect-ratio: 16 / 10; background: var(--bg-3); }
-  .ph :global(img) { transition: transform 0.35s ease; }
+  .ph { position: relative; aspect-ratio: 16 / 10; background: var(--mc-inset); border-bottom: 1px solid var(--mc-line); }
+  .ph :global(img) { transition: transform 0.4s var(--mc-ease); }
   .card:hover .ph :global(img) { transform: scale(1.03); }
 
-  .over { position: absolute; top: 0.6rem; left: 0.6rem; right: 0.6rem;
-          display: flex; justify-content: space-between; align-items: flex-start; }
-  /* the tier tint is translucent — floating on a photo it needs a backdrop */
-  .over .tier { box-shadow: 0 1px 3px rgba(16, 24, 40, 0.18);
-                background: var(--overlay); color: var(--hot-ink);
-                backdrop-filter: blur(4px); }
-  .over .tier.warm { color: var(--warm-ink); }
-  .over .tier.cold { color: var(--cold-ink); }
+  .over { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: flex-start; }
+  .over .tier { background: rgba(12, 12, 14, 0.78); border-color: rgba(255, 255, 255, 0.12); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
   .score {
-    display: inline-flex; align-items: center; justify-content: center;
-    min-width: 34px; height: 26px; padding: 0 0.45rem;
-    background: var(--overlay); border-radius: 8px;
-    font-size: 0.82rem; font-weight: 700; color: var(--ink);
-    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.18);
-    font-variant-numeric: tabular-nums;
+    display: inline-flex; align-items: center; justify-content: center; min-width: 34px; height: 26px; padding: 0 8px;
+    background: rgba(12, 12, 14, 0.78); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    font: 700 13px/1 var(--mc-mono); color: var(--mc-ink);
   }
-  .score.wait { color: var(--accent); }
+  .score.wait { color: var(--mc-accent); }
 
-  .body { display: flex; flex-direction: column; gap: 0.35rem;
-          padding: 0.8rem 0.95rem 0.95rem; flex: 1; }
-  .topline { display: flex; justify-content: space-between; align-items: baseline; gap: 0.7rem; }
-  .cprice { font-size: 1.12rem; }
-  .suburb { font-size: 0.74rem; font-weight: 500; color: var(--ink-3);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .trk {
+    position: absolute; left: 10px; bottom: 10px; z-index: 2;
+    display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(12, 12, 14, 0.78); color: #fff;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    font: 600 11.5px/1 var(--mc-font); text-transform: capitalize;
+    opacity: 0; transition: opacity var(--mc-t-fast), background var(--mc-t-fast), border-color var(--mc-t-fast);
+  }
+  .card:hover .trk, .card:focus-within .trk, .trk.on { opacity: 1; }
+  .trk:hover { background: var(--mc-ink); color: var(--mc-bg); border-color: var(--mc-ink); }
+  .trk.on { background: var(--mc-accent); border-color: var(--mc-accent); color: var(--mc-accent-ink); }
+  @media (pointer: coarse) { .trk { opacity: 1; } }
 
-  h3 { margin: 0; font-size: 0.86rem; font-weight: 500; line-height: 1.4; color: var(--ink-2);
-       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-       overflow: hidden; }
-  .meta { margin: 0; font-size: 0.74rem; color: var(--ink-3); }
-  .chips { display: flex; gap: 0.3rem; flex-wrap: wrap; align-items: center; margin-top: 0.1rem; }
-  .ag { margin: 0.1rem 0 0; font-size: 0.72rem; color: var(--ink-3);
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .body { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px 14px; flex: 1; }
+  .topline { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .cprice { font-size: 17px; }
+  .suburb { font: 500 12px/1.3 var(--mc-font); color: var(--mc-ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  h3 { margin: 0; font: 500 13.5px/1.4 var(--mc-font); color: var(--mc-ink2);
+       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .meta { margin: 0; font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); }
+  .chips { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
+  .ag { margin: 2px 0 0; font: 400 11.5px/1.4 var(--mc-font); color: var(--mc-ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  @media (prefers-reduced-motion: reduce) { .card:hover, .card:active { transform: none; } }
 </style>

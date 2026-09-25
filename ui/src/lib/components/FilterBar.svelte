@@ -1,6 +1,9 @@
 <script>
   import { app, setShowSole, setDealType } from '$lib/state.svelte.js';
   import { filters, clearFilters, isFiltering } from '$lib/filters.svelte.js';
+  import Seg from './glass/Seg.svelte';
+  import Icon from './glass/Icon.svelte';
+  import { slide } from '$lib/motion.js';
 
   let { shown, total } = $props();
 
@@ -31,136 +34,129 @@
   const storedView = typeof localStorage === 'undefined' ? null : localStorage.getItem('obv2.view');
   if (storedView === 'list' || storedView === 'cards') filters.view = storedView;
   $effect(() => {
-    localStorage.setItem('obv2.view', filters.view);
+    try { localStorage.setItem('obv2.view', filters.view); } catch { /* private mode */ }
   });
+
+  const DEAL = [{ value: 'sale', label: 'For sale' }, { value: 'rent', label: 'To rent' }];
+  const TIER = [{ value: '', label: 'All' }, { value: 'hot', label: 'Hot' }, { value: 'warm', label: 'Warm' }, { value: 'cold', label: 'Cold' }];
+  const VIEW = [{ value: 'cards', label: 'Cards', icon: 'grid' }, { value: 'list', label: 'List', icon: 'list' }];
 </script>
 
 <div class="bar">
   <div class="row">
-    <div class="seg deal" role="group" aria-label="listing type">
-      {#each [['sale', 'For sale'], ['rent', 'To rent']] as [v, l] (v)}
-        <button class:on={app.dealType === v} onclick={() => pickDeal(v)}>{l}</button>
-      {/each}
-    </div>
+    <Seg options={DEAL} value={app.dealType} onchange={pickDeal} label="Listing type" />
 
-    <input type="search" class="search"
-           placeholder={rent ? 'Search title, street, agency…' : 'Search title, street, erf, agency…'}
-           bind:value={filters.q} />
+    <label class="mg-search">
+      <span class="ic"><Icon name="search" size={16} /></span>
+      <input type="search" class="mg-input"
+             placeholder={rent ? 'Search title, street, agency…' : 'Search title, street, erf, agency…'}
+             bind:value={filters.q} />
+      {#if filters.q}
+        <button type="button" class="clear" onclick={() => (filters.q = '')} aria-label="Clear the search"><Icon name="close" size={14} /></button>
+      {/if}
+    </label>
 
     {#if !rent}
-      <div class="seg" role="group" aria-label="tier">
-        {#each [['', 'All'], ['hot', 'Hot'], ['warm', 'Warm'], ['cold', 'Cold']] as [v, l] (v)}
-          <button class:on={filters.tier === v} class="t-{v || 'all'}"
-                  onclick={() => (filters.tier = v)}>{l}</button>
-        {/each}
-      </div>
+      <Seg options={TIER} value={filters.tier} onchange={(v) => (filters.tier = v)} label="Tier" />
     {/if}
 
-    <select bind:value={filters.sort} title="sort order">
-      {#if !rent}<option value="score">Sort: score</option>{/if}
-      <option value="pricedesc">Sort: {rent ? 'rent' : 'price'} high → low</option>
-      <option value="priceasc">Sort: {rent ? 'rent' : 'price'} low → high</option>
-      <option value="newest">Sort: newest</option>
-      {#if !rent}
-        <option value="cut">Sort: biggest cut</option>
-        <option value="weakness">Sort: weakest marketing</option>
-      {/if}
-    </select>
+    <span class="mg-select">
+      <select bind:value={filters.sort} title="sort order" aria-label="Sort order">
+        {#if !rent}<option value="score">Sort: score</option>{/if}
+        <option value="pricedesc">Sort: {rent ? 'rent' : 'price'} high → low</option>
+        <option value="priceasc">Sort: {rent ? 'rent' : 'price'} low → high</option>
+        <option value="newest">Sort: newest</option>
+        {#if !rent}
+          <option value="cut">Sort: biggest cut</option>
+          <option value="weakness">Sort: weakest marketing</option>
+        {/if}
+      </select>
+      <span class="ic"><Icon name="chevronDown" size={14} /></span>
+    </span>
 
-    <button class="btn" class:hasmore={refineCount > 0} onclick={() => (refineOpen = !refineOpen)}>
-      Filters{#if refineCount}<b class="cnt">{refineCount}</b>{/if}
+    <button type="button" class="mg-btn secondary" class:on={refineOpen || refineCount > 0}
+            onclick={() => (refineOpen = !refineOpen)} aria-expanded={refineOpen}>
+      <Icon name="sliders" size={15} /> Filters{#if refineCount}<b class="cnt mg-tnum">{refineCount}</b>{/if}
     </button>
 
-    <span class="count">{shown === total
+    <span class="count mg-tnum">{shown === total
       ? `${shown} ${rent ? 'rentals' : 'properties'}`
       : `${shown} of ${total}`}</span>
 
-    <div class="seg view" role="group" aria-label="view">
-      <button class:on={filters.view === 'cards'} onclick={() => (filters.view = 'cards')}
-              title="card view">▦ Cards</button>
-      <button class:on={filters.view === 'list'} onclick={() => (filters.view = 'list')}
-              title="list view">☰ List</button>
-    </div>
+    <Seg options={VIEW} value={filters.view} onchange={(v) => (filters.view = v)} label="View" />
   </div>
 
   {#if refineOpen}
-    <div class="row refine panel">
-      <select bind:value={filters.suburb}>
-        <option value="">All suburbs</option>
-        {#each suburbs as s (s)}<option value={s}>{s}</option>{/each}
-      </select>
+    <div class="refine mg-panel" transition:slide={{ y: -6, duration: 200 }}>
+      <span class="mg-select">
+        <select bind:value={filters.suburb} aria-label="Suburb">
+          <option value="">All suburbs</option>
+          {#each suburbs as s (s)}<option value={s}>{s}</option>{/each}
+        </select>
+        <span class="ic"><Icon name="chevronDown" size={14} /></span>
+      </span>
       {#if !rent}
-        <select bind:value={filters.mandate}>
-          <option value="">Any mandate</option>
-          <option value="open">Open</option>
-          <option value="probably_open">Probably open</option>
-          <option value="unknown">Unknown</option>
-        </select>
-        <select bind:value={filters.erf}>
-          <option value="">Any erf status</option>
-          <option value="resolved">Erf resolved</option>
-          <option value="candidates">Has candidates</option>
-          <option value="unresolved">Unresolved</option>
-        </select>
+        <span class="mg-select">
+          <select bind:value={filters.mandate} aria-label="Mandate">
+            <option value="">Any mandate</option>
+            <option value="open">Open</option>
+            <option value="probably_open">Probably open</option>
+            <option value="unknown">Unknown</option>
+          </select>
+          <span class="ic"><Icon name="chevronDown" size={14} /></span>
+        </span>
+        <span class="mg-select">
+          <select bind:value={filters.erf} aria-label="Erf status">
+            <option value="">Any erf status</option>
+            <option value="resolved">Erf resolved</option>
+            <option value="candidates">Has candidates</option>
+            <option value="unresolved">Unresolved</option>
+          </select>
+          <span class="ic"><Icon name="chevronDown" size={14} /></span>
+        </span>
       {/if}
       <span class="range">
-        <input type="number" min="0" placeholder="Min" bind:value={filters.min} />
+        <input type="number" min="0" placeholder="Min" class="mg-input" bind:value={filters.min} aria-label="Minimum price" />
         <span class="dash">–</span>
-        <input type="number" min="0" placeholder="Max" bind:value={filters.max} />
+        <input type="number" min="0" placeholder="Max" class="mg-input" bind:value={filters.max} aria-label="Maximum price" />
         <span class="unit">{rent ? 'R thousand / period' : 'R million'}</span>
       </span>
       {#if !rent}
         <label class="sole">
-          <input type="checkbox" checked={app.showSole}
-                 onchange={(e) => setShowSole(e.currentTarget.checked)} />
+          <input type="checkbox" checked={app.showSole} onchange={(e) => setShowSole(e.currentTarget.checked)} />
           Include sole mandates
         </label>
       {/if}
       {#if isFiltering()}
-        <button class="clear" onclick={clearFilters}>✕ Clear all</button>
+        <button type="button" class="mg-btn sm ghost" onclick={clearFilters}><Icon name="close" size={13} /> Clear all</button>
       {/if}
     </div>
   {/if}
 </div>
 
 <style>
-  .bar { margin: 1.1rem 0 1.2rem; }
-  .row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-  .refine { margin-top: 0.6rem; padding: 0.75rem 1rem; }
+  .bar { margin: 14px 0 14px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mg-search { flex: 1 1 220px; max-width: 420px; }
+  .mg-select { flex: none; }
+  .mg-select > select { height: 36px; }
 
-  .search { flex: 1 1 260px; max-width: 440px; }
+  .cnt {
+    margin-left: 6px; min-width: 18px; height: 18px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 9999px; background: var(--mc-accent); color: var(--mc-accent-ink); font-size: 11px;
+  }
+  .count { margin-left: auto; font: 400 12.5px/1 var(--mc-font); color: var(--mc-ink3); white-space: nowrap; }
 
-  .seg { display: inline-flex; background: var(--bg-2);
-         border: 1px solid var(--line-2); border-radius: var(--r-sm);
-         overflow: hidden; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04); }
-  .seg button { background: none; border: none; color: var(--ink-2);
-                font: 500 0.82rem/1.3 var(--font-ui);
-                padding: 0.46rem 0.85rem;
-                border-right: 1px solid var(--line); }
-  .seg button:last-child { border-right: none; }
-  .seg button:hover { color: var(--ink); background: var(--bg-3); }
-  .seg button.on { background: var(--accent-soft); color: var(--accent-2); font-weight: 600; }
-  .seg button.on.t-hot { background: var(--hot-soft); color: #b91c1c; }
-  .seg button.on.t-warm { background: var(--warm-soft); color: #92400e; }
-  .seg button.on.t-cold { background: var(--cold-soft); color: #4b5563; }
-  .deal button { white-space: nowrap; }
+  .refine { margin-top: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .range { display: inline-flex; align-items: center; gap: 6px; }
+  .range .mg-input { width: 88px; height: 36px; }
+  .dash, .unit { color: var(--mc-ink3); font-size: 12.5px; }
 
-  .cnt { margin-left: 0.45rem; background: var(--accent); color: #fff;
-         border-radius: 999px; padding: 0.02rem 0.44rem; font-size: 0.7rem; }
-  .hasmore { border-color: var(--accent-line); color: var(--accent-2); }
+  .sole { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; font: 500 13px/1 var(--mc-font); color: var(--mc-ink2); cursor: pointer; }
+  .sole input { width: 16px; height: 16px; margin: 0; }
 
-  .count { margin-left: auto; font-size: 0.76rem; color: var(--ink-3);
-           font-variant-numeric: tabular-nums; }
-
-  .range { display: inline-flex; align-items: center; gap: 0.35rem; }
-  .range input { width: 4.8rem; }
-  .dash, .unit { color: var(--ink-3); font-size: 0.78rem; }
-
-  .sole { display: inline-flex; align-items: center; gap: 0.45rem;
-          font-size: 0.82rem; color: var(--ink-2); cursor: pointer; }
-  .sole input { accent-color: var(--accent); width: 15px; height: 15px; }
-
-  .clear { background: none; border: none; font: 600 0.78rem/1.3 var(--font-ui);
-           color: var(--ink-3); }
-  .clear:hover { color: var(--bad); }
+  @media (max-width: 640px) {
+    .mg-search { flex-basis: 100%; max-width: none; order: -1; }
+    .count { flex-basis: 100%; margin-left: 0; order: 10; }
+  }
 </style>

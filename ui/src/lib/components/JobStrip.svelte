@@ -1,5 +1,7 @@
 <script>
   import { app, actions } from '$lib/state.svelte.js';
+  import Icon from './glass/Icon.svelte';
+  import { slide } from '$lib/motion.js';
 
   /* `inline` — already inside a page's own column, so drop the shell gutters */
   let { inline = false } = $props();
@@ -23,17 +25,18 @@
 </script>
 
 {#if !s.ai_ok && s.ai_reason}
-  <div class="aiwarn" class:inline>
-    AI scoring is off — {s.ai_reason}. Scores fall back to the heuristic; mandate
-    verdicts still use hard evidence (multi-agency listings, portal mandate flags).
+  <div class="mg-strip warn aiwarn" class:inline>
+    <span class="ic"><Icon name="alert" size={15} /></span>
+    <span><b>AI scoring is off</b> — {s.ai_reason}. Scores fall back to the heuristic; mandate
+    verdicts still use hard evidence (multi-agency listings, portal mandate flags).</span>
   </div>
 {/if}
 
 {#if show}
-  <section class="strip" class:idle={!s.running} class:inline>
+  <section class="strip mg-panel" class:idle={!s.running} class:inline transition:slide={{ y: -6, duration: 220 }}>
     <div class="row">
       <div class="phase">
-        {#if s.running}<span class="spin"></span>{/if}
+        {#if s.running}<span class="mg-dot warn"><i class="mg-ping"></i></span>{/if}
         <b>{s.running ? s.phase : busyNote || 'idle'}</b>
         {#if s.total}<span class="n">{s.done} / {s.total} pages</span>{/if}
       </div>
@@ -49,97 +52,54 @@
       </div>
 
       <div class="tools">
-        <button class="act" onclick={() => (app.logOpen = !app.logOpen)}>
+        <button type="button" class="mg-btn sm secondary" onclick={() => (app.logOpen = !app.logOpen)}>
           {app.logOpen ? 'Hide log' : 'Activity log'}
         </button>
         {#if s.running}
-          <button class="act stop" onclick={() => actions.stop()}>Stop</button>
+          <button type="button" class="mg-btn sm danger" onclick={() => actions.stop()}><Icon name="stop" size={13} /> Stop</button>
         {/if}
       </div>
     </div>
 
     {#if s.running && s.total}
-      <div class="bar"><i style:width="{pct}%"></i></div>
+      <div class="mg-bar warn prog"><i style:width="{pct}%"></i></div>
     {/if}
 
     {#if app.logOpen}
-      <pre class="log" bind:this={logEl}>{(s.log || []).join('\n')}</pre>
+      <pre class="log mg-inset" bind:this={logEl}>{(s.log || []).join('\n')}</pre>
     {/if}
   </section>
 {/if}
 
 <style>
-  .aiwarn, .strip {
-    max-width: 1480px;
-    margin-left: clamp(1rem, 3vw, 2rem);
-    margin-right: clamp(1rem, 3vw, 2rem);
-  }
-  @media (min-width: 1544px) { .aiwarn, .strip { margin-left: auto; margin-right: auto; } }
-  .aiwarn.inline, .strip.inline { max-width: none; margin-left: 0; margin-right: 0; }
+  .aiwarn, .strip { max-width: 1200px; margin-left: auto; margin-right: auto; }
+  .aiwarn.inline, .strip.inline { max-width: none; }
+  .aiwarn { margin-bottom: 14px; }
 
-  /* —————————————————————————————————————————— soft amber notice ——— */
-  .aiwarn {
-    margin-top: 0.9rem;
-    padding: 0.65rem 0.85rem;
-    background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 10px;
-    font: 400 0.8rem/1.55 var(--font-ui);
-    color: var(--warn-ink);
-  }
+  .strip { margin-bottom: 14px; padding: 12px 14px; }
+  .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 
-  /* ————————————————————————————————————————————— status card ——— */
-  .strip {
-    margin-top: 0.9rem; padding: 0.7rem 1rem;
-    background: var(--bg-2);
-    border: 1px solid var(--line); border-radius: var(--r-lg);
-    box-shadow: var(--shadow-1);
-  }
-  .strip.idle { box-shadow: none; }
+  .phase { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .phase b { font: 600 13px/1.3 var(--mc-font); color: var(--mc-warn); text-transform: capitalize; }
+  .strip.idle .phase b { color: var(--mc-ink2); }
+  .phase .n { font: 400 12.5px/1.3 var(--mc-mono); color: var(--mc-ink3); font-variant-numeric: tabular-nums; }
 
-  .row { display: flex; align-items: center; gap: 1.4rem; flex-wrap: wrap; }
-
-  .phase { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
-  .phase b {
-    font: 600 0.82rem/1.3 var(--font-ui); color: var(--accent-2);
-  }
-  .strip.idle .phase b { color: var(--ink-2); }
-  .phase .n {
-    font: 400 0.76rem/1.3 var(--font-ui); color: var(--ink-3);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .sources { display: flex; gap: 1.1rem; flex: 1; flex-wrap: wrap; }
+  .sources { display: flex; gap: 14px; flex: 1; flex-wrap: wrap; }
   .src {
     position: relative; min-width: 108px; padding-bottom: 9px;
-    display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem;
-    font: 500 0.74rem/1.3 var(--font-ui); color: var(--ink-2);
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    font: 500 12px/1.3 var(--mc-font); color: var(--mc-ink2);
   }
-  .src::after {
-    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px;
-    background: var(--bg-3); border-radius: 999px;
-  }
+  .src::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--mc-inset); border-radius: 999px; }
   .src .sname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .src .scount { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .src i {
-    position: absolute; left: 0; bottom: 0; height: 4px; z-index: 1;
-    background: var(--accent); border-radius: 999px; transition: width 0.4s;
-  }
+  .src .scount { color: var(--mc-ink); font: 600 12px/1.3 var(--mc-mono); }
+  .src i { position: absolute; left: 0; bottom: 0; height: 4px; z-index: 1; background: var(--mc-accent); border-radius: 999px; transition: width 0.4s var(--mc-ease); }
 
-  .tools { display: flex; gap: 0.4rem; }
-  .stop:hover { background: var(--red-soft); border-color: var(--red-line); color: var(--red); }
+  .tools { display: flex; gap: 6px; margin-left: auto; }
+  .prog { margin-top: 10px; }
 
-  .bar {
-    height: 6px; background: var(--bg-3); border: 1px solid var(--line);
-    border-radius: 999px; overflow: hidden; margin-top: 0.65rem;
-  }
-  .bar i { display: block; height: 100%; border-radius: 999px;
-           background: var(--accent); transition: width 0.4s; }
-
-  /* ——————————————————————————————————————————— activity log ——— */
   .log {
-    margin: 0.7rem 0 0; height: 200px; overflow-y: auto;
-    background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--r-sm);
-    padding: 0.6rem 0.75rem;
-    font: 400 0.68rem/1.65 var(--font-mono);
-    color: var(--ink-2); white-space: pre-wrap;
+    margin: 10px 0 0; height: 200px; overflow-y: auto; border-radius: 8px; padding: 10px 12px;
+    font: 400 11.5px/1.6 var(--mc-mono); color: var(--mc-ink2); white-space: pre-wrap;
   }
 </style>

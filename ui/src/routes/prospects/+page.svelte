@@ -9,6 +9,8 @@
   import ProspectList from '$lib/components/ProspectList.svelte';
   import JobStrip from '$lib/components/JobStrip.svelte';
   import Drawer from '$lib/components/Drawer.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
+  import Empty from '$lib/components/glass/Empty.svelte';
   import { fmtR, monthlyRent } from '$lib/format.js';
 
   const rows = $derived(sortRows(applyFilters(app.prospects)));
@@ -31,8 +33,7 @@
   const visible = $derived(rows.slice(0, limit));
 
   /* The sale tiles all count scored, deduped, erf-resolved work — none of
-     which a rental has. The rent book gets tiles it can actually fill: how
-     much stock, where it is, and what the middle of the market asks. */
+     which a rental has. The rent book gets tiles it can actually fill. */
   const rentInfo = $derived.by(() => {
     const list = app.prospects;
     const rents = list.map(monthlyRent).filter(Boolean).sort((a, b) => a - b);
@@ -53,18 +54,18 @@
   });
 
   const tiles = $derived(rent
-    ? [['Rentals', rentInfo.count, ''],
-       ['Suburbs', rentInfo.suburbs, ''],
-       ['Median rent', rentInfo.median ? fmtR(rentInfo.median) : null, ''],
-       ['Furnished', rentInfo.furnished, '']]
-    : [['Hot right now', saleInfo.hot, 'hot'],
-       ['Sellable', saleInfo.sellable, ''],
-       ['Multi-agency proof', saleInfo.multi, ''],
-       ['Erf resolved', saleInfo.erf, '']]);
+    ? [{ k: 'Rentals', v: rentInfo.count, sub: 'in the to-rent book' },
+       { k: 'Suburbs', v: rentInfo.suburbs, sub: 'with stock' },
+       { k: 'Median rent', v: rentInfo.median ? fmtR(rentInfo.median) : null, sub: 'a month' },
+       { k: 'Furnished', v: rentInfo.furnished, sub: 'ready to move in' }]
+    : [{ k: 'Hot', v: saleInfo.hot, tone: saleInfo.hot ? 'crit' : '', sub: 'call these first' },
+       { k: 'Sellable', v: saleInfo.sellable, sub: 'scored and deduped' },
+       { k: 'Multi-agency', v: saleInfo.multi, tone: 'ok', sub: 'proven open mandate' },
+       { k: 'Erf resolved', v: saleInfo.erf, sub: 'matched to the cadastre' }]);
 
   const crawling = $derived(app.status.running);
 
-  /* One plain sentence about the book, the way the landing screen talks. */
+  /* One plain sentence about the book. */
   const line = $derived.by(() => {
     const s = app.status;
     if (s.running)
@@ -87,55 +88,63 @@
 
 <svelte:head><title>Oblivion — {rent ? 'Rentals' : 'Prospect Engine'}</title></svelte:head>
 
-<div class="mg-row">
+<div class="mg-row head">
   <div class="titles">
-    <h1 class="mg-h2">{rent ? 'Rentals' : 'Prospect engine'}</h1>
-    <p class="line">
-      {#if crawling}<span class="mg-dot ok"><i class="mg-ping"></i></span>{/if}{line}
+    <h1 class="mg-h1">{rent ? 'Rentals' : 'Prospect engine'}</h1>
+    <p class="mg-sub line">
+      {#if crawling}<span class="mg-dot warn"><i class="mg-ping"></i></span>{/if}{line}
     </p>
-  </div>
-
-  <div class="mg-actions">
-    {#each tiles as [label, v, cls] (label)}
-      <span class="mg-stat pill">
-        <b class="v mg-tnum {cls}">{v ?? '—'}</b>
-        <span class="k">{label}</span>
-      </span>
-    {/each}
   </div>
 </div>
 
-<!-- the engine's own progress strip; TODO(prospects agent): restyle as
-     `.mg-strip` + `.mg-bar` -->
+<div class="tiles">
+  {#each tiles as t, i (t.k)}
+    <div class="mg-stat-tile mg-rise" style:--i={i}>
+      <span class="hud">{t.k}</span>
+      <div class="v {t.tone || ''}">{#if app.loaded || t.v != null}{t.v ?? '—'}{:else}<Skeleton h="26px" w="56px" />{/if}</div>
+      <div class="sub">{t.sub}</div>
+    </div>
+  {/each}
+</div>
+
 <JobStrip inline />
 
 <AiFinder />
 
-<div class="gap"><FilterBar shown={rows.length} total={app.prospects.length} /></div>
+<FilterBar shown={rows.length} total={app.prospects.length} />
 
 {#if !app.loaded}
-  <div class="empty mg-glass-soft"><span class="mg-spin"></span>&nbsp; Loading {rent ? 'rentals' : 'prospects'}…</div>
+  <div class="grid" aria-busy="true">
+    {#each Array(6) as _, i (i)}
+      <div class="skcard mg-panel" style:--i={i}>
+        <Skeleton h="150px" r="0" delay={i * 60} />
+        <div class="skbody">
+          <Skeleton h="18px" w="40%" delay={i * 60} />
+          <Skeleton h="13px" lines={2} delay={i * 60 + 40} />
+        </div>
+      </div>
+    {/each}
+  </div>
 {:else if !app.prospects.length}
-  <div class="empty mg-glass-soft">
-    {#if rent}
-      <p class="big">No rentals yet</p>
-      <p>The to-rent book is crawled on request — start a crawl with
-        <b>Include rentals</b> ticked, or wait for tonight's full pass.</p>
-    {:else}
-      <p class="big">No prospects yet</p>
-      <p>Run your first crawl — pick portals and areas, the engine does the rest.</p>
-    {/if}
-    <button class="mg-btn primary" onclick={() => (app.runOpen = true)}>New crawl</button>
+  <div class="mg-panel">
+    <Empty icon="building" title={rent ? 'No rentals yet' : 'No prospects yet'}
+           hint={rent
+             ? 'The to-rent book is crawled on request — start a crawl with “Include rentals” ticked, or wait for tonight’s full pass.'
+             : 'Run your first crawl — pick portals and areas, the engine does the rest.'}>
+      <button type="button" class="mg-btn primary" onclick={() => (app.runOpen = true)}>New crawl</button>
+    </Empty>
   </div>
 {:else if !rows.length}
-  <div class="empty mg-glass-soft">
-    <p>{rent ? 'No rentals match these filters.' : 'Nothing matches these filters.'}</p>
-    {#if isFiltering()}<button class="mg-btn secondary" onclick={clearFilters}>Clear filters</button>{/if}
+  <div class="mg-panel">
+    <Empty icon="filter" title={rent ? 'No rentals match these filters' : 'Nothing matches these filters'}
+           hint="Loosen the search, the tier or the price range.">
+      {#if isFiltering()}<button type="button" class="mg-btn secondary" onclick={clearFilters}>Clear filters</button>{/if}
+    </Empty>
   </div>
 {:else if filters.view === 'cards'}
   <div class="grid">
-    {#each visible as r (r.listing_key)}
-      <ProspectCard {r} />
+    {#each visible as r, i (r.listing_key)}
+      <ProspectCard {r} {i} />
     {/each}
   </div>
 {:else}
@@ -144,7 +153,7 @@
 
 {#if rows.length > limit}
   <div class="more">
-    <button class="mg-btn secondary" onclick={() => (limit += 120)}>
+    <button type="button" class="mg-btn secondary" onclick={() => (limit += 120)}>
       Show more · {rows.length - limit} remaining
     </button>
   </div>
@@ -153,32 +162,18 @@
 <Drawer />
 
 <style>
-  /* The page header lives inside the app's pane: title, one sentence, and
-     the figures on the right. The photograph behind it belongs to the scene.
-
-     TODO(prospects agent): FilterBar, AiFinder, ProspectCard/List, Drawer,
-     JobStrip and RunPanel are all still on the old vocabulary. */
+  .head { margin-bottom: 14px; }
   .titles { min-width: 0; }
-  .line {
-    margin: 4px 0 0; display: flex; align-items: center; gap: 7px;
-    font: 400 13px/1.5 var(--mg-font); color: var(--mg-i2);
-  }
-  .line .mg-dot { margin-top: 1px; }
+  .line { margin-top: 4px; display: flex; align-items: center; gap: 8px; }
 
-  .mg-actions .v { color: var(--mg-i); }
-  .mg-actions .v.hot { color: var(--mg-crit); }
+  .tiles { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 14px; }
+  @media (min-width: 900px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
-  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); }
+  @media (max-width: 420px) { .grid { grid-template-columns: 1fr; } }
 
-  .empty {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 12px; text-align: center; color: var(--mg-i2);
-    padding: 64px 16px; border-radius: var(--mg-r-card);
-  }
-  .empty .big { font: 600 17px/1.3 var(--mg-font); color: var(--mg-i); margin: 0; }
-  .empty p { margin: 0; font-size: 13px; }
+  .skcard { overflow: hidden; }
+  .skbody { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
 
   .more { display: flex; justify-content: center; margin-top: 20px; }
-
-  .gap { padding-top: 0.3rem; }
 </style>
