@@ -160,5 +160,21 @@ export const api = {
   reinvite: (id, days) => post(`/api/users/${id}/reinvite`, { days }),
   invites: () => get('/api/invites'),
   createInvite: (body) => post('/api/invites', body),
-  revokeInvite: (id) => del('/api/invites/' + id)
+  revokeInvite: (id) => del('/api/invites/' + id),
+
+  /* ---- team: per-person tasks and presence (team.py). `user` is only
+     honoured for admins — a member asking for somebody else's list gets a
+     403 from the server, so the UI never draws the switcher for them. */
+  myTasks: (user) => get('/api/team/tasks' + (user ? '?user=' + user : '')),
+  taskBoard: () => get('/api/team/tasks/board'),
+  createTask: (body) => post('/api/team/tasks', body),
+  updateTask: (id, body) => patch('/api/team/tasks/' + id, body),
+  startTask: (id) => post(`/api/team/tasks/${id}/start`),
+  completeTask: (id) => post(`/api/team/tasks/${id}/complete`),
+  reopenTask: (id) => post(`/api/team/tasks/${id}/reopen`),
+  deleteTask: (id) => del('/api/team/tasks/' + id),
+  propertySearch: (q) => get('/api/team/properties?q=' + encodeURIComponent(q)),
+  presence: (pagePath) => post('/api/presence', { page: pagePath }),
+  online: () => get('/api/online'),
+  revokeAnySession: (sid) => post(`/api/team/sessions/${encodeURIComponent(sid)}/revoke`)
 };

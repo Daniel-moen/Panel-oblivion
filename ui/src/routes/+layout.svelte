@@ -26,6 +26,7 @@
   import { app, startPolling, stopPolling } from '$lib/state.svelte.js';
   import { startChat } from '$lib/chat.svelte.js';
   import { loadMe } from '$lib/me.svelte.js';
+  import { installTeam } from '$lib/team.svelte.js';
   import StatusStrip from '$lib/components/glass/StatusStrip.svelte';
   import Dock from '$lib/components/glass/Dock.svelte';
   import Rail from '$lib/components/glass/Rail.svelte';
@@ -46,9 +47,13 @@
     loadMe();
     startPolling();
     const stopChat = startChat();
+    /* The team features (tasks, /online, presence) register their own nav
+       and Home cards through shell.svelte.js; this is their only hook. */
+    const stopTeam = installTeam(() => path);
     return () => {
       stopPolling();
       stopChat();
+      stopTeam();
     };
   });
 
