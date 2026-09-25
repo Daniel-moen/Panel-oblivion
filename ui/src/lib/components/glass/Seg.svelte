@@ -82,6 +82,6 @@
   .ct { font-size: 11px; color: var(--mc-ink3); font-variant-numeric: tabular-nums; }
   button.on .ct { color: var(--mc-ink2); }
 
-  @media (pointer: coarse) { button { height: 36px; } }
+  @media (pointer: coarse) { button { height: 40px; padding: 0 14px; } }
   @media (prefers-reduced-motion: reduce) { .pill { transition: opacity 0.06s; } }
 </style>
