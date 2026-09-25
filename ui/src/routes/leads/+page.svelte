@@ -214,6 +214,7 @@
   .titles { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .titles .mg-h1 { font-size: 26px; }
   .kp { gap: 6px; }
+  .kp .mg-stat.pill { align-items: center; }
 
   .cols { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
   .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }

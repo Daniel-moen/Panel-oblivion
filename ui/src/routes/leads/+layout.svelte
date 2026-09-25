@@ -26,11 +26,12 @@
   let focused = $state(false);
   let cursor = $state(0);
   let box = $state(null);
+  let got = $state(0); // how many of the two lists have landed
 
   onMount(() => {
     loadToday();
-    api.tracked().then((r) => (all = r)).catch(() => {});
-    api.contacts().then((r) => (people = r)).catch(() => {});
+    api.tracked().then((r) => (all = r)).catch(() => {}).finally(() => got++);
+    api.contacts().then((r) => (people = r)).catch(() => {}).finally(() => got++);
   });
 
   const needle = $derived(q.trim().toLowerCase());
@@ -104,7 +105,9 @@
 
     {#if open}
       <div class="hits mg-popover" id="lead-hits" role="listbox" transition:slide={{ y: -6, duration: 180 }}>
-        {#if !results.length}
+        {#if !results.length && got < 2}
+          <p class="none"><span class="mg-spin"></span> Searching…</p>
+        {:else if !results.length}
           <p class="none">No property or person matches “{q.trim()}”.</p>
         {:else}
           {#each results as r, i (r.key)}
@@ -142,7 +145,13 @@
     .find { flex-basis: 100%; max-width: none; }
     .sections { flex-basis: 100%; }
   }
+  /* a phone: the four labels fit on one line once the icons step aside */
+  @media (max-width: 439px) {
+    .sections :global(button svg) { display: none; }
+    .sections :global(button) { padding: 0 10px; }
+  }
 
+  .find input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
   .hits {
     position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
     display: flex; flex-direction: column; gap: 1px;
@@ -159,6 +168,6 @@
   .t b { font: 500 13px/1.35 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .t span { font: 400 12px/1.35 var(--mc-font); color: var(--mc-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hits :global(.chev) { flex: none; color: var(--mc-ink3); }
-  .none { margin: 0; padding: 12px 10px; font: 400 13px/1.45 var(--mc-font); color: var(--mc-ink3); }
+  .none { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 10px; font: 400 13px/1.45 var(--mc-font); color: var(--mc-ink3); }
   @media (pointer: coarse) { .hits > button { min-height: 48px; } }
 </style>

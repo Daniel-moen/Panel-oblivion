@@ -121,6 +121,7 @@
   .date.set { border-color: var(--mc-ok-line); color: var(--mc-accent); }
   .acts { display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
   .kbd { margin-right: auto; }
+  @media (max-width: 639px) { .kbd { display: none; } }
   @media (pointer: coarse) {
     .chips .mg-chip, .date { height: 40px; }
     .acts .mg-btn { height: 44px; }

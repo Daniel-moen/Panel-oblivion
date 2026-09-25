@@ -18,29 +18,32 @@
 
   let { p, task = null, reason = '', tone = '', children } = $props();
   let logging = $state(false);
-  let snoozeAt = $state(null); // {top,right} while the menu is open
+  let snoozeOpen = $state(false);
+  let snoozeAt = $state({ left: 0 }); // where the menu sits; outlives the close so the exit animates
   let snoozeBtn = $state(null);
   let busy = $state(false);
   const wa = $derived(waNumber(p?.contact_phone));
 
   function openSnooze() {
-    if (snoozeAt) { snoozeAt = null; return; }
+    if (snoozeOpen) { snoozeOpen = false; return; }
     const r = snoozeBtn.getBoundingClientRect();
     const below = window.innerHeight - r.bottom > 170;
-    snoozeAt = below
-      ? { top: r.bottom + 6, right: window.innerWidth - r.right }
-      : { bottom: window.innerHeight - r.top + 6, right: window.innerWidth - r.right };
+    // right-align to the button, but never past either edge of the screen
+    const W = 188;
+    const left = Math.max(8, Math.min(r.right - W, window.innerWidth - W - 8));
+    snoozeAt = below ? { top: r.bottom + 6, left } : { bottom: window.innerHeight - r.top + 6, left };
+    snoozeOpen = true;
     tick().then(() => document.querySelector('.lr-snooze button')?.focus());
   }
   async function act(fn) {
-    busy = true; snoozeAt = null;
+    busy = true; snoozeOpen = false;
     try { await fn(); } finally { busy = false; }
   }
 
   // the popover closes on Esc, an outside tap, a scroll or a resize
   $effect(() => {
-    if (!snoozeAt) return;
-    const close = () => (snoozeAt = null);
+    if (!snoozeOpen) return;
+    const close = () => (snoozeOpen = false);
     const onDown = (e) => { if (!e.target.closest?.('.lr-snooze') && e.target !== snoozeBtn && !snoozeBtn?.contains(e.target)) close(); };
     const onKey = (e) => { if (e.key === 'Escape') { close(); snoozeBtn?.focus(); } };
     window.addEventListener('pointerdown', onDown, true);
@@ -91,8 +94,8 @@
       <button type="button" class="mg-btn secondary icon sm" class:on={logging} onclick={() => (logging = true)}
               title="Log a contact attempt" aria-label="Log a contact attempt"><Icon name="pencil" size={15} /></button>
       {#if task}
-        <button type="button" class="mg-btn secondary icon sm" class:on={!!snoozeAt} bind:this={snoozeBtn} onclick={openSnooze}
-                disabled={busy} title="Snooze" aria-label="Snooze" aria-haspopup="menu" aria-expanded={!!snoozeAt}><Icon name="clock" size={15} /></button>
+        <button type="button" class="mg-btn secondary icon sm" class:on={snoozeOpen} bind:this={snoozeBtn} onclick={openSnooze}
+                disabled={busy} title="Snooze" aria-label="Snooze" aria-haspopup="menu" aria-expanded={snoozeOpen}><Icon name="clock" size={15} /></button>
         <button type="button" class="mg-btn secondary icon sm done" onclick={() => act(() => taskDone(task))} disabled={busy}
                 title="Mark done" aria-label="Mark done"><Icon name="check" size={15} stroke={2} /></button>
       {/if}
@@ -100,12 +103,12 @@
   </div>
 </div>
 
-{#if snoozeAt}
+{#if snoozeOpen}
   <div class="mg-portal" use:portal>
     <div class="lr-snooze mg-popover" role="menu" aria-label="Snooze until"
          style:top={snoozeAt.top != null ? snoozeAt.top + 'px' : null}
          style:bottom={snoozeAt.bottom != null ? snoozeAt.bottom + 'px' : null}
-         style:right="{snoozeAt.right}px"
+         style:left="{snoozeAt.left}px"
          transition:slide={{ y: snoozeAt.top != null ? -6 : 6, duration: 180 }}>
       <span class="hud">Snooze until</span>
       <button type="button" role="menuitem" onclick={() => act(() => snooze(task, 1))}>Tomorrow</button>
@@ -165,7 +168,7 @@
   }
 
   .lr-snooze {
-    position: fixed; z-index: 95; min-width: 180px;
+    position: fixed; z-index: 95; width: 188px;
     display: flex; flex-direction: column;
   }
   .lr-snooze .hud { padding: 6px 10px 4px; }

@@ -1,11 +1,22 @@
 <script>
-  import { onMount } from 'svelte';
+  /* One tracked property: who owns it, every call, the stage, the mandate.
+
+     Header panel (photo, badges, price, the actions you take from here) →
+     the stage stepper → two columns: the work (call brief, composer, the
+     timeline) and the facts (contacts, mandate, tasks, listings). Adding a
+     contact and recording a mandate outcome open a Sheet. */
+  import { tick, untrack } from 'svelte';
   import { page } from '$app/state';
   import { api } from '$lib/api.js';
   import { toast, app } from '$lib/state.svelte.js';
   import { loadToday, waNumber, addrOf } from '$lib/leads.svelte.js';
   import QuickLog from '$lib/components/QuickLog.svelte';
   import CallBrief from '$lib/components/CallBrief.svelte';
+  import Photo from '$lib/components/Photo.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
+  import Icon from '$lib/components/glass/Icon.svelte';
+  import Empty from '$lib/components/glass/Empty.svelte';
+  import Sheet from '$lib/components/glass/Sheet.svelte';
   import { fmtR, fmtM } from '$lib/format.js';
   import { STAGE_LABEL, MANDATE_LABEL, ago, isPast, shortDate, label } from '$lib/panel.js';
 
@@ -18,6 +29,8 @@
   let showContact = $state(false);
   let showMandate = $state(false);
   let newTask = $state('');
+  let saving = $state(false);
+  let stepper = $state(null);
   /* Collapsed by default: the brief costs a round-trip and this page is
      opened far more often to log a call than to prepare one. */
   let showBrief = $state(false);
@@ -36,21 +49,32 @@
       d = dd; meta = mm; err = null;
     } catch (e) { err = e.status === 404 ? 'notfound' : e.message; }
   }
-  onMount(load);
-  $effect(() => { gid; load(); });
+  // one load per gid (the old onMount + effect pair fetched everything twice)
+  $effect(() => { gid; untrack(() => { d = null; err = null; load(); }); });
   const refresh = async () => { await load(); loadToday(); };
 
+  // keep the current stage in view on a narrow stepper
+  $effect(() => {
+    d?.stage;
+    tick().then(() => stepper?.querySelector('.step.cur')?.scrollIntoView?.({ block: 'nearest', inline: 'center' }));
+  });
+
   async function setStage(v) {
-    try { await api.updateTracked(gid, { stage: v }); app.tracked[gid] = v; await refresh(); }
-    catch (e) { toast(e.message, 'error'); }
+    if (d.stage === v) return;
+    const prev = d.stage;
+    d.stage = v;
+    try { await api.updateTracked(gid, { stage: v }); app.tracked[gid] = v; toast('Moved to ' + STAGE_LABEL[v], 'ok'); await refresh(); }
+    catch (e) { d.stage = prev; toast(e.message, 'error'); }
   }
   async function togglePriority() {
     const v = d.priority === 'high' ? 'normal' : 'high';
     try { await api.updateTracked(gid, { priority: v }); d.priority = v; } catch (e) { toast(e.message, 'error'); }
   }
   async function add(kind, body, after) {
+    saving = true;
     try { await api.child.add(gid, kind, body); after?.(); await refresh(); toast('Saved', 'ok'); }
     catch (e) { toast(e.message, 'error'); }
+    finally { saving = false; }
   }
   async function remove(kind, id) {
     if (!confirm('Delete this entry?')) return;
@@ -63,17 +87,33 @@
     try { toast('Asking the deeds office…'); await api.deed(gid); await refresh(); }
     catch (e) { toast(e.message, 'error'); }
   }
+  async function trackIt() {
+    try { await api.track(gid); app.tracked[gid] = 'new'; load(); } catch (e) { toast(e.message, 'error'); }
+  }
 
   const today = () => new Date().toISOString().slice(0, 10);
-  let cf = $state({ role: 'owner', name: '', phone: '', email: '', company: '', notes: '' });
+  const blankContact = () => ({ role: 'owner', name: '', phone: '', email: '', company: '', notes: '' });
+  let cf = $state(blankContact());
   let mf = $state({ type: 'sole', signed_at: today(), duration_days: 90, listing_price: '', commission_pct: '',
                     competing_agencies: '', lost_reason: 'went_with_other_agency', lost_to: '', notes: '' });
+  function saveContact() {
+    if (!(cf.name || cf.phone)) { toast('Add a name or a phone number', 'error'); return; }
+    add('contacts', { ...cf, provider: 'manual' }, () => { showContact = false; cf = blankContact(); });
+  }
   function saveMandate() {
     const b = { ...mf, listing_price: mf.listing_price ? Number(mf.listing_price) : null,
                 commission_pct: mf.commission_pct ? Number(mf.commission_pct) : null,
                 duration_days: mf.duration_days ? Number(mf.duration_days) : null };
     if (mf.type === 'none_lost') { b.signed_at = null; b.duration_days = null; } else { b.lost_reason = null; b.lost_to = null; }
     add('mandates', b, () => (showMandate = false));
+  }
+  function saveNote(e) {
+    e.preventDefault();
+    if (note.trim()) add('notes', { body: note.trim() }, () => (note = ''));
+  }
+  function saveTask(e) {
+    e.preventDefault();
+    if (newTask.trim()) add('tasks', { title: newTask.trim(), kind: 'other' }, () => (newTask = ''));
   }
 
   const primary = $derived(d?.contacts?.[0] || null);
@@ -99,7 +139,12 @@
   const prettyNotes = (n) => String(n || '').replace(/\{[^}]*\}/g, (j) => {
     try { return Object.entries(JSON.parse(j)).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · '); } catch { return j; }
   });
-  const ICON = { call: '📞', whatsapp: '💬', sms: '✉️', email: '📧', visit: '🚪', letter: '📮' };
+  const CH_ICON = { call: 'phone', whatsapp: 'message', sms: 'text', email: 'send', visit: 'home', letter: 'inbox' };
+  const EV_ICON = { note: 'pencil', mandate: 'ticket', stage_change: 'arrowRight', tracked: 'eye', contact_added: 'userPlus',
+                    price_cut: 'dollar', delisted: 'eyeOff', relisted: 'refresh' };
+  const evIcon = (s) => (s.kind === 'interaction' ? CH_ICON[s.i.channel] || 'phone' : EV_ICON[s.kind] || 'clock');
+  const GOOD = ['spoke', 'interested', 'meeting_set'];
+  const outTone = (o) => (GOOD.includes(o) ? 'ok' : o === 'not_interested' ? 'crit' : o === 'callback_requested' ? 'warn' : '');
   const actText = (a) => {
     const p = a.payload || {};
     if (a.kind === 'stage_change') return `Moved to ${STAGE_LABEL[p.to] || p.to}${p.reason ? ' — ' + p.reason : ''}`;
@@ -112,290 +157,398 @@
 
 <svelte:head><title>{d ? addrOf(d) : 'Property'} — Leads</title></svelte:head>
 
-{#if err === 'notfound'}
-  <div class="empty panel"><h3>Not tracked</h3><p>This property isn't in lead management yet.</p>
-    <button class="btn primary" onclick={async () => { await api.track(gid); app.tracked[gid] = 'new'; load(); }}>+ Track it</button></div>
-{:else if err}
-  <div class="empty panel"><h3>Couldn't load</h3><p>{err}</p></div>
-{:else if d}
-  <a class="back" href="/leads/properties">← Properties</a>
+<a class="mg-btn ghost sm back" href="/leads/properties"><Icon name="chevronLeft" size={15} /> Properties</a>
 
-  <header class="hd panel">
-    <div class="ph" style:background-image={d.photo_url ? `url(/api/photo/${encodeURIComponent(d.listing_key)})` : null}></div>
+{#if err === 'notfound'}
+  <Empty icon="building" title="Not tracked" hint="This property isn't in lead management yet.">
+    <button type="button" class="mg-btn primary" onclick={trackIt}><Icon name="plus" size={15} /> Track it</button>
+    <a class="mg-btn secondary" href="/leads/properties">All properties</a>
+  </Empty>
+{:else if err}
+  <div class="mg-strip crit"><span class="ic"><Icon name="alert" size={15} /></span><span><b>Couldn't load this property</b> — {err}</span></div>
+  <Empty icon="building" title="Property unavailable" hint="Try again in a moment.">
+    <button type="button" class="mg-btn secondary" onclick={load}><Icon name="refresh" size={15} /> Try again</button>
+  </Empty>
+{:else if !d}
+  <div class="mg-panel hd">
+    <Skeleton h="120px" w="160px" r="12px" />
+    <div class="hl"><Skeleton h="22px" w="120px" /><Skeleton h="24px" w="70%" /><Skeleton h="13px" w="45%" /><Skeleton h="18px" w="30%" /></div>
+  </div>
+  <div class="mg-panel"><Skeleton h="40px" /></div>
+{:else}
+  <header class="mg-panel hd mg-rise">
+    <div class="ph"><Photo r={d} eager alt={addrOf(d)} /></div>
     <div class="hl">
       <div class="badges">
         {#if d.tier}<span class="tier {d.tier}">{d.tier}</span>{/if}
         {#if d.mandate_verdict}<span class="mv {d.mandate_verdict}">{label(d.mandate_verdict)}</span>{/if}
-        {#if mandate}<span class="mand m-{mandate.type}">{mandate.type === 'none_lost' ? 'Lost' : MANDATE_LABEL[mandate.type] + ' mandate'}{mandate.expires_at && mandate.type !== 'none_lost' ? ' · exp ' + shortDate(mandate.expires_at) : ''}</span>{/if}
-        <button class="star" class:on={d.priority === 'high'} onclick={togglePriority} title="Toggle high priority">★</button>
+        {#if mandate}<span class="mg-chip xs {mandate.type === 'none_lost' ? 'crit' : 'ok'}">{mandate.type === 'none_lost' ? 'Lost' : MANDATE_LABEL[mandate.type] + ' mandate'}{mandate.expires_at && mandate.type !== 'none_lost' ? ' · exp ' + shortDate(mandate.expires_at) : ''}</span>{/if}
+        <button type="button" class="mg-btn icon sm star" class:secondary={d.priority !== 'high'} class:warn={d.priority === 'high'}
+                onclick={togglePriority} aria-pressed={d.priority === 'high'}
+                title={d.priority === 'high' ? 'High priority — tap to clear' : 'Mark high priority'} aria-label="High priority">
+          <Icon name="star" size={15} />
+        </button>
       </div>
-      <h1>{addrOf(d)}</h1>
-      <p class="sub">{[d.suburb, d.property_type, d.bedrooms ? d.bedrooms + ' bed' : null, d.erf_number ? 'Erf ' + d.erf_number : null].filter(Boolean).join(' · ')}</p>
-      <p class="price">{d.price_zar ? fmtR(d.price_zar) : 'POA'}{#if d.listing_count > 1}<span class="dim"> · {d.listing_count} listings · {d.agency_count} agencies</span>{/if}</p>
+      <h1 class="mg-h1">{addrOf(d)}</h1>
+      <p class="mg-sub">{[d.suburb, d.property_type, d.bedrooms ? d.bedrooms + ' bed' : null, d.erf_number ? 'Erf ' + d.erf_number : null].filter(Boolean).join(' · ')}</p>
+      <p class="amt"><span class="mg-tnum">{d.price_zar ? fmtR(d.price_zar) : 'POA'}</span>{#if d.listing_count > 1}<span class="dim"> · {d.listing_count} listings · {d.agency_count} agencies</span>{/if}</p>
       <div class="acts">
-        {#if primary?.phone}<a class="btn sm" href="tel:{primary.phone}">📞 Call {primary.name?.split(' ')[0] || ''}</a>{/if}
-        {#if wa}<a class="btn sm" href="https://wa.me/{wa}" target="_blank" rel="noopener">💬 WhatsApp</a>{/if}
-        <button class="btn sm" onclick={openBrief} title="What to say when you phone the owner">Call brief</button>
-        {#if d.url}<a class="btn sm" href={d.url} target="_blank" rel="noopener">Listing ↗</a>{/if}
-        {#if d.cma_url}<a class="btn sm" href={d.cma_url}>CMA report</a>{/if}
-        <a class="btn sm" href="/prospects?open={encodeURIComponent(d.listing_key)}" title="Open in the prospect engine: score, signals, erf tools">Engine view</a>
-        <a class="btn sm" href="/map?focus={encodeURIComponent(gid)}">Map</a>
+        {#if primary?.phone}<a class="mg-btn primary sm" href="tel:{primary.phone}"><Icon name="phone" size={14} stroke={2} /> Call {primary.name?.split(' ')[0] || ''}</a>{/if}
+        {#if wa}<a class="mg-btn secondary sm" href="https://wa.me/{wa}" target="_blank" rel="noopener"><Icon name="message" size={14} /> WhatsApp</a>{/if}
+        <button type="button" class="mg-btn secondary sm" onclick={openBrief} title="What to say when you phone the owner"><Icon name="list" size={14} /> Call brief</button>
+        {#if d.cma_url}<a class="mg-btn secondary sm" href={d.cma_url}><Icon name="ruler" size={14} /> CMA report</a>{/if}
+        <a class="mg-btn secondary sm" href="/prospects?open={encodeURIComponent(d.listing_key)}" title="Open in the prospect engine: score, signals, erf tools"><Icon name="bolt" size={14} /> Engine view</a>
+        <a class="mg-btn secondary sm" href="/map?focus={encodeURIComponent(gid)}"><Icon name="mapPin" size={14} /> Map</a>
+        {#if d.url}<a class="mg-btn ghost sm" href={d.url} target="_blank" rel="noopener">Listing <Icon name="external" size={13} /></a>{/if}
       </div>
     </div>
   </header>
 
-  <div class="stepper panel">
+  <nav class="mg-panel stepper mg-noscroll mg-rise" style:--i={1} bind:this={stepper} aria-label="Stage">
     {#each FLOW as s, i (s)}
-      <button class="step" class:done={i < flowIdx} class:cur={s === d.stage} onclick={() => setStage(s)} title={STAGE_LABEL[s]}>
-        <i>{i < flowIdx ? '✓' : i + 1}</i><span>{STAGE_LABEL[s]}</span>
+      <button type="button" class="step" class:done={i < flowIdx} class:cur={s === d.stage} aria-current={s === d.stage ? 'step' : undefined}
+              onclick={() => setStage(s)} title="Move to {STAGE_LABEL[s]}">
+        <i class="mg-tnum">{#if i < flowIdx}<Icon name="check" size={11} stroke={2.5} />{:else}{i + 1}{/if}</i><span>{STAGE_LABEL[s]}</span>
       </button>
     {/each}
     <span class="sep"></span>
     {#each ENDS as s (s)}
-      <button class="step end" class:cur={s === d.stage} onclick={() => setStage(s)}><span>{STAGE_LABEL[s]}</span></button>
+      <button type="button" class="step end {s}" class:cur={s === d.stage} aria-current={s === d.stage ? 'step' : undefined}
+              onclick={() => setStage(s)} title="Move to {STAGE_LABEL[s]}"><span>{STAGE_LABEL[s]}</span></button>
     {/each}
-  </div>
+  </nav>
 
   <div class="cols">
-    <div class="col main">
-      <section class="panel pad brief" bind:this={briefEl}>
+    <div class="col">
+      <section class="mg-section mg-rise" style:--i={2} bind:this={briefEl}>
         {#if showBrief}
-          <CallBrief gid={gid} />
+          <div class="body"><CallBrief gid={gid} /></div>
         {:else}
-          <div class="row">
+          <div class="head">
             <h2>Call brief</h2>
-            <span class="grow"></span>
-            <button class="btn sm" onclick={openBrief}>Show call brief</button>
+            <div class="mg-actions"><button type="button" class="mg-btn secondary sm" onclick={openBrief}>Show call brief</button></div>
           </div>
         {/if}
       </section>
 
-      <section class="panel composer">
-        <div class="ctabs">
-          <button class:on={compose === 'log'} onclick={() => (compose = 'log')}>Log contact attempt</button>
-          <button class:on={compose === 'note'} onclick={() => (compose = 'note')}>Add note</button>
-          <span class="kbd">⌘↵</span>
+      <section class="mg-section mg-rise" style:--i={3}>
+        <div class="mg-tabs tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={compose === 'log'} onclick={() => (compose = 'log')}>Log contact attempt</button>
+          <button type="button" role="tab" aria-selected={compose === 'note'} onclick={() => (compose = 'note')}>Add note</button>
         </div>
-        {#if compose === 'log'}
-          <QuickLog {gid} contacts={d.contacts} onsaved={refresh} />
-        {:else}
-          <form class="row" onsubmit={(e) => { e.preventDefault(); if (note.trim()) add('notes', { body: note.trim() }, () => (note = '')); }}>
-            <input type="text" bind:value={note} placeholder="Anything worth remembering…" />
-            <button class="btn sm primary" type="submit">Save note</button>
-          </form>
-        {/if}
+        <div class="body">
+          {#if compose === 'log'}
+            <QuickLog {gid} contacts={d.contacts} onsaved={refresh} />
+          {:else}
+            <form class="line" onsubmit={saveNote}>
+              <input class="mg-input" type="text" bind:value={note} placeholder="Anything worth remembering…" aria-label="Note" />
+              <button class="mg-btn primary" type="submit" disabled={!note.trim() || saving}>Save note</button>
+            </form>
+          {/if}
+        </div>
       </section>
 
-      <section class="panel stream">
-        {#if !stream.length}<p class="hint">Nothing yet. Log your first call above.</p>{/if}
-        {#each stream as s (s.kind + (s.i?.id ?? s.n?.id ?? s.a?.id))}
-          <div class="ev {s.kind}">
-            <div class="ico">
-              {#if s.kind === 'interaction'}{ICON[s.i.channel] || '•'}{:else if s.kind === 'note'}📝{:else if s.kind === 'mandate'}🏆{:else if s.kind === 'stage_change'}→{:else}•{/if}
-            </div>
-            <div class="body">
-              {#if s.kind === 'interaction'}
-                <div class="l1"><b>{label(s.i.channel)}</b>
-                  <span class="oc o-{s.i.outcome}">{label(s.i.outcome)}</span>
-                  {#if s.i.contact_name}<span class="dim">with {s.i.contact_name}</span>{/if}</div>
-                {#if s.i.summary}<p>{s.i.summary}</p>{/if}
-                {#if s.i.next_follow_up_at}<p class="dim">follow-up {shortDate(s.i.next_follow_up_at)}</p>{/if}
-              {:else if s.kind === 'note'}
-                <p>{s.n.body}</p>
-              {:else}
-                <p class="sys">{actText(s.a)}</p>
-              {/if}
-            </div>
-            <div class="when" title={s.t}>{ago(s.t)}</div>
-            {#if s.kind === 'interaction'}<button class="x" onclick={() => remove('interactions', s.i.id)}>×</button>
-            {:else if s.kind === 'note'}<button class="x" onclick={() => remove('notes', s.n.id)}>×</button>{/if}
+      <section class="mg-section mg-rise" style:--i={4}>
+        <div class="head"><h2>Timeline</h2><span class="mg-count">{stream.length || ''}</span></div>
+        {#if !stream.length}
+          <p class="note">Nothing yet. Log your first call above.</p>
+        {:else}
+          <div class="mg-list">
+            {#each stream as s (s.kind + (s.i?.id ?? s.n?.id ?? s.a?.id))}
+              <div class="ev {s.kind}">
+                <span class="ico"><Icon name={evIcon(s)} size={14} /></span>
+                <div class="evb">
+                  {#if s.kind === 'interaction'}
+                    <div class="l1"><b>{label(s.i.channel)}</b>
+                      <span class="mg-chip xs {outTone(s.i.outcome)}">{label(s.i.outcome)}</span>
+                      {#if s.i.contact_name}<span class="dim">with {s.i.contact_name}</span>{/if}</div>
+                    {#if s.i.summary}<p>{s.i.summary}</p>{/if}
+                    {#if s.i.next_follow_up_at}<p class="dim">follow-up {shortDate(s.i.next_follow_up_at)}</p>{/if}
+                  {:else if s.kind === 'note'}
+                    <p class="nb">{s.n.body}</p>
+                  {:else}
+                    <p class="sys">{actText(s.a)}</p>
+                  {/if}
+                </div>
+                <span class="when" title={s.t}>{ago(s.t)}</span>
+                {#if s.kind === 'interaction'}<button type="button" class="mg-btn ghost icon sm x" onclick={() => remove('interactions', s.i.id)} aria-label="Delete this entry" title="Delete"><Icon name="trash" size={14} /></button>
+                {:else if s.kind === 'note'}<button type="button" class="mg-btn ghost icon sm x" onclick={() => remove('notes', s.n.id)} aria-label="Delete this note" title="Delete"><Icon name="trash" size={14} /></button>{/if}
+              </div>
+            {/each}
           </div>
-        {/each}
+        {/if}
       </section>
     </div>
 
-    <div class="col side">
-      <section class="panel pad">
-        <h2>Contacts</h2>
-        {#each d.contacts as c (c.id)}
-          <div class="contact">
-            <div class="cn"><a class="pn" href="/leads/contacts/{c.id}"><b>{c.name || '—'}</b></a><span class="pill">{c.role}</span><button class="x" onclick={() => remove('contacts', c.id)} title="Delete (POPIA)">×</button></div>
-            {#if c.company}<span class="dim">{c.company}</span>{/if}
-            {#if c.phone}<a href="tel:{c.phone}">{c.phone}</a>{/if}
-            {#if c.email}<a href="mailto:{c.email}">{c.email}</a>{/if}
-            {#if c.notes}<span class="dim small">{prettyNotes(c.notes)}</span>{/if}
-            <span class="dim small">via {c.provider}</span>
+    <div class="col">
+      <section class="mg-section mg-rise" style:--i={3}>
+        <div class="head"><h2>Contacts</h2><span class="mg-count">{d.contacts.length || ''}</span>
+          <div class="mg-actions">
+            {#if d.cma_url}<button type="button" class="mg-btn ghost sm" onclick={deedLookup} title="Look up the registered owner via the deeds office">Deeds lookup</button>{/if}
+            <button type="button" class="mg-btn secondary sm" onclick={() => (showContact = true)}><Icon name="plus" size={14} /> Add</button>
           </div>
-        {/each}
-        {#if !d.contacts.length}<p class="hint">No owner details yet.</p>{/if}
-        {#if showContact}
-          <form class="form" onsubmit={(e) => { e.preventDefault(); if (cf.name || cf.phone) add('contacts', { ...cf, provider: 'manual' }, () => { showContact = false; cf = { role: 'owner', name: '', phone: '', email: '', company: '', notes: '' }; }); }}>
-            <div class="two"><input type="text" placeholder="Name" bind:value={cf.name} />
-              <select bind:value={cf.role}>{#each meta.roles as r (r)}<option value={r}>{r}</option>{/each}</select></div>
-            <div class="two"><input type="text" placeholder="Phone" bind:value={cf.phone} /><input type="text" placeholder="Email" bind:value={cf.email} /></div>
-            <input type="text" placeholder="Company / notes" bind:value={cf.notes} />
-            <div class="row"><button class="btn sm primary" type="submit">Save</button><button class="btn sm" type="button" onclick={() => (showContact = false)}>Cancel</button></div>
-          </form>
+        </div>
+        {#if !d.contacts.length}
+          <p class="note">No owner details yet.</p>
         {:else}
-          <div class="row">
-            <button class="btn sm" onclick={() => (showContact = true)}>+ Add</button>
-            {#if d.cma_url}<button class="btn sm" onclick={deedLookup} title="Look up the registered owner via the deeds office">Deeds lookup</button>{/if}
+          <div class="mg-list">
+            {#each d.contacts as c (c.id)}
+              <div class="contact">
+                <div class="cn">
+                  <a class="pn" href="/leads/contacts/{c.id}">{c.name || '—'}</a>
+                  <span class="mg-chip xs">{c.role}</span>
+                  <button type="button" class="mg-btn ghost icon sm x" onclick={() => remove('contacts', c.id)} title="Delete (POPIA)" aria-label="Delete contact"><Icon name="trash" size={14} /></button>
+                </div>
+                {#if c.company}<span class="dim">{c.company}</span>{/if}
+                {#if c.phone}<a class="lnk mg-tnum" href="tel:{c.phone}"><Icon name="phone" size={12} />{c.phone}</a>{/if}
+                {#if c.email}<a class="lnk" href="mailto:{c.email}"><Icon name="send" size={12} />{c.email}</a>{/if}
+                {#if c.notes}<span class="dim small">{prettyNotes(c.notes)}</span>{/if}
+                <span class="dim small">via {c.provider}</span>
+              </div>
+            {/each}
           </div>
         {/if}
       </section>
 
-      <section class="panel pad">
-        <h2>Mandate</h2>
+      <section class="mg-section mg-rise" style:--i={4}>
+        <div class="head"><h2>Mandate</h2>
+          <div class="mg-actions">
+            <button type="button" class="mg-btn sm" class:accent={!mandate && d.stage === 'valuation_sent'} class:secondary={mandate || d.stage !== 'valuation_sent'}
+                    onclick={() => (showMandate = true)}>{mandate ? 'Record new outcome' : 'Record outcome'}</button>
+          </div>
+        </div>
         {#if mandate}
-          <div class="mcard m-{mandate.type}">
-            <b>{mandate.type === 'none_lost' ? 'Lost' : MANDATE_LABEL[mandate.type]}</b>
-            {#if mandate.type === 'none_lost'}
-              <span>{label(mandate.lost_reason)}{mandate.lost_to ? ' · to ' + mandate.lost_to : ''}</span>
-            {:else}
-              <span>Signed {shortDate(mandate.signed_at)}{mandate.expires_at ? ` · expires ${shortDate(mandate.expires_at)} (${ago(mandate.expires_at)})` : ''}</span>
-              <span>{mandate.listing_price ? fmtM(mandate.listing_price) : ''}{mandate.commission_pct ? ` · ${mandate.commission_pct}%` : ''}</span>
-            {/if}
-            {#if mandate.notes}<span class="dim">{mandate.notes}</span>{/if}
+          <div class="body">
+            <span class="mg-chip {mandate.type === 'none_lost' ? 'crit' : 'ok'}">{mandate.type === 'none_lost' ? 'Lost' : MANDATE_LABEL[mandate.type] + ' mandate'}</span>
+            <dl class="mg-kv">
+              {#if mandate.type === 'none_lost'}
+                <div><dt>Reason</dt><dd>{label(mandate.lost_reason) || '—'}</dd></div>
+                {#if mandate.lost_to}<div><dt>Lost to</dt><dd>{mandate.lost_to}</dd></div>{/if}
+              {:else}
+                <div><dt>Signed</dt><dd class="mg-tnum">{shortDate(mandate.signed_at)}</dd></div>
+                {#if mandate.expires_at}<div><dt>Expires</dt><dd class="mg-tnum" class:late={isPast(mandate.expires_at)}>{shortDate(mandate.expires_at)} · {ago(mandate.expires_at)}</dd></div>{/if}
+                {#if mandate.listing_price}<div><dt>Listing price</dt><dd class="mg-tnum">{fmtM(mandate.listing_price)}</dd></div>{/if}
+                {#if mandate.commission_pct}<div><dt>Commission</dt><dd class="mg-tnum">{mandate.commission_pct}%</dd></div>{/if}
+              {/if}
+              {#if mandate.notes}<div><dt>Notes</dt><dd>{mandate.notes}</dd></div>{/if}
+            </dl>
+          </div>
+        {:else}
+          <p class="note">No outcome recorded yet.</p>
+        {/if}
+      </section>
+
+      <section class="mg-section mg-rise" style:--i={5}>
+        <div class="head"><h2>Tasks</h2>{#if openTasks.length}<span class="mg-count">{openTasks.length} open</span>{/if}</div>
+        {#if openTasks.length}
+          <div class="mg-list">
+            {#each openTasks as t (t.id)}
+              <div class="task">
+                <label class="tl"><input type="checkbox" onchange={() => toggleTask(t)} aria-label="Mark “{t.title}” done" />
+                  <span><b>{t.title}</b><small class:late={isPast(t.due_at)}>{t.due_at ? `${shortDate(t.due_at)} · ${ago(t.due_at)}` : 'no date'}</small></span></label>
+                <button type="button" class="mg-btn ghost icon sm x" onclick={() => remove('tasks', t.id)} aria-label="Delete task" title="Delete"><Icon name="trash" size={14} /></button>
+              </div>
+            {/each}
           </div>
         {/if}
-        {#if showMandate}
-          <form class="form" onsubmit={(e) => { e.preventDefault(); saveMandate(); }}>
-            <select bind:value={mf.type}>{#each meta.mandate_types as t (t)}<option value={t}>{t === 'none_lost' ? 'Lost — no mandate' : MANDATE_LABEL[t] + ' mandate'}</option>{/each}</select>
-            {#if mf.type === 'none_lost'}
-              <select bind:value={mf.lost_reason}>{#each meta.lost_reasons as r (r)}<option value={r}>{label(r)}</option>{/each}</select>
-              <input type="text" placeholder="Lost to which agency?" bind:value={mf.lost_to} />
-            {:else}
-              <div class="two"><label>Signed <input type="date" bind:value={mf.signed_at} /></label><label>Days <input type="number" bind:value={mf.duration_days} /></label></div>
-              <div class="two"><input type="number" placeholder="Listing price (R)" bind:value={mf.listing_price} /><input type="number" step="0.1" placeholder="Commission %" bind:value={mf.commission_pct} /></div>
-              <input type="text" placeholder="Competing agencies" bind:value={mf.competing_agencies} />
-            {/if}
-            <input type="text" placeholder="Notes" bind:value={mf.notes} />
-            <div class="row"><button class="btn sm primary" type="submit">Save</button><button class="btn sm" type="button" onclick={() => (showMandate = false)}>Cancel</button></div>
-          </form>
-        {:else}
-          <button class="btn sm" class:primary={!mandate && d.stage === 'valuation_sent'} onclick={() => (showMandate = true)}>{mandate ? 'Record new outcome' : 'Record outcome'}</button>
+        <form class="line addtask" onsubmit={saveTask}>
+          <input class="mg-input" type="text" placeholder="Add a task…" bind:value={newTask} aria-label="New task" />
+          <button class="mg-btn secondary icon" type="submit" aria-label="Add task" disabled={!newTask.trim() || saving}><Icon name="plus" size={16} /></button>
+        </form>
+        {#if doneTasks.length}
+          <details class="more">
+            <summary>{doneTasks.length} done</summary>
+            {#each doneTasks as t (t.id)}
+              <label class="tl done"><input type="checkbox" checked onchange={() => toggleTask(t)} aria-label="Reopen “{t.title}”" /><span>{t.title}</span></label>
+            {/each}
+          </details>
         {/if}
       </section>
 
-      <section class="panel pad">
-        <h2>Tasks {#if openTasks.length}<span class="cnt">{openTasks.length}</span>{/if}</h2>
-        {#each openTasks as t (t.id)}
-          <label class="task"><input type="checkbox" onchange={() => toggleTask(t)} />
-            <span><b>{t.title}</b><small class:late={isPast(t.due_at)}>{t.due_at ? `${shortDate(t.due_at)} · ${ago(t.due_at)}` : 'no date'}</small></span>
-            <button class="x" type="button" onclick={() => remove('tasks', t.id)}>×</button></label>
-        {/each}
-        <form class="row" onsubmit={(e) => { e.preventDefault(); if (newTask.trim()) add('tasks', { title: newTask.trim(), kind: 'other' }, () => (newTask = '')); }}>
-          <input type="text" placeholder="Add a task…" bind:value={newTask} /><button class="btn sm" type="submit">+</button>
-        </form>
-        {#if doneTasks.length}<details><summary class="dim small">{doneTasks.length} done</summary>
-          {#each doneTasks as t (t.id)}<label class="task done"><input type="checkbox" checked onchange={() => toggleTask(t)} /><span>{t.title}</span></label>{/each}</details>{/if}
-      </section>
-
-      <section class="panel pad">
-        <h2>Listings</h2>
-        {#each d.listings as l (l.listing_key)}
-          <div class="lst"><a href={l.url} target="_blank" rel="noopener"><b>{l.source}</b> ↗</a>
-            <span>{l.agency || ''}{l.agent_name ? ' · ' + l.agent_name : ''}</span>
-            <span class="dim">{l.price_zar ? fmtM(l.price_zar) : 'POA'} · seen {ago(l.last_seen)}{l.lifecycle && l.lifecycle !== 'active' ? ' · ' + l.lifecycle : ''}</span></div>
-        {/each}
+      <section class="mg-section mg-rise" style:--i={6}>
+        <div class="head"><h2>Listings</h2><span class="mg-count">{d.listings.length || ''}</span></div>
+        <div class="mg-list">
+          {#each d.listings as l (l.listing_key)}
+            <a class="mg-listrow" href={l.url} target="_blank" rel="noopener">
+              <span class="t"><b>{l.source}</b>
+                <span>{l.agency || ''}{l.agent_name ? ' · ' + l.agent_name : ''}</span>
+                <span>{l.price_zar ? fmtM(l.price_zar) : 'POA'} · seen {ago(l.last_seen)}{l.lifecycle && l.lifecycle !== 'active' ? ' · ' + l.lifecycle : ''}</span></span>
+              <Icon name="external" size={14} class="chev" />
+            </a>
+          {/each}
+        </div>
         {#if d.price_history.length > 1}
-          <details><summary class="dim small">Price history ({d.price_history.length})</summary>
-            {#each d.price_history as p (p.listing_key + p.observed_at)}<div class="dim small">{shortDate(p.observed_at)} · {fmtR(p.price_zar)} · {p.listing_key.split(':')[0]}</div>{/each}</details>
+          <details class="more">
+            <summary>Price history ({d.price_history.length})</summary>
+            {#each d.price_history as p (p.listing_key + p.observed_at)}
+              <div class="ph-row mg-tnum"><span>{shortDate(p.observed_at)}</span><b>{fmtR(p.price_zar)}</b><span class="dim">{p.listing_key.split(':')[0]}</span></div>
+            {/each}
+          </details>
         {/if}
       </section>
     </div>
   </div>
+
+  <Sheet open={showContact} title="Add a contact" size="sm" onclose={() => (showContact = false)}>
+    <form id="cform" class="form" onsubmit={(e) => { e.preventDefault(); saveContact(); }}>
+      <label><span class="hud">Name</span><input class="mg-input" type="text" bind:value={cf.name} autocomplete="off" /></label>
+      <label><span class="hud">Role</span>
+        <div class="mg-select full"><select bind:value={cf.role}>{#each meta?.roles || ['owner'] as r (r)}<option value={r}>{r}</option>{/each}</select><span class="ic"><Icon name="chevronDown" size={14} /></span></div></label>
+      <div class="two">
+        <label><span class="hud">Phone</span><input class="mg-input" type="tel" bind:value={cf.phone} autocomplete="off" /></label>
+        <label><span class="hud">Email</span><input class="mg-input" type="email" bind:value={cf.email} autocomplete="off" /></label>
+      </div>
+      <label><span class="hud">Company / notes</span><input class="mg-input" type="text" bind:value={cf.notes} /></label>
+    </form>
+    {#snippet footer()}
+      <div class="right">
+        <button type="button" class="mg-btn ghost" onclick={() => (showContact = false)}>Cancel</button>
+        <button type="submit" form="cform" class="mg-btn primary" disabled={saving || !(cf.name || cf.phone)}>Save contact</button>
+      </div>
+    {/snippet}
+  </Sheet>
+
+  <Sheet open={showMandate} title="Record the mandate outcome" size="sm" onclose={() => (showMandate = false)}>
+    <form id="mform" class="form" onsubmit={(e) => { e.preventDefault(); saveMandate(); }}>
+      <label><span class="hud">Outcome</span>
+        <div class="mg-select full"><select bind:value={mf.type}>{#each meta?.mandate_types || [] as t (t)}<option value={t}>{t === 'none_lost' ? 'Lost — no mandate' : MANDATE_LABEL[t] + ' mandate'}</option>{/each}</select><span class="ic"><Icon name="chevronDown" size={14} /></span></div></label>
+      {#if mf.type === 'none_lost'}
+        <label><span class="hud">Why</span>
+          <div class="mg-select full"><select bind:value={mf.lost_reason}>{#each meta?.lost_reasons || [] as r (r)}<option value={r}>{label(r)}</option>{/each}</select><span class="ic"><Icon name="chevronDown" size={14} /></span></div></label>
+        <label><span class="hud">Lost to which agency?</span><input class="mg-input" type="text" bind:value={mf.lost_to} /></label>
+      {:else}
+        <div class="two">
+          <label><span class="hud">Signed</span><input class="mg-input" type="date" bind:value={mf.signed_at} /></label>
+          <label><span class="hud">Days</span><input class="mg-input" type="number" inputmode="numeric" bind:value={mf.duration_days} /></label>
+        </div>
+        <div class="two">
+          <label><span class="hud">Listing price (R)</span><input class="mg-input" type="number" inputmode="numeric" bind:value={mf.listing_price} /></label>
+          <label><span class="hud">Commission %</span><input class="mg-input" type="number" inputmode="decimal" step="0.1" bind:value={mf.commission_pct} /></label>
+        </div>
+        <label><span class="hud">Competing agencies</span><input class="mg-input" type="text" bind:value={mf.competing_agencies} /></label>
+      {/if}
+      <label><span class="hud">Notes</span><input class="mg-input" type="text" bind:value={mf.notes} /></label>
+    </form>
+    {#snippet footer()}
+      <div class="right">
+        <button type="button" class="mg-btn ghost" onclick={() => (showMandate = false)}>Cancel</button>
+        <button type="submit" form="mform" class="mg-btn primary" disabled={saving}>Save outcome</button>
+      </div>
+    {/snippet}
+  </Sheet>
 {/if}
 
 <style>
-  .back { display: inline-block; margin-bottom: 0.7rem; font-size: 0.82rem; color: var(--ink-3); }
-  .empty { padding: 3rem 2rem; text-align: center; max-width: 520px; margin: 3rem auto; }
-  .empty p { color: var(--ink-2); margin: 0.5rem 0 1.2rem; }
+  .back { margin: -4px 0 10px -8px; }
 
-  .hd { display: flex; gap: 1.3rem; padding: 1.2rem; margin-bottom: 0.8rem; }
-  .ph { width: 150px; height: 120px; flex: none; border-radius: 12px; background: var(--bg-3) center/cover; }
-  .hl { flex: 1; min-width: 0; }
-  .badges { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.4rem; }
-  .star { margin-left: auto; background: none; border: 0; font-size: 1.2rem; color: var(--line-3); cursor: pointer; }
-  .star.on { color: var(--warm); }
-  h1 { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 0.2rem; }
-  .sub { color: var(--ink-2); font-size: 0.86rem; }
-  .price { font-size: 1.1rem; font-weight: 700; margin: 0.4rem 0 0.7rem; }
-  .acts { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-  .dim { color: var(--ink-3); } .small { font-size: 0.74rem; }
+  .hd { display: flex; gap: 16px; padding: 16px; margin-bottom: 12px; }
+  .ph { width: 180px; height: 136px; flex: none; border-radius: var(--mc-r-md); overflow: hidden; background: var(--mc-inset); border: 1px solid var(--mc-line); }
+  .hl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .star { margin-left: auto; }
+  .hl .mg-h1 { overflow-wrap: anywhere; }
+  .amt { margin: 2px 0 6px; font: 600 18px/1.3 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .dim { color: var(--mc-ink3); font-weight: 400; font-size: 13px; }
+  .small { font-size: 12px; }
+  .late { color: var(--mc-crit) !important; }
+  .mg-chip.xs { height: 22px; padding: 0 8px; font-size: 11px; }
+  @media (max-width: 639px) {
+    .hd { flex-direction: column; padding: 12px; }
+    .ph { width: 100%; height: auto; aspect-ratio: 16 / 9; }
+    .acts .mg-btn { flex: 1 1 auto; }
+  }
 
-  .stepper { display: flex; align-items: center; gap: 0.15rem; padding: 0.5rem; margin-bottom: 1rem; overflow-x: auto; }
-  .step { display: flex; align-items: center; gap: 0.4rem; background: none; border: 0; padding: 0.4rem 0.6rem; border-radius: 8px;
-          color: var(--ink-3); font-size: 0.76rem; font-weight: 500; cursor: pointer; white-space: nowrap; }
-  .step i { font-style: normal; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
-            font-size: 0.66rem; font-weight: 700; background: var(--bg-3); color: var(--ink-3); }
-  .step.done { color: var(--ink-2); } .step.done i { background: var(--open-soft); color: var(--open); }
-  .step.cur { background: var(--accent-soft); color: var(--accent-2); font-weight: 700; }
-  .step.cur i { background: var(--accent); color: #fff; }
-  .step:hover:not(.cur) { background: var(--bg-3); color: var(--ink); }
-  .sep { flex: 1; min-width: 0.5rem; }
-  .step.end.cur { background: var(--red-soft); color: var(--bad); }
+  .stepper { display: flex; align-items: center; gap: 2px; padding: 6px; margin-bottom: 14px; overflow-x: auto; }
+  .step {
+    flex: none; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px;
+    background: none; border: 1px solid transparent; border-radius: 10px;
+    color: var(--mc-ink3); font: 500 12.5px/1 var(--mc-font); cursor: pointer; white-space: nowrap;
+    transition: background var(--mc-t-fast), color var(--mc-t-fast), border-color var(--mc-t-fast);
+  }
+  .step i {
+    font-style: normal; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 11px; font-weight: 600; background: var(--mc-raised); border: 1px solid var(--mc-line); color: var(--mc-ink3);
+  }
+  .step.done { color: var(--mc-ink2); }
+  .step.done i { background: var(--mc-ok-soft); border-color: var(--mc-ok-line); color: var(--mc-accent); }
+  .step.cur { background: var(--mc-ok-soft); border-color: var(--mc-ok-line); color: var(--mc-accent); font-weight: 600; }
+  .step.cur i { background: var(--mc-accent); border-color: var(--mc-accent); color: var(--mc-accent-ink); }
+  .step:hover:not(.cur) { background: rgba(255, 255, 255, 0.04); color: var(--mc-ink); }
+  .sep { flex: 1 0 12px; }
+  .step.end.lost.cur { background: var(--mc-crit-soft); border-color: var(--mc-crit-line); color: var(--mc-crit); }
+  .step.end.parked.cur { background: var(--mc-raised); border-color: var(--mc-line2); color: var(--mc-ink); }
+  @media (pointer: coarse) { .step { height: 44px; } }
 
-  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 1rem; align-items: start; }
-  .col { display: flex; flex-direction: column; gap: 1rem; }
-  @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  @media (min-width: 1180px) { .cols { grid-template-columns: minmax(0, 1fr) 340px; } }
 
-  .brief h2 { margin: 0; }
-  .brief .grow { flex: 1; }
-  .composer { padding: 0.9rem 1rem 1rem; }
-  .ctabs { display: flex; gap: 0.2rem; margin-bottom: 0.7rem; align-items: center; }
-  .ctabs button { background: none; border: 0; padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; color: var(--ink-3); cursor: pointer; }
-  .ctabs button.on { background: var(--bg-3); color: var(--ink); }
-  .kbd { margin-left: auto; font-size: 0.68rem; color: var(--ink-3); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 0.3rem; }
-  .row { display: flex; gap: 0.5rem; align-items: center; }
-  .row input[type='text'] { flex: 1; }
+  .mg-section > .head { align-items: center; min-height: 48px; padding-top: 8px; padding-bottom: 8px; }
+  .tabs { padding: 0 8px; }
+  .note { margin: 0; padding: 12px 16px; font: 400 13px/1.5 var(--mc-font); color: var(--mc-ink3); }
+  .line { display: flex; gap: 8px; align-items: center; }
+  .line .mg-input { flex: 1; min-width: 0; }
 
-  .stream { padding: 0.3rem 0; }
-  .hint { padding: 0.8rem 1rem; color: var(--ink-3); font-size: 0.84rem; }
-  .pad .hint { padding: 0 0 0.6rem; }
-  .ev { display: flex; gap: 0.8rem; padding: 0.7rem 1rem; border-top: 1px solid var(--line); align-items: flex-start; }
-  .ev:first-child { border-top: 0; }
-  .ico { width: 30px; height: 30px; border-radius: 50%; background: var(--bg-3); display: grid; place-items: center; font-size: 0.9rem; flex: none; }
-  .ev.mandate .ico { background: var(--open-soft); }
-  .ev.stage_change .ico, .ev.tracked .ico, .ev.contact_added .ico { background: transparent; color: var(--ink-3); }
-  .body { flex: 1; min-width: 0; font-size: 0.86rem; }
-  .l1 { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-  .body p { margin: 0.2rem 0 0; }
-  .sys { color: var(--ink-3); font-size: 0.8rem; }
-  .when { font-size: 0.74rem; color: var(--ink-3); white-space: nowrap; }
-  .x { background: none; border: 0; color: var(--ink-3); cursor: pointer; font-size: 1rem; padding: 0 0.2rem; opacity: 0; }
-  .ev:hover .x, .contact:hover .x, .task:hover .x { opacity: 1; }
-  .x:hover { color: var(--bad); }
-  .oc { font-size: 0.7rem; font-weight: 600; padding: 0.08rem 0.45rem; border-radius: 4px; background: var(--bg-3); color: var(--ink-2); }
-  .o-spoke, .o-interested, .o-meeting_set { background: var(--open-soft); color: var(--open); }
-  .o-not_interested { background: var(--red-soft); color: var(--sole); }
-  .o-callback_requested { background: var(--popen-soft); color: var(--popen); }
+  .ev { display: flex; gap: 12px; padding: 12px 16px; align-items: flex-start; }
+  .ico {
+    width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center;
+    background: var(--mc-raised); border: 1px solid var(--mc-line); color: var(--mc-ink2);
+  }
+  .ev.mandate .ico { background: var(--mc-ok-soft); border-color: var(--mc-ok-line); color: var(--mc-accent); }
+  .ev.stage_change .ico, .ev.tracked .ico, .ev.contact_added .ico, .ev.price_cut .ico, .ev.delisted .ico, .ev.relisted .ico {
+    background: transparent; color: var(--mc-ink3);
+  }
+  .evb { flex: 1; min-width: 0; font: 400 13px/1.5 var(--mc-font); color: var(--mc-ink2); padding-top: 4px; }
+  .l1 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .l1 b { color: var(--mc-ink); font-weight: 600; text-transform: capitalize; }
+  .evb p { margin: 4px 0 0; overflow-wrap: anywhere; }
+  .evb p.nb { margin: 0; color: var(--mc-ink); white-space: pre-wrap; }
+  .evb p.sys { margin: 0; color: var(--mc-ink3); }
+  .when { flex: none; padding-top: 6px; font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); white-space: nowrap; }
+  .x { flex: none; color: var(--mc-ink3); }
+  .x:hover { color: var(--mc-crit); background: var(--mc-crit-soft); }
+  /* on a pointer that can hover, delete appears with the row; on touch it is always there */
+  @media (hover: hover) {
+    .ev .x, .contact .x, .task .x { opacity: 0; transition: opacity var(--mc-t-fast); }
+    .ev:hover .x, .contact:hover .x, .task:hover .x, .x:focus-visible { opacity: 1; }
+  }
 
-  .pad { padding: 0.9rem 1rem; }
-  h2 { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2); margin-bottom: 0.6rem; display: flex; gap: 0.4rem; align-items: center; }
-  .cnt { background: var(--accent-soft); color: var(--accent-2); padding: 0 0.45rem; border-radius: 999px; font-size: 0.68rem; }
-  .contact { display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.84rem; padding: 0.5rem 0; border-top: 1px solid var(--line); }
-  .contact:first-of-type { border-top: 0; }
-  .cn { display: flex; gap: 0.4rem; align-items: center; }
+  .contact { display: flex; flex-direction: column; gap: 3px; padding: 10px 16px; font: 400 13px/1.45 var(--mc-font); }
+  .cn { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .pn { min-width: 0; font-weight: 600; color: var(--mc-ink); overflow-wrap: anywhere; }
+  .pn:hover { color: var(--mc-accent); }
   .cn .x { margin-left: auto; }
-  .pn { color: var(--ink); } .pn:hover { color: var(--accent); }
-  .pill { font-size: 0.66rem; padding: 0.05rem 0.4rem; border-radius: 999px; background: var(--bg-3); color: var(--ink-2); }
-  .form { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.5rem; }
-  .form input, .form select { width: 100%; font-size: 0.82rem; }
-  .form label { font-size: 0.7rem; color: var(--ink-3); display: flex; flex-direction: column; gap: 0.15rem; }
-  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
-  .mand { font-size: 0.7rem; font-weight: 700; padding: 0.12rem 0.5rem; border-radius: 4px; background: var(--open-soft); color: var(--open); }
-  .m-none_lost { background: var(--red-soft); color: var(--sole); }
-  .mcard { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.82rem; padding: 0.7rem 0.8rem; border-radius: var(--r-sm);
-           background: var(--open-soft); border: 1px solid transparent; margin-bottom: 0.6rem; }
-  .mcard b { font-size: 0.95rem; color: var(--open); }
-  .mcard.m-none_lost { background: var(--red-soft); } .mcard.m-none_lost b { color: var(--sole); }
-  .task { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.4rem 0; font-size: 0.84rem; cursor: pointer; }
-  .task span { display: flex; flex-direction: column; flex: 1; }
-  .task small { color: var(--ink-3); font-size: 0.72rem; } .task small.late { color: var(--bad); font-weight: 600; }
-  .task.done { opacity: 0.55; text-decoration: line-through; }
-  .task .x { align-self: center; }
-  .lst { display: flex; flex-direction: column; font-size: 0.8rem; padding: 0.4rem 0; border-top: 1px solid var(--line); }
-  .lst:first-of-type { border-top: 0; }
-  details { margin-top: 0.4rem; } summary { cursor: pointer; }
+  .lnk { display: inline-flex; align-items: center; gap: 6px; color: var(--mc-ink2); width: fit-content; }
+  .lnk:hover { color: var(--mc-accent); }
+
+  .mg-section > .body .mg-kv { margin-top: 8px; }
+
+  .task { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 16px; }
+  .tl { flex: 1; min-width: 0; display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; cursor: pointer; font: 400 13px/1.4 var(--mc-font); color: var(--mc-ink2); }
+  .tl input { margin-top: 2px; width: 16px; height: 16px; flex: none; }
+  .tl > span { display: flex; flex-direction: column; min-width: 0; }
+  .tl b { font-weight: 500; color: var(--mc-ink); }
+  .tl small { font-size: 12px; color: var(--mc-ink3); }
+  .tl.done { opacity: 0.55; text-decoration: line-through; padding: 6px 16px; }
+  .addtask { padding: 12px 16px; border-top: 1px solid var(--mc-line); }
+  .head + .addtask { border-top: 0; }
+
+  .more { border-top: 1px solid var(--mc-line); }
+  .more summary { padding: 12px 16px; cursor: pointer; font: 500 12.5px/1 var(--mc-font); color: var(--mc-ink3); }
+  .more summary:hover { color: var(--mc-ink2); }
+  .ph-row { display: flex; gap: 10px; padding: 4px 16px; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink2); }
+  .ph-row:last-child { padding-bottom: 12px; }
+  .ph-row b { color: var(--mc-ink); font-weight: 500; }
+  .mg-section :global(.chev) { flex: none; color: var(--mc-ink3); }
+
+  .form { display: flex; flex-direction: column; gap: 12px; }
+  .form label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .mg-select.full { display: block; }
+  @media (pointer: coarse) {
+    .form .mg-input, .mg-select.full select { height: 44px; font-size: 16px; }
+    .x { width: 44px; height: 44px; }
+    .tl input { width: 20px; height: 20px; }
+  }
 </style>
