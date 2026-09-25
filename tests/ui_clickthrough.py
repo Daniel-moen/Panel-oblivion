@@ -28,7 +28,7 @@ at left:0) and the .mg-page column is horizontally centred.
 The dock (task 0048: no rail; one floating pill at every width), per viewport:
   - nav[data-testid=dock] inside the viewport at opacity 1, on one row (tabs
     and the raised primary share a top within 2px, no overflow, ≤ vw-16 wide)
-  - labels hidden < 640px, shown ≥ 640px; [dock-cma] present iff ≥ 1024px
+  - labels hidden < 900px, shown ≥ 900px (seven labelled tabs need ~800px); [dock-cma] present iff ≥ 1024px
   - Prospects → Leads: the highlight glides (intermediate positions seen) and
     settles within 3px of the Leads tab's centre; Leads gets aria-current
   - the raised primary opens the crawl sheet (data-action=crawl) or the Quick
@@ -651,10 +651,10 @@ def check_dock(page, base: str, vp: str, shot) -> None:
               f"{d['scrollW']} > {d['clientW']}")
         check(f"{tag}: width ≤ viewport − 16", nav["w"] <= d["vw"] - 16, f"{nav['w']:.0f} vs {d['vw']}")
         labelled = [t["href"] for t in d["tabs"] if t["text"]]
-        if w < 640:
-            check(f"{tag}: labels hidden below 640px", not labelled, f"labelled: {labelled}")
+        if w < 900:
+            check(f"{tag}: labels hidden below 900px", not labelled, f"labelled: {labelled}")
         else:
-            check(f"{tag}: labels shown from 640px", len(labelled) == len(d["tabs"]),
+            check(f"{tag}: labels shown from 900px", len(labelled) == len(d["tabs"]),
                   f"labelled {labelled} of {hrefs}")
         check(f"{tag}: CMA pill {'present' if w >= 1024 else 'absent'} at {w}px",
               d["cma"] == (w >= 1024), f"cma visible={d['cma']}")
