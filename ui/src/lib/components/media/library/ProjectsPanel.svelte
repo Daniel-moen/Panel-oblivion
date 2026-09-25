@@ -4,7 +4,7 @@
      project filter — a stage IS a folder, so the folder filter already does
      the work. */
   import { onMount } from 'svelte';
-  import { rise } from '$lib/motion.js';
+  import { staggerIn } from '$lib/motion.js';
   import { media } from '$lib/media.js';
   import { say, can, CAP } from '$lib/media.svelte.js';
   import Sheet from '$lib/components/glass/Sheet.svelte';
@@ -71,7 +71,7 @@
     {:else}
       <div class="list">
         {#each shown as p, i (p.id)}
-          <article class="mg-tile card" in:rise={{ i }}>
+          <article class="mg-tile card" in:staggerIn|global={{ i }}>
             <div class="top">
               <b title={p.path}>{p.name}</b>
               <span class="mg-tnum">{total(p)} file{total(p) === 1 ? '' : 's'}</span>

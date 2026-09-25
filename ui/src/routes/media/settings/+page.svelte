@@ -13,7 +13,7 @@
      library check and tag rules. Each card is only drawn for a role that can
      use it (/api/me capabilities); the server checks again regardless. */
   import { onMount } from 'svelte';
-  import { rise } from '$lib/motion.js';
+  import { play, fadeUp } from '$lib/motion.js';
   import { mstate, boot, watchJobs, runRescan, runProxies, runAutoTag, say } from '$lib/media.svelte.js';
   import { media, fmtBytes } from '$lib/media.js';
   import Skeleton from '$lib/components/Skeleton.svelte';
@@ -216,7 +216,7 @@
   <span class="mg-label">Running now</span>
 
   {#if mstate.rescan?.running}
-    <div class="job mg-panel" in:rise>
+    <div class="job mg-panel" in:play={fadeUp}>
       <div class="jh">
         <span class="pulse" aria-hidden="true"><span class="ring mg-ping"></span><span class="core"></span></span>
         <b>Indexing</b>
@@ -230,7 +230,7 @@
   {/if}
 
   {#each jobs as j (j.id ?? j.video_id)}
-    <div class="job mg-panel" in:rise>
+    <div class="job mg-panel" in:play={fadeUp}>
       <div class="jh">
         <span class="pulse" aria-hidden="true"><span class="ring mg-ping"></span><span class="core"></span></span>
         <b class="cap">{j.type || 'job'}</b>

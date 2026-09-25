@@ -7,8 +7,8 @@ the /login form, and drives headless Chromium (Playwright):
     .venv/bin/python tests/ui_clickthrough.py                    # checks only
     .venv/bin/python tests/ui_clickthrough.py --shots /tmp/shots --label before
 
-Viewports: phone 390x844 (mobile, touch), iPad 1024x768 and 1180x820 (touch).
-Routes: / /prospects /leads /map /media /online /account.
+Viewports: phone 390x844 (mobile, touch), iPad 1024x768 and 1180x820 (touch),
+desktop 1440x900. Routes: / /prospects /leads /map /media /online /account.
 
 On Home (`/`) it checks the photo-first scene's contract:
   - greeting h1[data-home-greeting] and sentence [data-home-line] get text,
@@ -21,7 +21,30 @@ On Home (`/`) it checks the photo-first scene's contract:
   - Quick log round button → [data-quicklog-sheet] visible; Escape closes it
   - reveal chevron button[data-home-reveal] → [data-home-overview] in view with
     a visible .mg-stat-tile; scroll back to top → scrollY 0, scene back
-Every other route: header.strip's Search and Quick log buttons do the same.
+Every other route: header.strip's Search and Quick log buttons do the same,
+there is no left rail (no `aside.rail`, no fixed ~300px full-height element
+at left:0) and the .mg-page column is horizontally centred.
+
+The dock (task 0048: no rail; one floating pill at every width), per viewport:
+  - nav[data-testid=dock] inside the viewport at opacity 1, on one row (tabs
+    and the raised primary share a top within 2px, no overflow, ≤ vw-16 wide)
+  - labels hidden < 640px, shown ≥ 640px; [dock-cma] present iff ≥ 1024px
+  - Prospects → Leads: the highlight glides (intermediate positions seen) and
+    settles within 3px of the Leads tab's centre; Leads gets aria-current
+  - the raised primary opens the crawl sheet (data-action=crawl) or the Quick
+    log (quicklog); Escape closes it
+  - [account-btn] opens /account from /, /prospects and /leads
+  - Home: the dock goes .quiet after the idle delay (every width)
+  - reduced motion (a fresh context): a dock-tab route change, sampled every
+    frame for ~600 ms, animates no transform anywhere (opacity only)
+
+The chat launcher (sweep): on every route — the fixed ones plus each /leads
+and /media sub-page found under ui/src/routes ([param] pages get a real id
+from the API, or are skipped with a note) — exactly one [chat-launcher] a
+person can see (box in the viewport, not hidden, no ancestor at opacity 0,
+topmost at its centre by elementFromPoint); any [chat-badge] sits inside it;
+clicking it opens the chat (check_chat). Home is checked again once the dock
+has gone quiet. --no-dock / --no-chat-sweep skip these blocks.
 
 Console errors and page errors are collected across the whole run. Ignored:
 `net::ERR_ABORTED` (fetches cut short by navigation) and 404s for resources on
@@ -60,6 +83,7 @@ VIEWPORTS = {
     "phone": dict(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True),
     "ipad": dict(viewport={"width": 1024, "height": 768}, has_touch=True),
     "ipad-l": dict(viewport={"width": 1180, "height": 820}, has_touch=True),
+    "desktop": dict(viewport={"width": 1440, "height": 900}),
 }
 ROUTES = ["/", "/prospects", "/leads", "/map", "/media", "/online", "/account"]
 VIEWS = ["needs", "mandates", "crawl", "pipeline"]
@@ -411,6 +435,7 @@ def check_route(page, base: str, vp: str, path: str, shot) -> None:
          lambda: page.wait_for_selector("header.strip", state="visible", timeout=T))
     page.wait_for_timeout(1500)
     shot(vp, path)
+    check_no_rail(page, tag)
 
     def search():
         page.click('header.strip button[aria-label="Search"]', timeout=T)
@@ -443,19 +468,450 @@ def check_route(page, base: str, vp: str, path: str, shot) -> None:
                frost=path != "/map")
 
 
+# ---------------------------------------------------------------- the dock (task 0048)
+
+DOCK = 'nav[data-testid="dock"]'
+TAB = 'a[data-dock-item]'
+HL = '[data-testid="dock-highlight"]'
+PRIMARY = '[data-testid="dock-primary"]'
+CMA = '[data-testid="dock-cma"]'
+ACCOUNT = '[data-testid="account-btn"]'
+CRAWL_SHEET = '[role="dialog"][aria-label="New crawl"]'
+DOCK_TABS = ["/", "/prospects", "/agent", "/leads", "/map", "/media", "/online"]
+
+# Old rail leftovers + the page column's horizontal centring, in one pass.
+RAIL_PROBE = """() => {
+  const vw = document.documentElement.clientWidth, vh = innerHeight;
+  const fixedLeft = [];
+  for (const e of document.querySelectorAll('body *')) {
+    const cs = getComputedStyle(e);
+    if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') continue;
+    const b = e.getBoundingClientRect();
+    if (Math.abs(b.left) <= 1 && b.width >= 260 && b.width <= 340 && b.height >= vh * 0.9)
+      fixedLeft.push((e.tagName + '.' + [...e.classList].join('.')).slice(0, 80));
+  }
+  const m = document.querySelector('main.mg-page');
+  let centre = null;
+  if (m) {
+    const b = m.getBoundingClientRect(), cs = getComputedStyle(m);
+    const left = b.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth);
+    const right = vw - (b.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth));
+    centre = { left: Math.round(left * 10) / 10, right: Math.round(right * 10) / 10 };
+  }
+  return { rails: document.querySelectorAll('aside.rail').length, fixedLeft, centre };
+}"""
+
+DOCK_PROBE = """([dock, tab, primary, cma]) => {
+  const n = document.querySelector(dock);
+  if (!n) return null;
+  const r = (e) => { const b = e.getBoundingClientRect();
+    return { x: b.x, y: b.y, w: b.width, h: b.height, top: b.top, cx: b.x + b.width / 2 }; };
+  const vis = (e) => { if (!e) return false; const b = e.getBoundingClientRect(), cs = getComputedStyle(e);
+    return b.width > 0 && b.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none'; };
+  const tabs = [...n.querySelectorAll(tab)].map((a) => ({
+    href: a.getAttribute('data-dock-item'), text: a.innerText.trim(), rect: r(a),
+    current: a.getAttribute('aria-current') }));
+  const p = document.querySelector(primary);
+  const c = document.querySelector(cma);
+  return { nav: r(n), opacity: getComputedStyle(n).opacity, cls: n.className,
+           scrollW: n.scrollWidth, clientW: n.clientWidth,
+           vw: document.documentElement.clientWidth, vh: innerHeight,
+           tabs, primary: p ? { rect: r(p), action: p.getAttribute('data-action'), vis: vis(p) } : null,
+           cma: vis(c), more: vis(document.querySelector('[data-testid="dock-more"]')) };
+}"""
+
+# Resolves once the highlight's box has not moved for 6 frames (or 3 s).
+# Also records every centre-x it passed through since `window.__hlTrack` was
+# armed, so a glide (intermediate positions) can be told from a jump.
+HL_ARM = """(sel) => {
+  const xs = []; window.__hlTrack = xs; let stop = false; window.__hlStop = () => { stop = true; };
+  const f = () => { const h = document.querySelector(sel);
+    if (h) { const b = h.getBoundingClientRect(); xs.push(b.x + b.width / 2); }
+    if (!stop) requestAnimationFrame(f); };
+  requestAnimationFrame(f);
+}"""
+HL_SETTLE = """(sel) => new Promise((res) => {
+  let last = null, still = 0; const t0 = performance.now();
+  const f = () => {
+    const h = document.querySelector(sel);
+    const b = h && h.getBoundingClientRect();
+    const k = b ? [b.x, b.y, b.width, b.height].map((v) => v.toFixed(1)).join() : 'none';
+    if (k === last) still++; else { still = 0; last = k; }
+    if (still >= 6 || performance.now() - t0 > 3000) {
+      if (window.__hlStop) window.__hlStop();
+      res(b ? { cx: b.x + b.width / 2, cy: b.y + b.height / 2, w: b.width, track: window.__hlTrack || [] } : null);
+    } else requestAnimationFrame(f);
+  };
+  requestAnimationFrame(f);
+})"""
+
+# Reduced motion: click the dock tab, then sample every element's computed
+# transform on every frame for `ms`, plus once more at the end. An element is
+# flagged only if its transform took an INTERMEDIATE value — one that is
+# neither the first nor the last it showed. That lets through static layout
+# transforms (translate(-50%) centring, present before or arriving with the
+# new page) and instant jumps (the highlight moving without a glide), and
+# catches anything that travels or scales. Leaflet panes are ignored.
+REDUCED_SAMPLE = """([sel, ms]) => new Promise((res) => {
+  const ID = new Set(['none', 'matrix(1, 0, 0, 1, 0, 0)']);
+  /* Two transforms are "the same" within 1px of translation and 0.01 of
+     scale/rotation, so a sub-pixel relayout after an instant jump (a tab
+     widening as its label goes bold) is not mistaken for a glide. */
+  const nums = (t) => (t === 'id' ? [1, 0, 0, 1, 0, 0] : (t.slice(t.indexOf('(')).match(/-?[\\d.]+(?:e-?\\d+)?/g) || []).map(Number));
+  const TX = { 6: [4, 5], 16: [12, 13, 14] };
+  const same = (a, b) => {
+    if (a === b) return true;
+    const x = nums(a), y = nums(b);
+    if (x.length !== y.length) {                    // 2d vs 3d: compare as 2d
+      const d2 = (m) => m.length === 16 ? [m[0], m[1], m[4], m[5], m[12], m[13]] : m;
+      return same2(d2(x), d2(y), TX[6]);
+    }
+    return same2(x, y, TX[x.length] || []);
+  };
+  const same2 = (x, y, tx) => x.every((v, i) => Math.abs(v - y[i]) <= (tx.includes(i) ? 1 : 0.01));
+  const seen = new Map();                           // el -> [values in order]
+  const name = (e) => (e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') +
+    [...e.classList].slice(0, 3).map((c) => '.' + c).join('') +
+    (e.getAttribute('data-testid') ? `[${e.getAttribute('data-testid')}]` : '')).slice(0, 90);
+  const snap = () => {
+    for (const e of document.querySelectorAll('body *')) {
+      if (e.closest('.leaflet-container, [class*="leaflet-"]')) continue;
+      const t = getComputedStyle(e).transform;
+      let v = seen.get(e);
+      if (!v) {
+        if (ID.has(t)) { seen.set(e, ['id']); continue; }
+        v = []; seen.set(e, v);
+      }
+      const val = ID.has(t) ? 'id' : t;
+      if (!v.length || !same(v[v.length - 1], val)) v.push(val);
+    }
+  };
+  snap();                                           // baseline
+  const a = document.querySelector(sel);
+  if (!a) return res({ error: 'no tab ' + sel });
+  a.click();
+  const t0 = performance.now(); let frames = 0;
+  const f = () => { snap(); frames++;
+    if (performance.now() - t0 < ms) requestAnimationFrame(f);
+    else setTimeout(() => { snap();
+      const bad = [];
+      for (const [e, v] of seen) if (v.length > 2) bad.push({ el: name(e), values: v.slice(0, 4) });
+      res({ frames, bad: bad.slice(0, 8), nbad: bad.length, path: location.pathname });
+    }, 50);
+  };
+  requestAnimationFrame(f);
+})"""
+
+
+def check_no_rail(page, tag: str) -> None:
+    info = page.evaluate(RAIL_PROBE)
+    check(f"{tag}: no aside.rail", info["rails"] == 0, f"{info['rails']} found")
+    check(f"{tag}: no fixed ~300px full-height element at left:0", not info["fixedLeft"], info["fixedLeft"])
+    c = info["centre"]
+    if c is not None:
+        check(f"{tag}: the .mg-page column is centred (left gap ≈ right gap, ≤4px)",
+              abs(c["left"] - c["right"]) <= 4, c)
+
+
+def wait_dock(page, timeout=T) -> None:
+    """The dock is in, at full opacity, not quiet, and has stopped moving."""
+    page.wait_for_function(
+        """(sel) => { const n = document.querySelector(sel); if (!n) return false;
+             if (n.classList.contains('quiet') || getComputedStyle(n).opacity !== '1') return false;
+             const k = JSON.stringify(n.getBoundingClientRect());
+             const same = window.__dockLast === k; window.__dockLast = k; return same; }""",
+        arg=DOCK, polling="raf", timeout=timeout)
+
+
+def check_dock(page, base: str, vp: str, shot) -> None:
+    tag = f"{vp} dock"
+    w = page.viewport_size["width"]
+
+    def layout():
+        page.goto(base + "/prospects", wait_until="domcontentloaded")
+        wait_dock(page)
+        d = page.evaluate(DOCK_PROBE, [DOCK, TAB, PRIMARY, CMA])
+        nav = d["nav"]
+        check(f"{tag}: visible inside the viewport at opacity 1",
+              d["opacity"] == "1" and nav["x"] >= 0 and nav["y"] >= 0
+              and nav["x"] + nav["w"] <= d["vw"] + 0.5 and nav["y"] + nav["h"] <= d["vh"] + 0.5, d["nav"])
+        centred = abs(nav["x"] - (d["vw"] - nav["x"] - nav["w"]))
+        check(f"{tag}: centred horizontally (≤4px)", centred <= 4, f"off by {centred:.1f}")
+        hrefs = [t["href"] for t in d["tabs"]]
+        want = [h for h in DOCK_TABS if h != "/online"]
+        missing = [h for h in want if h not in hrefs]
+        check(f"{tag}: tabs Home/Prospects/Agent Z/Leads/Map/Media present", not missing,
+              f"missing {missing}, have {hrefs}")
+        check(f"{tag}: Online is a tab or folds into [dock-more]", "/online" in hrefs or d["more"], hrefs)
+        check(f"{tag}: has the raised primary", bool(d["primary"] and d["primary"]["vis"]), d["primary"])
+        tops = [t["rect"]["top"] for t in d["tabs"]] + ([d["primary"]["rect"]["top"]] if d["primary"] else [])
+        spread = max(tops) - min(tops) if tops else 0
+        check(f"{tag}: one row (tabs + primary tops within 2px)", spread <= 2, f"spread {spread:.1f}px")
+        check(f"{tag}: no overflow (scrollWidth ≤ clientWidth)", d["scrollW"] <= d["clientW"],
+              f"{d['scrollW']} > {d['clientW']}")
+        check(f"{tag}: width ≤ viewport − 16", nav["w"] <= d["vw"] - 16, f"{nav['w']:.0f} vs {d['vw']}")
+        labelled = [t["href"] for t in d["tabs"] if t["text"]]
+        if w < 640:
+            check(f"{tag}: labels hidden below 640px", not labelled, f"labelled: {labelled}")
+        else:
+            check(f"{tag}: labels shown from 640px", len(labelled) == len(d["tabs"]),
+                  f"labelled {labelled} of {hrefs}")
+        check(f"{tag}: CMA pill {'present' if w >= 1024 else 'absent'} at {w}px",
+              d["cma"] == (w >= 1024), f"cma visible={d['cma']}")
+        cur = [t["href"] for t in d["tabs"] if t["current"] == "page"]
+        check(f"{tag}: /prospects tab is aria-current", cur == ["/prospects"], cur)
+        shot(vp, "/prospects", suffix="-dock")
+
+    step(f"{tag}: layout", layout)
+
+    def glide():
+        page.goto(base + "/prospects", wait_until="domcontentloaded")
+        wait_dock(page)
+        page.evaluate(HL_SETTLE, HL)
+        before = page.evaluate(HL_SETTLE, HL)
+        check(f"{tag}: [dock-highlight] exists", before is not None)
+        if before is None:
+            return
+        page.evaluate(HL_ARM, HL)
+        page.click(f'{DOCK} a[data-dock-item="/leads"]', timeout=T)
+        page.wait_for_url("**/leads**", timeout=T)
+        page.wait_for_function(
+            "(s) => document.querySelector(s)?.getAttribute('aria-current') === 'page'",
+            arg=f'{DOCK} a[data-dock-item="/leads"]', timeout=T)
+        after = page.evaluate(HL_SETTLE, HL)
+        tab = page.locator(f'{DOCK} a[data-dock-item="/leads"]').bounding_box()
+        tcx, tcy = tab["x"] + tab["width"] / 2, tab["y"] + tab["height"] / 2
+        dx, dy = abs(after["cx"] - tcx), abs(after["cy"] - tcy)
+        check(f"{tag}: highlight settles on Leads (centre within 3px)", dx <= 3 and dy <= 3,
+              f"dx {dx:.1f} dy {dy:.1f}")
+        check(f"{tag}: Leads has aria-current=page", True)
+        lo, hi = sorted((before["cx"], after["cx"]))
+        mids = {round(x) for x in after["track"] if lo + 1 < x < hi - 1}
+        check(f"{tag}: the highlight glides (intermediate positions seen)", len(mids) >= 2,
+              f"{len(mids)} intermediate x from {before['cx']:.0f} to {after['cx']:.0f}")
+        shot(vp, "/leads", suffix="-glide")
+
+    step(f"{tag}: tab glide Prospects → Leads", glide)
+
+    def primary():
+        page.goto(base + "/prospects", wait_until="domcontentloaded")
+        wait_dock(page)
+        btn = page.locator(PRIMARY).first
+        action = btn.get_attribute("data-action")
+        if action == "crawl":
+            if crawl_running(page, base):
+                print("       (a crawl is running: the primary shows progress, sheet not checked)")
+                return
+            btn.click(timeout=T)
+            page.wait_for_selector(CRAWL_SHEET, state="visible", timeout=T)
+            check(f"{tag}: primary (crawl) opens the crawl sheet", True)
+            # the dock floats above the modal, but is out of reach behind it
+            check(f"{tag}: the dock is inert while the crawl sheet is open",
+                  page.evaluate(f"() => !!document.querySelector('{DOCK}')?.inert"))
+            page.keyboard.press("Escape")
+            page.wait_for_selector(CRAWL_SHEET, state="hidden", timeout=T)
+            check(f"{tag}: Escape closes the crawl sheet", True)
+            check(f"{tag}: the dock is live again once the sheet closes",
+                  page.evaluate(f"() => !document.querySelector('{DOCK}')?.inert"))
+            check(f"{tag}: focus returns to the primary after the sheet closes",
+                  page.evaluate(f"() => !!document.activeElement?.closest('{PRIMARY}')"))
+        elif action == "quicklog":
+            check_quicklog(page, PRIMARY, f"{tag} primary")
+        else:
+            check(f"{tag}: primary data-action is crawl or quicklog on /prospects", False, action)
+
+    step(f"{tag}: raised primary", primary)
+
+    for path in ("/", "/prospects", "/leads"):
+        def account(path=path):
+            page.goto(base + path, wait_until="domcontentloaded")
+            btn = page.locator(ACCOUNT).locator("visible=true").first
+            btn.wait_for(state="visible", timeout=T)
+            btn.click(timeout=T)
+            page.wait_for_url("**/account**", timeout=T)
+            check(f"{tag}: Account button on {path} opens /account", True)
+
+        step(f"{tag}: Account from {path}", account)
+
+    def quiet():
+        page.goto(base + "/", wait_until="domcontentloaded")
+        page.wait_for_selector(DOCK, state="attached", timeout=T)
+        page.wait_for_selector(f"{DOCK}.quiet", state="attached", timeout=8000)
+        check(f"{tag}: Home's dock goes .quiet after idle at {w}px", True)
+
+    step(f"{tag}: Home quiet", quiet)
+
+
+def check_reduced(br, base: str, vp: str) -> None:
+    """A fresh context with prefers-reduced-motion: reduce. Route changes
+    through the dock animate opacity only — no transform travels."""
+    tag = f"{vp} reduced-motion"
+    ctx = br.new_context(device_scale_factor=1, reduced_motion="reduce", **VIEWPORTS[vp])
+    ctx.set_default_timeout(15000)
+    page = ctx.new_page()
+    attach_console(page, lambda: f"{vp}/reduced")
+    try:
+        sign_in(page, base)
+        for src, dst in (("/prospects", "/leads"), ("/leads", "/prospects")):
+            def run(src=src, dst=dst):
+                if urlparse(page.url).path != src:
+                    page.goto(base + src, wait_until="domcontentloaded")
+                wait_dock(page)
+                page.wait_for_timeout(300)      # entry fades done (opacity only anyway)
+                r = page.evaluate(REDUCED_SAMPLE, [f'{DOCK} a[data-dock-item="{dst}"]', 600])
+                if r.get("error"):
+                    check(f"{tag}: {src} → {dst}", False, r["error"])
+                    return
+                check(f"{tag}: {src} → {dst} moved no transform ({r['frames']} frames)",
+                      r["nbad"] == 0, f"{r['nbad']} element(s): {r['bad']}")
+                check(f"{tag}: {src} → {dst} navigated", r["path"].startswith(dst)
+                      or urlparse(page.url).path.startswith(dst), r["path"])
+
+            step(f"{tag}: {src} → {dst}", run)
+    finally:
+        ctx.close()
+
+
+# ---------------------------------------------------------------- the chat launcher, everywhere
+
+LAUNCHER = '[data-testid="chat-launcher"]'
+
+# Marks and counts the launchers a person can actually see: a non-zero box
+# inside the viewport, not display:none / visibility:hidden, no ancestor at
+# opacity 0, and the topmost element at its centre is the launcher (or inside
+# it). The one that passes gets [data-ct-visible] so the click hits it.
+LAUNCHER_PROBE = """(sel) => {
+  const vw = document.documentElement.clientWidth, vh = innerHeight;
+  const out = [];
+  for (const e of document.querySelectorAll(sel)) {
+    e.removeAttribute('data-ct-visible');
+    const b = e.getBoundingClientRect();
+    const why = [];
+    if (!(b.width > 0 && b.height > 0)) why.push('no box');
+    const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+    if (!(cx >= 0 && cy >= 0 && cx <= vw && cy <= vh)) why.push('off-screen');
+    const cs = getComputedStyle(e);
+    if (cs.visibility === 'hidden' || cs.display === 'none') why.push('hidden');
+    for (let a = e; a; a = a.parentElement)
+      if (parseFloat(getComputedStyle(a).opacity) < 0.05) { why.push('opacity 0'); break; }
+    if (!why.length) {
+      const top = document.elementFromPoint(cx, cy);
+      if (!top || !(top === e || e.contains(top)))
+        why.push('covered by ' + (top ? (top.tagName.toLowerCase() + '.' + [...top.classList].slice(0, 2).join('.')) : 'nothing'));
+    }
+    out.push({ why, x: Math.round(b.left), y: Math.round(b.top) });
+    if (!why.length) e.setAttribute('data-ct-visible', '');
+  }
+  const badges = [...document.querySelectorAll('[data-testid="chat-badge"]')];
+  const stray = badges.filter((bd) => !bd.closest(sel)).length;
+  return { all: out, visible: out.filter((o) => !o.why.length).length, badges: badges.length, stray };
+}"""
+
+
+def sweep_routes(page, base: str) -> tuple[list[str], list[str]]:
+    """Every route the chat launcher must sit on: the fixed ones, plus each
+    /leads and /media sub-page found under ui/src/routes. A [param] route
+    takes a real id from the scratch DB's API, or is skipped with a note."""
+    routes = ["/", "/prospects", "/leads", "/map", "/media", "/online", "/agent", "/account"]
+    notes = []
+    ids = {}
+
+    def first(url, key):
+        try:
+            rows = page.context.request.get(base + url).json()
+            return str(rows[0][key]) if isinstance(rows, list) and rows else None
+        except Exception:                               # noqa: BLE001
+            return None
+
+    for top in ("leads", "media"):
+        root = os.path.join(REPO, "ui", "src", "routes", top)
+        found = []
+        for dirpath, _dirs, files in os.walk(root):
+            if "+page.svelte" not in files or dirpath == root:
+                continue
+            rel = os.path.relpath(dirpath, root).replace(os.sep, "/")
+            parts = rel.split("/")
+            if any(p.startswith("[") for p in parts):
+                param = next(p for p in parts if p.startswith("["))
+                src = {("contacts", "[id]"): ("/api/contacts", "id"),
+                       ("properties", "[gid]"): ("/api/tracked", "group_id")}.get((parts[0], param))
+                if src and src not in ids:
+                    ids[src] = first(*src)
+                val = ids.get(src) if src else None
+                if not val:
+                    notes.append(f"/{top}/{rel}: no real id for {param}, skipped")
+                    continue
+                rel = "/".join(val if p == param else p for p in parts)
+            found.append(f"/{top}/{rel}")
+        routes += sorted(found)
+    # The media editors take an optional ?id= / ?project=; the scratch
+    # MEDIA_ROOT is empty, so there is no real item to open them on.
+    notes.append("/media/edit, /media/shoot, /media/video: opened without ?id (scratch MEDIA_ROOT has no items)")
+    return routes, notes
+
+
+def check_launcher(page, tag: str) -> bool:
+    """Exactly one launcher a person can see (waits up to T for it)."""
+    try:
+        page.wait_for_function(f"() => ({LAUNCHER_PROBE})({json.dumps(LAUNCHER)}).visible === 1", timeout=T)
+    except Exception:                                   # noqa: BLE001
+        pass
+    info = page.evaluate(LAUNCHER_PROBE, LAUNCHER)
+    ok = check(f"{tag}: exactly one visible, uncovered [chat-launcher]", info["visible"] == 1, info["all"])
+    if info["badges"]:
+        check(f"{tag}: [chat-badge] sits inside the launcher", info["stray"] == 0,
+              f"{info['stray']} of {info['badges']} outside")
+    return ok
+
+
+def check_chat_everywhere(page, base: str, vp: str, done: set[str]) -> None:
+    """Task 0048: one reachable chat launcher on every route, sub-pages
+    included; it opens the chat. `done` = routes whose chat click the main
+    route loop already exercised (only the visibility check repeats there)."""
+    routes, notes = sweep_routes(page, base)
+    for n in notes:
+        print(f"       note: {n}")
+    for path in routes:
+        tag = f"{vp} chat {path}"
+
+        def run(path=path, tag=tag):
+            page.goto(base + path, wait_until="domcontentloaded")
+            page.wait_for_selector(LAUNCHER, state="attached", timeout=T)
+            if check_launcher(page, tag) and path not in done:
+                check_chat(page, f"{LAUNCHER}[data-ct-visible]", tag, frost=not path.startswith("/map"))
+
+        step(f"{tag}: launcher", run)
+
+    # Home once the dock has gone quiet: the launcher must still be there
+    def quiet():
+        tag = f"{vp} chat / (dock quiet)"
+        page.goto(base + "/", wait_until="domcontentloaded")
+        page.wait_for_selector(f"{DOCK}.quiet", state="attached", timeout=8000)
+        check_launcher(page, tag)
+
+    step(f"{vp} chat / (dock quiet)", quiet)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--shots", metavar="DIR", help="save full-viewport screenshots here")
-    ap.add_argument("--label", default="after", help="screenshot name prefix (default: after)")
+    ap.add_argument("--label", default="after",
+                    help="screenshot name prefix: <label>-<viewport>-<route>.png (default: after)")
     ap.add_argument("--db", help="database to copy (default: prospects.db in this checkout)")
-    ap.add_argument("--only", help="comma list of viewports (phone,ipad,ipad-l)")
+    ap.add_argument("--only", help="comma list of viewports (phone,ipad,ipad-l,desktop)")
+    ap.add_argument("--no-dock", action="store_true", help="skip the dock / reduced-motion checks")
+    ap.add_argument("--no-chat-sweep", action="store_true",
+                    help="skip the one-chat-launcher check on every route and sub-page")
     ap.add_argument("--routes", help="comma list of routes to visit (default: all)")
     args = ap.parse_args()
     from playwright.sync_api import sync_playwright
 
     if args.shots:
         os.makedirs(args.shots, exist_ok=True)
-    vps = [v for v in (args.only.split(",") if args.only else VIEWPORTS)]
+    vps = [v.strip() for v in (args.only.split(",") if args.only else VIEWPORTS) if v.strip()]
+    unknown = [v for v in vps if v not in VIEWPORTS]
+    if unknown:
+        sys.exit(f"unknown viewport(s) {unknown}; choose from {list(VIEWPORTS)}")
     routes = args.routes.split(",") if args.routes else ROUTES
 
     if NO_MEDIA:
@@ -481,7 +937,13 @@ def main() -> int:
                     check_home(page, base, vp, shot)
                 else:
                     check_route(page, base, vp, path, shot)
+            if not args.no_dock:
+                check_dock(page, base, vp, shot)
+            if not args.no_chat_sweep:
+                check_chat_everywhere(page, base, vp, set(routes))
             ctx.close()
+            if not args.no_dock:
+                check_reduced(br, base, vp)
         br.close()
 
     print()

@@ -14,6 +14,7 @@
   import { chat, send, addAttachment, removeAttachment, mentionText, loadPeople } from '$lib/chat.svelte.js';
   import { me } from '$lib/me.svelte.js';
   import { isHttp, domainOf, initials } from './text.js';
+  import { pressable } from '$lib/motion.js';
 
   let { channelId, disabled = false } = $props();
 
@@ -282,7 +283,7 @@
                 aria-label="Message" disabled={disabled || !d} maxlength="4000"
                 oninput={onInput} onkeydown={onKey} onclick={scanAt}
                 onblur={() => setTimeout(() => { if (chat.overlay === 'people') closePeople(); }, 150)}></textarea>
-      <button type="button" class="mg-btn accent icon send" data-testid="chat-send" onclick={submit}
+      <button type="button" class="mg-btn accent icon send" data-testid="chat-send" onclick={submit} use:pressable
               disabled={!canSend} aria-label="Send" title="Send">
         <Icon name="send" size={16} stroke={2} />
       </button>

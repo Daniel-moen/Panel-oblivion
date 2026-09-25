@@ -3,7 +3,7 @@
   import { filters, clearFilters, isFiltering } from '$lib/filters.svelte.js';
   import Seg from './glass/Seg.svelte';
   import Icon from './glass/Icon.svelte';
-  import { slide } from '$lib/motion.js';
+  import { play, fadeIn } from '$lib/motion.js';
 
   let { shown, total } = $props();
 
@@ -87,7 +87,7 @@
   </div>
 
   {#if refineOpen}
-    <div class="refine mg-panel" transition:slide={{ y: -6, duration: 200 }}>
+    <div class="refine mg-panel" transition:play={fadeIn}>
       <span class="mg-select">
         <select bind:value={filters.suburb} aria-label="Suburb">
           <option value="">All suburbs</option>

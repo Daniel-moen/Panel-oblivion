@@ -10,6 +10,7 @@
   import Icon from '$lib/components/glass/Icon.svelte';
   import { chat, openChannel, showMentions, createTopic } from '$lib/chat.svelte.js';
   import { shortAgo } from './text.js';
+  import { staggerIn } from '$lib/motion.js';
 
   let { compact = false } = $props();
 
@@ -72,8 +73,9 @@
       <span class="at">@</span> Mentions
       {#if chat.mentions}<i class="n hot">{chat.mentions}</i>{/if}
     </button>
-    {#each sorted as c (c.id)}
+    {#each sorted as c, i (c.id)}
       <button type="button" class="tab" role="tab" aria-selected={isOn(c)} class:on={isOn(c)}
+              in:staggerIn|global={{ i }}
               data-testid="chat-channel" data-slug={c.slug} data-id={c.id}
               title={label(c)} onclick={() => openChannel(c.id)}>
         {#if c.kind === 'property'}
@@ -134,7 +136,8 @@
       {/if}
       <button type="button" class="row" class:on={isOn(c)} class:unread={c.unread}
               data-testid="chat-channel" data-slug={c.slug} data-id={c.id}
-              aria-current={isOn(c) ? 'true' : undefined} onclick={() => openChannel(c.id)}>
+              aria-current={isOn(c) ? 'true' : undefined} onclick={() => openChannel(c.id)}
+              in:staggerIn|global={{ i }}>
         {#if c.kind === 'property'}
           <span class="ic ph">
             {#if c.property?.photo_url && !broken[c.id]}

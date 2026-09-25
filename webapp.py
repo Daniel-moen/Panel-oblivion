@@ -825,10 +825,13 @@ def _slim_json(entry: dict) -> tuple[bytes, str]:
                 for r in entry["rows"]]
         body = json.dumps(slim, separators=(",", ":"), ensure_ascii=False,
                           default=str).encode("utf-8")
-        # Assigned together, etag last: a racing reader sees either nothing
-        # (and builds its own identical copy) or both.
+        etag = hashlib.md5(body).hexdigest()
+        # Etag FIRST: readers test slim_json, so once they see it the etag
+        # is already there; a racing reader sees either nothing (and builds
+        # its own identical copy) or both. The builder returns its locals.
+        entry["etag"] = etag
         entry["slim_json"] = body
-        entry["etag"] = hashlib.md5(body).hexdigest()
+        return body, etag
     return entry["slim_json"], entry["etag"]
 
 

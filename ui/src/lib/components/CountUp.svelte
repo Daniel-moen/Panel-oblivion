@@ -1,24 +1,29 @@
 <script>
   /* A number that arrives rather than appears.
 
-     Eased with a cubic out over ~900ms: long enough to read as motion, short
-     enough that nobody waits for it. Skipped when the value is small
+     It runs on spring.gentle — Mission Control's spring for numbers and
+     large moves (lib/motion.js), over the time that spring takes to settle.
+     Skipped when the value is small
      (counting 0→3 looks broken, not lively) and when the viewer asked for
      reduced motion. Only the *first* value animates — re-running on every
      poll would make the dashboard twitch. */
 
-  let { value = 0, format = (n) => String(Math.round(n)), duration = 900 } = $props();
+  import { spring, springEase, springMs, prefersReduced } from '$lib/motion.js';
+
+  let { value = 0, format = (n) => String(Math.round(n)) } = $props();
+
+  const ease = springEase(spring.gentle);
+  const duration = springMs(spring.gentle);
 
   let shown = $state(0);
   let last = null;
 
   function run(to) {
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (reduce || !to || Math.abs(to) < 5) { shown = to; return; }
+    if (prefersReduced() || !to || Math.abs(to) < 5) { shown = to; return; }
     const t0 = performance.now();
     const tick = (t) => {
       const p = Math.min(1, (t - t0) / duration);
-      shown = to * (1 - Math.pow(1 - p, 3));
+      shown = to * ease(p);
       if (p < 1) requestAnimationFrame(tick);
       else shown = to;
     };

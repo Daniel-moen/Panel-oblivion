@@ -6,13 +6,13 @@
      dot rather than a red slab when something failed — the message is the
      message. It clears itself (see toast() in $lib/state.svelte.js). */
   import { app } from '$lib/state.svelte.js';
-  import { rise, fade } from '$lib/motion.js';
+  import { play, fadeUp } from '$lib/motion.js';
 </script>
 
 {#if app.toast}
   <div class="host">
     <div class="toast" class:error={app.toast.kind === 'error'} role="status"
-         in:rise={{ y: 12, duration: 280 }} out:fade={{ duration: 160 }}>
+         transition:play|global={fadeUp}>
       <span class="mg-dot {app.toast.kind === 'error' ? 'crit' : 'ok'} sm"></span>
       <span class="msg">{app.toast.msg}</span>
     </div>
@@ -21,7 +21,7 @@
 
 <style>
   .host {
-    position: fixed; left: 0; right: 0; bottom: calc(var(--sab) + var(--mc-dock-h) + 16px);
+    position: fixed; left: 0; right: 0; bottom: var(--mc-dock-clear);
     z-index: 95; pointer-events: none; display: flex; justify-content: center; padding: 0 16px;
   }
   .toast {
@@ -35,7 +35,4 @@
   }
   .msg { min-width: 0; overflow-wrap: anywhere; }
   .toast.error { border-color: var(--mc-crit-line); }
-  @media (min-width: 1024px) {
-    .host { left: var(--mc-rail-w); bottom: calc(var(--sab) + 24px); }
-  }
 </style>

@@ -18,7 +18,7 @@
   import Seg from '$lib/components/glass/Seg.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
-  import { pop, fade } from '$lib/motion.js';
+  import { play, fadeIn, scaleIn } from '$lib/motion.js';
   import { photoUrl } from '$lib/media.js';
   import {
     pe, developedUrl, baseUrl, tileUrl, sourceUV, displayToSourceScale, fullRecipe, MASK_DEFAULTS, isDefault
@@ -368,14 +368,14 @@
                  bind:crop={ed.recipe.crop} {cropAspect} {brush} overlay={windowOverlay}
                  onstroke={onStroke} onpoint={onPoint} />
         {#if loupe}
-          <div class="loupe mg-raised" transition:pop={{ duration: 220, y: 8 }}>
+          <div class="loupe mg-raised" transition:play={scaleIn}>
             <div class="lh"><span>Original · 100%</span>
               <button type="button" class="mg-btn ghost icon sm" onclick={() => { loupe = false; loupeAt = null; }} aria-label="Close"><Icon name="close" size={13} /></button></div>
             {#if loupeSrc}<img src={loupeSrc} alt="100% crop of the original" />{:else}<p>Tap the photo to look closer.</p>{/if}
           </div>
         {/if}
-        {#if mode === 'point' && !loupe}<span class="tip mg-chip" transition:fade={{ duration: 150 }}>Tap the object to select</span>{/if}
-        {#if mode === 'brush'}<span class="tip mg-chip" transition:fade={{ duration: 150 }}>Paint over what should go</span>{/if}
+        {#if mode === 'point' && !loupe}<span class="tip mg-chip" transition:play={fadeIn}>Tap the object to select</span>{/if}
+        {#if mode === 'brush'}<span class="tip mg-chip" transition:play={fadeIn}>Paint over what should go</span>{/if}
       </div>
 
       {#if siblings.length > 1}

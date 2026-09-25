@@ -3,16 +3,19 @@
      link state and a small date over a light clock on the left, the status
      readout and a row of round glass buttons on the right.
 
-     The clock replaces the brand (the Dock's Home tab and the Rail's name
-     already say where you are), so the strip reads the same on a phone, an
-     iPad and a desktop. It is sticky and translucent, like the panel's
-     header; the buttons carry no blur of their own.
+     The clock replaces the brand (the Dock's Home tab already says where
+     you are), so the strip reads the same on a phone, an iPad and a
+     desktop. It is sticky and translucent, like the panel's header; the
+     buttons carry no blur of their own.
 
      Right-hand cluster, left to right: the page's own posted actions
      (`shell.actions`), Search (focuses the page's search box, or goes to
      one — `$lib/search.js`; also on "/"), Quick log (the global sheet;
      about this property when you are on one), team chat (with the unread
-     count), account, and — on a phone only — the primary action.
+     count) and the account — the signed-in person's initial, which is where
+     the old sidebar's foot (name, role, passkeys, settings) lives now. The
+     primary action is not here: it is the Dock's raised button, at every
+     width.
 
      Props:
        scene   true on Home while something is happening (a crawl): a slim
@@ -27,7 +30,7 @@
   import { chat, toggleChat, chatBadge } from '$lib/chat.svelte.js';
   import { openSearch, searchKey } from '$lib/search.js';
   import Icon from './Icon.svelte';
-  import PrimaryButton from './PrimaryButton.svelte';
+  import AccountButton from './AccountButton.svelte';
 
   let { scene = false } = $props();
 
@@ -135,11 +138,7 @@
                               data-kind={badge.kind} aria-hidden="true">{badge.txt}</i>{/if}
         </button>
 
-        <a class="mg-round" class:on={path.startsWith('/account')} href="/account" aria-label="Account" title="Account">
-          <Icon name="user" size={18} />
-        </a>
-
-        <span class="phone-go"><PrimaryButton /></span>
+        <AccountButton />
       </div>
     </div>
   </header>
@@ -179,7 +178,6 @@
     font: 700 9.5px/1 var(--mc-font); font-style: normal; font-variant-numeric: tabular-nums;
   }
   .count.mention { background: var(--mc-accent); color: var(--mc-accent-ink); }
-  .phone-go { display: inline-flex; }
 
   /* the scene's slim strip: just the dot and what is happening */
   .scene .in { justify-content: center; }
@@ -187,7 +185,7 @@
   .slim:hover .st { text-decoration: underline; text-underline-offset: 3px; }
 
   /* a phone: the readout steps aside (the dot still says it) unless a crawl
-     runs, the date goes short, the gaps tighten — five round buttons and
+     runs, the date goes short, the gaps tighten — four round buttons and
      the clock fit 390px */
   @media (max-width: 480px) {
     .in { gap: 6px; padding: 0 10px 0 14px; }
@@ -205,9 +203,8 @@
     .crowded .btns { gap: 2px; }
   }
 
-  /* from the rail breakpoint the primary action lives in the rail's foot */
+  /* a wide screen: roomier sides */
   @media (min-width: 1024px) {
-    .phone-go { display: none; }
     .in { padding: 0 20px 0 24px; gap: 10px; }
   }
 </style>

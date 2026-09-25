@@ -18,7 +18,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { flip } from 'svelte/animate';
-  import { fade, rise, slide } from '$lib/motion.js';
+  import { play, fadeIn, fadeUp, staggerIn } from '$lib/motion.js';
   import { mstate, boot, loadClips, loadFolders, openClip, closeClip, stepClip,
            toggleSelect, clearSelect, selectAll, say, can, CAP, setLabel, dropClips,
            LABELS } from '$lib/media.svelte.js';
@@ -311,7 +311,7 @@
       <TrashView oncount={(n) => (trashCount = n)} />
     {:else}
     {#if mstate.clipboard.length && can(CAP.UPLOAD)}
-      <div class="selbar paste" in:slide={{ y: 8, duration: 220 }} out:fade={{ duration: 150 }}>
+      <div class="selbar paste" in:play={fadeUp} out:play={{ v: fadeUp, exit: true }}>
         <b>{mstate.clipboard.length} copied</b>
         {#if here}
           <button class="mg-btn primary sm" disabled={working} onclick={paste}>
@@ -325,7 +325,7 @@
     {/if}
 
     {#if sel.size}
-      <div class="selbar" in:slide={{ y: 8, duration: 220 }} out:fade={{ duration: 150 }}>
+      <div class="selbar" in:play={fadeUp} out:play={{ v: fadeUp, exit: true }}>
         <b>{sel.size} selected</b>
         {#if can(CAP.ANNOTATE)}
           <button class="mg-btn secondary sm" class:on={labelOpen} aria-expanded={labelOpen}
@@ -367,7 +367,7 @@
         <button class="mg-btn ghost sm" onclick={selectAll}>All</button>
         <button class="mg-btn ghost sm" onclick={clearSelect}>Clear</button>
         {#if labelOpen}
-          <div class="labelrow" in:slide={{ y: -4, duration: 180 }}>
+          <div class="labelrow" in:play={fadeIn}>
             <LabelDots value={null} showNone={false} toggle={false} label="Label the selection"
                        onchange={labelSel} />
             <button class="mg-btn ghost sm" onclick={() => labelSel(null)}>Clear label</button>
@@ -421,7 +421,7 @@
       <div class={mstate.view === 'grid' ? 'grid' : 'list'}>
         {#each clips as c, i (c.id)}
           <div animate:flip={{ duration: 260 }}
-               in:rise={{ i }}>
+               in:staggerIn|global={{ i }}>
             <ClipCard clip={c}
                       selected={sel.has(c.id)}
                       selecting={sel.size > 0}
@@ -454,7 +454,7 @@
   /* ———————————————————————————————————————————————————— folder rail ——— */
   .rail {
     position: sticky; top: calc(var(--mc-strip-h) + 12px); align-self: start;
-    max-height: calc(100dvh - var(--mc-strip-h) - 32px); overflow-y: auto;
+    max-height: calc(100dvh - var(--mc-strip-h) - 12px - var(--mc-dock-clear)); overflow-y: auto; /* clear of the dock */
     background: var(--mc-surface); border: 1px solid var(--mc-line);
     border-radius: var(--mc-r); box-shadow: var(--mc-sh-1); padding: 8px;
     display: flex; flex-direction: column; gap: 2px; min-width: 0;

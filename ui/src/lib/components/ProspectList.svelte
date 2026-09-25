@@ -3,6 +3,7 @@
   import Signals from './Signals.svelte';
   import { app } from '$lib/state.svelte.js';
   import { addrOf, furnishedTxt, priceShort } from '$lib/format.js';
+  import { staggerIn } from '$lib/motion.js';
 
   let { rows } = $props();
 
@@ -31,8 +32,9 @@
       </tr>
     </thead>
     <tbody>
-      {#each rows as r (r.listing_key)}
+      {#each rows as r, i (r.listing_key)}
         <tr class="item" class:sel={r.listing_key === app.selectedKey} data-prospect={r.listing_key}
+            in:staggerIn|global={{ i }}
             onclick={() => pick(r)} onkeydown={(e) => e.key === 'Enter' && pick(r)} role="button" tabindex="0">
           <td class="td-ph"><div class="thumb"><Photo {r} /></div></td>
           <td class="main">

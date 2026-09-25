@@ -5,7 +5,7 @@
      status strip. Everything here is absolute INSIDE that pane, and the whole
      page sits in one isolated stacking context (`.stage`) so Leaflet's own
      z-indices (panes at 400+, controls at 1000) can never climb over the
-     phone dock, the chat panel or a sheet.
+     floating dock, the chat panel or a sheet.
 
      Floating chrome, all solid raised planes (no blur over the map — the map
      has to keep 60fps while it pans):
@@ -21,7 +21,7 @@
   import 'leaflet/dist/leaflet.css';
   import { api } from '$lib/api.js';
   import { fmtR, fmtM, fmtInt, mvLabel, satUrl } from '$lib/format.js';
-  import { slide } from '$lib/motion.js';
+  import { play, fadeIn } from '$lib/motion.js';
   import Icon from '$lib/components/glass/Icon.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
@@ -262,7 +262,7 @@
     const beside = panelOpen && !narrow;
     PAD_TL[0] = beside ? CHROME_W + 32 : 16;
     PAD_TL[1] = narrow ? 150 : (beside ? 24 : 120);
-    PAD_BR[1] = narrow ? 110 : 56;
+    PAD_BR[1] = 110; // the floating dock, at every width
   }
 
   /* —————————————————————————————————————————————————— marker rebuild ——— */
@@ -459,7 +459,7 @@
     </div>
 
     {#if panelOpen}
-      <div class="panel mg-glass" transition:slide={{ y: -10, duration: 220 }}>
+      <div class="panel mg-glass" transition:play={fadeIn}>
         <div class="filters">
           <div class="tiers" role="group" aria-label="Tiers">
             {#each TIERS as [t, label, tone] (t)}
@@ -599,10 +599,11 @@
   .stage {
     position: absolute; inset: 0; isolation: isolate; z-index: 0; overflow: hidden;
     --gap: 12px;
-    /* the floor the floating chrome must stay above: the dock on a phone */
-    --floor: calc(var(--mc-dock-h) + var(--sab) + 12px);
+    /* the floor the floating chrome must stay above: the floating dock,
+       at every width */
+    --floor: var(--mc-dock-clear);
   }
-  @media (min-width: 1024px) { .stage { --floor: 16px; --gap: 16px; } }
+  @media (min-width: 1024px) { .stage { --gap: 16px; } }
 
   .map { position: absolute; inset: 0; background: var(--mc-bg); }
 
@@ -790,7 +791,7 @@
   .stage :global(.leaflet-container) {
     background: var(--mc-bg); font-family: var(--mc-font); outline: none;
   }
-  /* controls clear the phone dock and the rail's gutter */
+  /* the zoom controls and attribution clear the dock */
   .stage :global(.leaflet-bottom) { bottom: calc(var(--floor) - 12px); }
   .stage :global(.leaflet-right .leaflet-control) { margin-right: var(--gap); }
   .stage :global(.leaflet-bottom .leaflet-control) { margin-bottom: 12px; }

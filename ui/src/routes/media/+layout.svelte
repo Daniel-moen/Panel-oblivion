@@ -1,7 +1,7 @@
 <script>
   /* The Media section, re-homed.
 
-     The status strip, the rail and the dock are the app's
+     The status strip and the dock are the app's
      now — routes/+layout.svelte draws them for every route, and this file
      draws only what is Media's own: the two strips that explain a missing
      drive or a dead backend, the row of eight sub-sections, and the page.
@@ -18,7 +18,7 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { fade } from '$lib/motion.js';
+  import { play, fadeIn } from '$lib/motion.js';
   import { mstate, mtoast, boot, watchJobs } from '$lib/media.svelte.js';
   import { setStatus, clearStatus } from '$lib/shell.svelte.js';
   import MediaToasts from '$lib/components/MediaToasts.svelte';
@@ -120,7 +120,7 @@
 </div>
 
 {#key path}
-  <div in:fade={{ duration: 180, delay: 60 }}>{@render children()}</div>
+  <div in:play={{ v: fadeIn, delay: 60 }}>{@render children()}</div>
 {/key}
 
 <MediaToasts items={mtoast.items} />

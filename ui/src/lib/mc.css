@@ -13,9 +13,10 @@
    glows or gradients.
 
    The blur budget (iPad): backdrop-filter is the expensive thing, so the app
-   keeps to at most four blurred surfaces stacked on screen: the strip, the
-   dock or the rail, ONE content pane (`.mg-pane`, a fixed sheet of glass the
-   page scrolls over) and one sheet / drawer. Everything inside the pane —
+   keeps to at most three blurred surfaces stacked on screen: the strip, the
+   floating dock and one sheet / drawer. The ONE content pane (`.mg-pane`,
+   a fixed sheet of glass the page scrolls over) is frosted by a pre-blurred
+   copy of the photo (glass/Frost), not a live backdrop-filter. Everything inside the pane —
    sections, tiles, cards, chips, inputs, rows — is `glass-soft`: a white 6 %
    lift with a 12 % hairline, no blur of its own. Blur never animates.
 
@@ -109,8 +110,10 @@
 
   /* — the shell's fixed furniture, so pages can clear it ———————————— */
   --mc-strip-h: 52px;   /* the status strip                */
-  --mc-dock-h: 64px;    /* the phone dock, without the inset */
-  --mc-rail-w: 300px;   /* the iPad / desktop rail          */
+  --mc-dock-h: 58px;    /* the floating dock pill (44 + 2×6 padding + 2 hairline) */
+  /* what a page / sheet leaves free at the bottom so the dock never covers
+     content: the pill, its 14px float above the safe area, and a 12px breath */
+  --mc-dock-clear: calc(var(--sab) + 14px + var(--mc-dock-h) + 12px);
   --mc-gutter: 0px;     /* the gap between the pane and the screen edge */
   --mc-pane-top: calc(var(--sat) + var(--mc-strip-h)); /* where the pane starts */
 
@@ -200,8 +203,8 @@
   --font-mono: var(--mc-mono);
 }
 
-/* the pane's gutters follow the panel: flush on a phone, 16px from 640,
-   and clear of the rail from 1024 */
+/* the pane's gutters follow the panel: flush on a phone, 16px from 640 —
+   the same at every width after that (there is no sidebar to clear) */
 @media (min-width: 640px) { :root { --mc-gutter: 16px; --mc-pane-top: calc(var(--sat) + var(--mc-strip-h) + 12px); } }
 
 /* ————————————————————————————————————————————————————— the scene ——— */
@@ -287,9 +290,11 @@
 .mg-pill { border-radius: 9999px; }
 
 /* .mg-pane — the ONE content pane: a fixed sheet of glass under the page,
-   from the strip to the bottom edge, that the document scrolls over. Flush
-   on a phone (where the panel's windows are full-screen sheets), 16px gutters
-   from 640, clear of the rail from 1024. The layout draws it (with a
+   from the strip down, that the document scrolls over. On a phone it is
+   flush and runs off the bottom edge (the panel's windows are full-screen
+   sheets there); from 640 it floats — 16px gutters on three sides, rounded
+   all round, centred at every width — and the dock floats over its foot.
+   The layout draws it (with a
    glass/Frost inside: the photo pre-blurred, not a live backdrop-filter);
    pages never do. */
 .mg-pane {
@@ -300,9 +305,12 @@
   box-shadow: var(--mc-sh-3);
   --frost-r: var(--mc-r-lg) var(--mc-r-lg) 0 0;
 }
-@media (min-width: 640px) { .mg-pane { --frost-tint: var(--mc-glass); } }
-@media (min-width: 1024px) {
-  .mg-pane { left: calc(var(--mc-rail-w) + var(--mc-gutter)); bottom: 16px; border-bottom: 1px solid var(--mc-glass-line); border-radius: var(--mc-r-lg); --frost-r: var(--mc-r-lg); }
+@media (min-width: 640px) {
+  .mg-pane {
+    --frost-tint: var(--mc-glass);
+    bottom: var(--mc-gutter); border-bottom: 1px solid var(--mc-glass-line);
+    border-radius: var(--mc-r-lg); --frost-r: var(--mc-r-lg);
+  }
 }
 
 /* ———————————————————————————————————————————————————————— buttons ——— */
@@ -479,16 +487,16 @@ button.mg-card:disabled { opacity: 0.4; pointer-events: none; }
 
 /* ——————————————————————————————————————————————————————— structures ——— */
 
-/* .mg-page — a route's content column, laid over the pane. Sides are the
-   pane's inner padding plus its gutter, the bottom clears the phone dock.
-   The rail layout overrides the bottom. */
+/* .mg-page — a route's content column, laid over the pane, centred at every
+   width. Sides are the pane's inner padding plus its gutter; the bottom
+   leaves `--mc-dock-clear` for the floating dock (at every width). */
 .mg-page {
   position: relative; z-index: 10;
   width: 100%; max-width: 1200px; margin: 0 auto;
-  padding: 16px 16px calc(var(--mc-dock-h) + var(--sab) + 24px);
+  padding: 16px 16px var(--mc-dock-clear);
 }
 @media (min-width: 640px) {
-  .mg-page { padding: 32px calc(var(--mc-gutter) + 20px) calc(var(--mc-dock-h) + var(--sab) + 24px); max-width: calc(1200px + 2 * var(--mc-gutter)); }
+  .mg-page { padding: 32px calc(var(--mc-gutter) + 20px) var(--mc-dock-clear); max-width: calc(1200px + 2 * var(--mc-gutter)); }
 }
 
 /* .mg-row — a view's header row: title left, actions right, wraps on a phone. */
@@ -742,3 +750,40 @@ a.mg-stat-tile:active { transform: scale(0.985); }
 
 /* .mg-sr — read by screen readers, not drawn. */
 .mg-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ——————————————————————————————————————————— motion: press / hoverLift ——— */
+/* `use:pressable` (lib/motion.js) adds these and sets --mg-spring-snappy to
+   spring.snappy as a CSS linear() easing. press = whileTap scale 0.97;
+   hoverLift = whileHover y −1 (pointer devices only) + whileTap 0.98.
+   Reduced motion drops both (opacity is all that is left to animate). */
+.mg-press, .mg-lift { transition: transform var(--mg-spring-snappy, 180ms cubic-bezier(0.2, 0.8, 0.2, 1)); }
+.mg-press:active:not(:disabled) { transform: scale(0.97); }
+.mg-lift:active:not(:disabled) { transform: scale(0.98); }
+@media (hover: hover) and (pointer: fine) {
+  .mg-lift:hover:not(:active) { transform: translateY(-1px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-press, .mg-lift, .mg-press:active, .mg-lift:active, .mg-lift:hover { transform: none !important; transition: none; }
+}
+
+/* ————————————————————————————————————————————————— motion: stagger ——— */
+/* .mg-rise (and its older names) is fadeUp + stagger(0.04) done in CSS, for
+   static sections that mount once with their page: 280ms on ease.out,
+   y 10 → 0, 40ms apart, capped at the 12th. Lists that a poll can add to use
+   `in:staggerIn|global` (lib/motion.js) instead, which only staggers the
+   container's first paint. Reduced motion: no travel (the rule above already
+   drops these animations to nothing). */
+.mg-rise, .mg-fadeup, .anim-rise {
+  animation: mg-rise 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 40ms);
+}
+/* A press on an .mg-btn keeps the button's own colour transitions; only the
+   transform moves onto spring.snappy. */
+.mg-btn.mg-press, .mg-btn.mg-lift {
+  transition: background var(--mc-t-fast), border-color var(--mc-t-fast), color var(--mc-t-fast),
+              transform var(--mg-spring-snappy), opacity var(--mc-t-fast);
+}
+@media (prefers-reduced-motion: reduce) {
+  .mg-rise, .mg-fadeup, .anim-rise { animation: none; opacity: 1; transform: none; }
+  .mg-btn.mg-press, .mg-btn.mg-lift { transition: background var(--mc-t-fast), border-color var(--mc-t-fast), color var(--mc-t-fast), opacity var(--mc-t-fast); }
+}

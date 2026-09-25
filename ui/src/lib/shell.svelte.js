@@ -1,6 +1,6 @@
 /* The chrome's letterbox, and its extension points.
 
-   The StatusStrip, the Dock and the Rail are global — drawn once, by
+   The StatusStrip and the Dock are global — drawn once, by
    `routes/+layout.svelte`, for every route — but what belongs in the strip's
    right-hand cluster is a page's business: Media knows whether it is
    indexing, the engine knows whether it is crawling.
@@ -31,7 +31,8 @@
 
      slots.nav      [{ href, label, icon, need? }]
                     Extra top-level sections. They render after the built-in
-                    six in the Dock and the Rail, in the same style. `need`
+                    six in the Dock, in the same style (the dock is sized to
+                    fit seven on a 390px phone — see glass/Dock.svelte). `need`
                     is a privilege flag (see me.svelte.js `can`) without
                     which the item is not drawn. Example, from a module that
                     runs at startup or a layout's onMount:
@@ -48,6 +49,8 @@
                       addHomeCard({ id: 'tasks', component: MyTasks });
 
    Nothing in here fetches or polls; it is a letterbox, not a store. */
+
+import { untrack } from 'svelte';
 
 export const shell = $state({
   status: null,
@@ -79,7 +82,7 @@ export function clearActions() {
   shell.actions = [];
 }
 
-/** Add a top-level section to the Dock and the Rail (idempotent by href). */
+/** Add a top-level section to the Dock (idempotent by href). */
 export function addNav(item) {
   if (!item?.href) return;
   if (!slots.nav.some((n) => n.href === item.href)) slots.nav = [...slots.nav, item];
@@ -133,10 +136,10 @@ export const inSection = (href, path) => (href === '/' ? path === '/' : path.sta
 
 /* ——— the scene (Home) and the two global tools ———
 
-     chrome.quiet     true when the Dock / Rail should step out of the way
-                      (Home, after 3 s without input). They slide off with
-                      a transform only; any tap, scroll or key brings them
-                      back. Never set for prefers-reduced-motion.
+     chrome.quiet     true when the Dock should step out of the way (Home,
+                      after 3 s without input, at every width). It slides
+                      off with a transform + fade only; any tap, scroll or
+                      key brings it back. Never set for prefers-reduced-motion.
      chrome.frost     the url glass/Frost.svelte shows (the hour's pre-blurred
                       photo), set by Backdrop; `frostLive` when it is a
                       custom photo that has to be blurred by a filter.
@@ -150,8 +153,28 @@ export const chrome = $state({
   quiet: false,
   frost: '',
   frostLive: false,
-  quickLog: { open: false, gid: null }
+  quickLog: { open: false, gid: null },
+  modal: 0
 });
+
+/* ——— modals and the dock ———
+     The dock floats above everything (z-60), sheets included, as the
+     panel's does. But while a modal (aria-modal) sheet or drawer is open the
+     page behind is out of reach, so the dock must be too: each modal holds
+     `chrome.modal` while it is open and the dock goes inert (and dims) until
+     the count is back to zero. Returns the release; use it as an $effect
+     teardown. */
+export function holdModal() {
+  /* untracked: called from an $effect, a tracked read of the count it
+     writes would make that effect re-run itself forever */
+  untrack(() => (chrome.modal += 1));
+  let held = true;
+  return () => {
+    if (!held) return;
+    held = false;
+    untrack(() => (chrome.modal = Math.max(0, chrome.modal - 1)));
+  };
+}
 
 /** Open the Quick log sheet, optionally already about one property group. */
 export function openQuickLog(gid = null) {

@@ -9,6 +9,7 @@
   import Message from './Message.svelte';
   import { chat, loadOlder, loadTail, markRead } from '$lib/chat.svelte.js';
   import { mentionMatcher, dayKey, dayLabel, when } from './text.js';
+  import { play, fadeIn } from '$lib/motion.js';
 
   let { channelId } = $props();
 
@@ -75,6 +76,12 @@
   let hasNew = $state(false);
   let newCount = $state(0);
   let placedFor = null;          // the channel we have done the first positioning for
+  /* Motion: history (the first page, older pages) simply appears; a line that
+     ARRIVES after the first placement rises in with fadeUp (Message.svelte).
+     `baseline` is the last message id at that placement. Your own sends rise
+     once, as the pending bubble — not again when the server confirms them. */
+  let baseline = $state(Infinity);
+  const arrives = (it) => it.kind === 'pending' || (it.kind === 'msg' && it.m.id > baseline && !it.m.mine);
   let lastTail = null;           // id/pending signature of the foot, to spot arrivals
 
   function foot(behavior = 'auto') {
@@ -116,6 +123,7 @@
       if (placedFor === id) return;
       placedFor = id;
       lastTail = sig();
+      baseline = sigParts(lastTail)[0];
       tick().then(() => {
         if (!scroller) return;
         const jump = chat.jumpTo != null ? scroller.querySelector(`[data-testid="chat-msg"][data-id="${chat.jumpTo}"]`) : null;
@@ -204,11 +212,11 @@
       {#if it.kind === 'day'}
         <div class="day"><span>{it.label}</span></div>
       {:else if it.kind === 'new'}
-        <div class="newline" data-testid="chat-unread-divider" role="separator" aria-label="New messages"><span>New</span></div>
+        <div class="newline" data-testid="chat-unread-divider" role="separator" aria-label="New messages" in:play|global={fadeIn}><span>New</span></div>
       {:else if it.kind === 'msg'}
-        <Message m={it.m} head={it.head} {matcher} />
+        <Message m={it.m} head={it.head} {matcher} enter={arrives(it)} />
       {:else}
-        <Message m={it.p} pending={it.p} head={it.head} {matcher} />
+        <Message m={it.p} pending={it.p} head={it.head} {matcher} enter={arrives(it)} />
       {/if}
     {/each}
   </div>

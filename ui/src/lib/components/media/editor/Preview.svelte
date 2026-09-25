@@ -16,7 +16,7 @@
        point  a click target: onpoint(u, v) */
   import Empty from '$lib/components/glass/Empty.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
-  import { fade } from '$lib/motion.js';
+  import { play, fadeIn } from '$lib/motion.js';
 
   let {
     src, before = null, showBefore = false, busy = false,
@@ -194,9 +194,9 @@
   {/if}
 
   {#if (loading || busy) && shown}
-    <span class="rend mg-chip" transition:fade={{ duration: 150 }}><span class="mg-spin"></span>Rendering</span>
+    <span class="rend mg-chip" transition:play={fadeIn}><span class="mg-spin"></span>Rendering</span>
   {/if}
-  {#if showBefore}<span class="tag mg-chip" transition:fade={{ duration: 150 }}>Before</span>{/if}
+  {#if showBefore}<span class="tag mg-chip" transition:play={fadeIn}>Before</span>{/if}
 </div>
 
 <style>

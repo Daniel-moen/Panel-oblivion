@@ -8,7 +8,7 @@
      the map and coming back keeps it. This page is the framing around it: one
      header row, then the conversation as a panel that fills the rest of the
      viewport — the thread scrolls inside it and the composer is pinned to its
-     foot, above the phone Dock. (The chat button up in the strip is the
+     foot, above the floating Dock. (The chat button up in the strip is the
      team's own line — a different conversation entirely.) */
   import { agent, resetAgent } from '$lib/agent.svelte.js';
   import { app } from '$lib/state.svelte.js';
@@ -54,20 +54,19 @@
 
 <style>
   /* The page is exactly one viewport tall: the strip above, the page's own
-     top gutter, and the Dock (phone) or a bottom gutter (rail) below. The
-     negative bottom margin eats half of .mg-page's dock clearance so the
-     composer sits 12px above the Dock rather than 24px. */
+     top gutter, and the dock's clearance below (`--mc-dock-clear`, the same
+     at every width — the dock floats over every width). .mg-page already
+     pads that much at its foot, so the composer sits 12px above the dock. */
   .z {
     --z-top: 16px;
-    --z-bottom: calc(var(--mc-dock-h) + var(--sab) + 12px);
+    --z-bottom: var(--mc-dock-clear);
     display: flex; flex-direction: column; min-height: 0;
     height: calc(100vh - var(--sat) - var(--mc-strip-h) - 1px - var(--z-top) - var(--z-bottom));
     height: calc(100dvh - var(--sat) - var(--mc-strip-h) - 1px - var(--z-top) - var(--z-bottom));
     min-height: 360px;
-    margin-bottom: -12px;
   }
-  @media (min-width: 640px) { .z { --z-top: 20px; } }
-  @media (min-width: 1024px) { .z { --z-bottom: calc(var(--sab) + 16px); margin-bottom: -16px; } }
+  /* the page's own top gutter (.mg-page: 16px, 32px from 640) */
+  @media (min-width: 640px) { .z { --z-top: 32px; } }
 
   .top { flex: none; flex-wrap: nowrap; margin-bottom: 12px; }
   .titles { flex: 1 1 0; min-width: 0; }

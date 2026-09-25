@@ -4,7 +4,7 @@
 
      The detail panel mounts one section at a time, so opening a card costs a
      single request, not five. */
-  import { rise, slide } from '$lib/motion.js';
+  import { play, fadeIn, staggerIn } from '$lib/motion.js';
   import Icon from '$lib/components/glass/Icon.svelte';
   import Seg from '$lib/components/glass/Seg.svelte';
   import { say } from '$lib/media.svelte.js';
@@ -55,7 +55,7 @@
   }
 </script>
 
-<article class="mg-card sh" in:rise={{ i: Math.round(delay / 60) }}>
+<article class="mg-card sh" in:staggerIn|global={{ i: Math.round(delay / 60) }}>
   <div class="ch">
     <span class="kind" title={kindMeta?.hint}><Icon name={kindMeta?.icon || 'share'} size={14} /></span>
     <h3>{s.title || 'Untitled portal'}</h3>
@@ -111,7 +111,7 @@
   </div>
 
   {#if tab}
-    <div class="panel" transition:slide={{ y: -6, duration: 200 }}>
+    <div class="panel" transition:play={fadeIn}>
       {#key tab}
         {#if tab === 'picks'}<PortalPicks share={s} />
         {:else if tab === 'pins'}<PortalPins share={s} />

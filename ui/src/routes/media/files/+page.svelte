@@ -7,7 +7,7 @@
      Drag anything onto the page and it uploads into the folder you are
      standing in, each file carrying its own progress bar. */
   import { onMount } from 'svelte';
-  import { rise, slide, fade } from '$lib/motion.js';
+  import { play, fadeIn, fadeUp, staggerIn } from '$lib/motion.js';
   import { flip } from 'svelte/animate';
   import { mstate, boot, say, can, CAP } from '$lib/media.svelte.js';
   import { media, uploadFile, fmtBytes } from '$lib/media.js';
@@ -180,7 +180,7 @@
   </nav>
 
   {#if sel.size}
-    <div class="selbar mg-panel" transition:slide={{ y: -8, duration: 200 }}>
+    <div class="selbar mg-panel" transition:play={fadeIn}>
       <b class="mg-tnum">{sel.size} selected</b>
       {#if can(CAP.DOWNLOAD)}
         <button class="mg-btn secondary sm" onclick={zip}><Icon name="download" size={14} />Zip</button>
@@ -197,7 +197,7 @@
           onclick={() => input?.click()} disabled={!mstate.status?.backend || (mstate.me && !can(CAP.UPLOAD))}>
     <span class="dzi"><Icon name="upload" size={16} /></span>
     {#if dragging}
-      <b transition:fade={{ duration: 140 }}>Drop to upload</b>
+      <b transition:play={fadeIn}>Drop to upload</b>
     {:else}
       <b>Drop files here, or choose some</b>
     {/if}
@@ -208,7 +208,7 @@
   {#if queue.length}
     <div class="queue">
       {#each queue as u (u.id)}
-        <div class="up mg-panel" animate:flip={{ duration: 200 }} in:rise>
+        <div class="up mg-panel" animate:flip={{ duration: 200 }} in:play={fadeUp}>
           <div class="uh">
             <span class="un">{u.name}</span>
             <span class="up-pct mg-tnum" class:failed={u.error}>
@@ -243,7 +243,7 @@
     <div class="rows mg-panel">
       {#each entries as e, i (e.path)}
         <div class="row" class:sel={sel.has(e.path)} animate:flip={{ duration: 220 }}
-             in:rise={{ i }}>
+             in:staggerIn|global={{ i }}>
           <input type="checkbox" checked={sel.has(e.path)} onchange={() => toggle(e)}
                  aria-label="Select {e.name}" />
 

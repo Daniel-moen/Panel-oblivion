@@ -15,6 +15,7 @@
   import Skeleton from '$lib/components/Skeleton.svelte';
   import { ago, shortDate, MANDATE_LABEL } from '$lib/panel.js';
   import { fmtM } from '$lib/format.js';
+  import { staggerIn } from '$lib/motion.js';
 
   onMount(loadToday);
   const t = $derived(leads.today);
@@ -90,50 +91,50 @@
   <div class="cols">
     <div class="col">
       {#if t.overdue.length}
-        <section class="mg-section mg-rise" style:--i={0}>
+        <section class="mg-section" in:staggerIn|global={{ i: 0 }}>
           <div class="head"><span class="mg-dot crit"></span><h2 class="crit">Overdue</h2><span class="mg-count">{t.overdue.length}</span></div>
           <div class="mg-list">
-            {#each t.overdue as k (k.id)}<LeadRow p={k.property} task={k} tone="late" reason="due {ago(k.due_at)}" />{/each}
+            {#each t.overdue as k, i (k.id)}<LeadRow {i} p={k.property} task={k} tone="late" reason="due {ago(k.due_at)}" />{/each}
           </div>
         </section>
       {/if}
 
-      <section class="mg-section mg-rise" style:--i={1}>
+      <section class="mg-section" in:staggerIn|global={{ i: 1 }}>
         <div class="head"><span class="mg-dot" class:warn={t.due_today.length}></span><h2>Today</h2><span class="mg-count">{t.due_today.length}</span></div>
         {#if !t.due_today.length}
           <p class="note"><Icon name="check" size={14} /> No follow-ups due today{t.overdue.length ? ' — clear the overdue ones above' : ''}.</p>
         {:else}
           <div class="mg-list">
-            {#each t.due_today as k (k.id)}<LeadRow p={k.property} task={k} />{/each}
+            {#each t.due_today as k, i (k.id)}<LeadRow {i} p={k.property} task={k} />{/each}
           </div>
         {/if}
       </section>
 
       {#if t.ready.length}
-        <section class="mg-section mg-rise" style:--i={2}>
+        <section class="mg-section" in:staggerIn|global={{ i: 2 }}>
           <div class="head"><span class="mg-dot ok"></span><h2>Ready to call</h2><span class="mg-count">{t.ready.length}</span></div>
           <p class="note">Owner details found, no contact attempt yet. Tap <Icon name="pencil" size={13} /> after the call.</p>
           <div class="mg-list">
-            {#each t.ready as p (p.group_id)}<LeadRow {p} reason={p.tier === 'hot' ? 'hot prospect' : ''} />{/each}
+            {#each t.ready as p, i (p.group_id)}<LeadRow {i} {p} reason={p.tier === 'hot' ? 'hot prospect' : ''} />{/each}
           </div>
         </section>
       {/if}
 
       {#if t.stale.length}
-        <section class="mg-section mg-rise" style:--i={3}>
+        <section class="mg-section" in:staggerIn|global={{ i: 3 }}>
           <div class="head"><span class="mg-dot warn"></span><h2>Gone quiet</h2><span class="mg-count">{t.stale.length}</span></div>
           <p class="note">Active leads with no contact attempt in {t.stale[0].days_quiet >= 10 ? '10+ ' : ''}days and nothing scheduled.</p>
           <div class="mg-list">
-            {#each t.stale as p (p.group_id)}<LeadRow {p} tone="warn" reason="{p.days_quiet} days quiet" />{/each}
+            {#each t.stale as p, i (p.group_id)}<LeadRow {i} {p} tone="warn" reason="{p.days_quiet} days quiet" />{/each}
           </div>
         </section>
       {/if}
 
       {#if t.upcoming.length}
-        <section class="mg-section mg-rise" style:--i={4}>
+        <section class="mg-section" in:staggerIn|global={{ i: 4 }}>
           <div class="head"><span class="mg-dot"></span><h2>Coming up</h2><span class="mg-count">{t.upcoming.length}</span></div>
           <div class="mg-list">
-            {#each t.upcoming as k (k.id)}<LeadRow p={k.property} task={k} reason="{shortDate(k.due_at)} · {ago(k.due_at)}" />{/each}
+            {#each t.upcoming as k, i (k.id)}<LeadRow {i} p={k.property} task={k} reason="{shortDate(k.due_at)} · {ago(k.due_at)}" />{/each}
           </div>
         </section>
       {/if}
@@ -141,7 +142,7 @@
 
     <div class="col side">
       {#if t.expiring.length}
-        <section class="mg-section mg-rise" style:--i={2}>
+        <section class="mg-section" in:staggerIn|global={{ i: 2 }}>
           <div class="head"><span class="mg-dot warn"></span><h2>Mandates expiring</h2><span class="mg-count">{t.expiring.length}</span></div>
           <div class="mg-list">
             {#each t.expiring as m (m.id)}
@@ -156,7 +157,7 @@
       {/if}
 
       {#if t.hot_untracked.length}
-        <section class="mg-section mg-rise" style:--i={3}>
+        <section class="mg-section" in:staggerIn|global={{ i: 3 }}>
           <div class="head"><span class="mg-dot crit"></span><h2>Hot in the engine</h2>
             <div class="mg-actions"><a class="mg-btn sm ghost" href="/prospects">All <Icon name="arrowRight" size={13} /></a></div></div>
           <p class="note">Open-mandate, top-scored — not tracked yet.</p>
@@ -177,7 +178,7 @@
       {/if}
 
       {#if t.recent_wins.length}
-        <section class="mg-section mg-rise" style:--i={4}>
+        <section class="mg-section" in:staggerIn|global={{ i: 4 }}>
           <div class="head"><span class="mg-dot ok"></span><h2>Recent wins</h2></div>
           <div class="mg-list">
             {#each t.recent_wins as w (w.id)}
@@ -192,7 +193,7 @@
       {/if}
 
       {#if t.engine_events.length}
-        <section class="mg-section mg-rise" style:--i={5}>
+        <section class="mg-section" in:staggerIn|global={{ i: 5 }}>
           <div class="head"><span class="mg-dot mgr"></span><h2>Engine noticed</h2></div>
           <div class="mg-list">
             {#each t.engine_events as e (e.group_id + e.occurred_at)}

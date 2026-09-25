@@ -11,7 +11,7 @@
      transcript — and knowing which rule put a tag there is what tells you
      whether to trust it or fix the rule. */
   import { onMount } from 'svelte';
-  import { rise } from '$lib/motion.js';
+  import { staggerIn } from '$lib/motion.js';
   import { flip } from 'svelte/animate';
   import { mstate, boot, runAutoTag, say, can, CAP } from '$lib/media.svelte.js';
   import { media } from '$lib/media.js';
@@ -107,7 +107,7 @@
          style:font-size="{sizeOf(t.count)}px"
          title="{t.name} — {t.count ?? 0} clip{(t.count ?? 0) === 1 ? '' : 's'}{t.source ? ' · ' + (SOURCE[t.source] || t.source) : ''}"
          animate:flip={{ duration: 240 }}
-         in:rise={{ i }}>
+         in:staggerIn|global={{ i }}>
         <span class="nm">{t.name}</span>
         {#if t.source}<span class="src">{SOURCE[t.source] || t.source}</span>{/if}
         <span class="n mg-tnum">{t.count ?? 0}</span>

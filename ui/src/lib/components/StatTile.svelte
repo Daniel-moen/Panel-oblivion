@@ -14,6 +14,7 @@
   import Meter from './glass/Meter.svelte';
   import Sparkline from './glass/Sparkline.svelte';
   import { fmtInt } from '$lib/format.js';
+  import { staggerIn, pressable } from '$lib/motion.js';
 
   let {
     label, value = null, sub = '', tone = '', href = null, live = false,
@@ -24,6 +25,11 @@
   const hasSpark = $derived(Array.isArray(spark) && spark.length >= 2 && spark.some((v) => v));
   const fmt = (n) => fmtInt(n);
 
+  /* Motion: the row of tiles rises in with stagger(0.04) on its first paint
+     only (staggerIn — never on a poll); a tile that goes somewhere gets
+     hoverLift. The number itself counts up on spring.gentle (CountUp). */
+  const liftIf = (node, on) => (on ? pressable(node, 'lift') : undefined);
+
   /* The sparkline sits beside the number, in whatever room the number leaves
      (≤ 110px); on a tile too narrow for a readable one (< 48px) it is left
      out rather than drawn over the caption. */
@@ -32,7 +38,8 @@
   const sw = $derived(Math.min(110, Math.floor(tw - 32 - vw - 16)));
 </script>
 
-<svelte:element this={href ? 'a' : 'div'} {href} bind:clientWidth={tw} class="mg-stat-tile mg-rise tile" class:link={!!href} style:--i={i}
+<svelte:element this={href ? 'a' : 'div'} {href} bind:clientWidth={tw} class="mg-stat-tile tile" class:link={!!href}
+                in:staggerIn|global={{ i }} use:liftIf={!!href}
                 title={hasSpark && sparkTitle ? sparkTitle : null}>
   <span class="hud">{label}{#if live}<span class="mg-dot warn sm mg-pulse"></span>{/if}</span>
   <div class="v {tone}"><span class="vv" bind:clientWidth={vw}>
@@ -51,9 +58,9 @@
 </svelte:element>
 
 <style>
-  .tile { display: block; color: inherit; transition: border-color var(--mc-t-fast), transform var(--mc-t) var(--mc-ease); }
+  .tile { display: block; color: inherit; transition: border-color var(--mc-t-fast); }
+  .tile.link { transition: border-color var(--mc-t-fast), transform var(--mg-spring-snappy); }
   .tile.link:hover { border-color: var(--mc-line2); }
-  .tile.link:active { transform: scale(0.985); }
   .tile.link:focus-visible { outline: 2px solid rgba(62, 207, 142, 0.7); outline-offset: 2px; }
   .v { position: relative; z-index: 1; }
   .sub { position: relative; z-index: 1; }

@@ -4,7 +4,7 @@
      which also carries the unread / mention badge (chatBadge()).
 
      The sheet is ONE blurred rectangle — nothing inside it carries a
-     backdrop-filter of its own. From 720px it is a panel: channels on the
+     backdrop-filter of its own. From 640px it is a panel: channels on the
      left (240px), the conversation on the right. Below that it is a
      near-full-screen sheet: a scrolling row of channel pills on top, the
      thread, the composer pinned at the foot — and kept above the iOS
@@ -17,7 +17,7 @@
      State and polling live in chat.svelte.js; docs/CHAT.md is the contract
      (including every data-testid used here). */
   import { tick } from 'svelte';
-  import { slide } from '$lib/motion.js';
+  import { play, scaleIn, sheetUp } from '$lib/motion.js';
   import { app } from '$lib/state.svelte.js';
   import { chat, closeChat, channelById, resumeChat } from '$lib/chat.svelte.js';
   import Icon from '$lib/components/glass/Icon.svelte';
@@ -45,10 +45,11 @@
     wasShown = on;
   });
 
-  /* ——— the two shapes ——— */
+  /* ——— the two shapes: a phone sheet (sheetUp) below 640px, a panel
+     (scaleIn) from there up — the same split and variants as glass/Sheet ——— */
   let wide = $state(true);
   $effect(() => {
-    const mq = matchMedia('(min-width: 720px)');
+    const mq = matchMedia('(min-width: 640px)');
     const sync = () => (wide = mq.matches);
     sync();
     mq.addEventListener('change', sync);
@@ -124,7 +125,7 @@
 {#if show && chat.open}
   <div class="sheet" class:wide class:kb={kb > 0} data-testid="chat-sheet" role="dialog" aria-label="Team chat"
            style:--kb="{kb}px" style:--vvt="{vvt}px" style:--vvh="{vvh}px"
-           transition:slide={wide ? { y: 24, duration: 260 } : { y: 520, duration: 300, opacity: 1 }}>
+           transition:play={wide ? scaleIn : sheetUp}>
     <header class="phead">
       <span class="mark" aria-hidden="true"><Icon name={chat.view === 'mentions' ? 'bell' : 'chat'} size={16} /></span>
       <div class="who">
@@ -183,10 +184,11 @@
 <style>
   /* ——— the sheet: a phone first ——— */
   .sheet {
-    position: fixed; z-index: 75;
+    position: fixed; z-index: 54; /* under the floating dock (z-60) */
     left: 0; right: 0; top: calc(var(--sat) + 8px); bottom: 0;
     display: flex; flex-direction: column; overflow: hidden;
-    padding-bottom: var(--sab);
+    /* the sheet runs under the dock; the composer stops above it */
+    padding-bottom: var(--mc-dock-clear);
     /* denser than the shared glass: a thread is text you read, and the page
        (or the dock on a phone) must never ghost through it */
     background: rgba(16, 16, 20, 0.985);
@@ -201,24 +203,17 @@
     border-radius: var(--mc-r-lg);
   }
 
-  /* from 720px: a panel, bottom-right, clear of the dock */
+  /* from 640px: a panel, bottom-right, standing on the dock's clearance at
+     every width (the dock floats at the bottom centre at all sizes) */
   .sheet.wide {
-    left: auto; top: auto; right: 16px;
-    bottom: calc(var(--mc-dock-h) + var(--sab) + 12px);
-    width: min(760px, calc(100vw - 32px));
-    height: min(660px, calc(100dvh - var(--sat) - var(--mc-strip-h) - var(--mc-dock-h) - var(--sab) - 28px));
+    left: auto; top: auto; right: var(--mc-gutter, 16px);
+    bottom: var(--mc-dock-clear);
+    width: min(780px, calc(100vw - 2 * var(--mc-gutter, 16px)));
+    height: min(680px, calc(100dvh - var(--sat) - var(--mc-strip-h) - var(--mc-dock-clear) - 16px));
     padding-bottom: 0;
     border-bottom: 1px solid var(--mc-glass-line); border-radius: var(--mc-r-lg);
   }
   .sheet.wide.kb { bottom: calc(var(--kb) + 12px); max-height: calc(var(--vvh) - 24px); }
-  /* from 1024px the dock is gone and the rail is on the left */
-  @media (min-width: 1024px) {
-    .sheet.wide {
-      right: 20px; bottom: calc(var(--sab) + 20px);
-      width: min(780px, calc(100vw - var(--mc-rail-w) - 40px));
-      height: min(680px, calc(100dvh - var(--sat) - var(--mc-strip-h) - 40px));
-    }
-  }
 
   /* ——— header ——— */
   .phead {

@@ -3,6 +3,7 @@
      the book as a table (sticky head, scrolls sideways when it must). A phone
      gets the same rows as a list — eight columns do not fit a thumb — with
      the stage control kept on every row. */
+  import { staggerIn } from '$lib/motion.js';
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
   import { toast, app } from '$lib/state.svelte.js';
@@ -107,7 +108,7 @@
 
 <div class="tiles">
   {#each funnel as [l, v, tone, sub], i (l)}
-    <div class="mg-stat-tile mg-rise" style:--i={i}>
+    <div class="mg-stat-tile" in:staggerIn|global={{ i }}>
       <span class="hud">{l}</span>
       <div class="v {tone}">{#if stats}{v ?? '—'}{:else if err}—{:else}<Skeleton h="26px" w="44px" />{/if}</div>
       <div class="sub" class:warn={tone === 'warn' || tone === 'crit'}>{sub}</div>
@@ -246,7 +247,7 @@
     <div class="mg-list">
       {#each filtered as r, i (r.group_id)}
         {@const d = r.next_task_due || r.next_follow_up_at}
-        <div class="prow mg-rise" style:--i={Math.min(i, 12)}>
+        <div class="prow" in:staggerIn|global={{ i }}>
           <a class="pmain" href="/leads/properties/{r.group_id}">
             <span class="t">
               <b>{addr(r)}</b>

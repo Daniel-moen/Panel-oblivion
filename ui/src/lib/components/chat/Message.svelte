@@ -11,8 +11,11 @@
   import Attachment from './Attachment.svelte';
   import { chat, editMessage, deleteMessage, retry, discard } from '$lib/chat.svelte.js';
   import { segments, initials, hhmm, when } from './text.js';
+  import { play, fadeUp } from '$lib/motion.js';
 
-  let { m, pending = null, head = false, matcher = null } = $props();
+  /* enter: Thread says this line arrived after the thread's first render —
+     it rises in with fadeUp; history just appears. */
+  let { m, pending = null, head = false, matcher = null, enter = false } = $props();
 
   const EDIT_MS = 15 * 60 * 1000;
 
@@ -96,7 +99,8 @@
 <div class="row" class:mine class:head class:pend={!!pending} class:failed={pending?.status === 'failed'}
      class:me-hit={!mine && m.mentions_me}
      data-testid="chat-msg" data-id={mid} data-mine={mine ? 'true' : 'false'}
-     data-status={pending ? pending.status : null}>
+     data-status={pending ? pending.status : null}
+     in:play|global={{ v: fadeUp, skip: !enter }}>
   {#if !mine}
     {#if head}
       <span class="avatar" aria-hidden="true">{m.user?.initials || initials(name)}</span>

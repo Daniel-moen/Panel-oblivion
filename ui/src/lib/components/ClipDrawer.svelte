@@ -9,13 +9,14 @@
      a line, the player seeks there. Finding the ten seconds where someone
      said "sea view" is the whole job. */
   import { tick } from 'svelte';
-  import { fade, pop, slide } from '$lib/motion.js';
+  import { play, fadeIn, scaleIn, sheetUp, spring, springCss } from '$lib/motion.js';
   import { media, posterUrl, streamUrl, photoUrl, thumbUrl, fmtDuration, fmtBytes } from '$lib/media.js';
   import { say, can, CAP, setLabel, dropClips } from '$lib/media.svelte.js';
   import LabelDots from '$lib/components/media/library/LabelDots.svelte';
   import VirtualCopies from '$lib/components/media/library/VirtualCopies.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
+  import { holdModal } from '$lib/shell.svelte.js';
 
   let { clip, loading = false, onclose, onstep } = $props();
 
@@ -130,8 +131,9 @@
   $effect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    const release = holdModal(); // the dock goes inert behind the lightbox
     tick().then(() => box?.focus?.({ preventScroll: true }));
-    return () => { document.body.style.overflow = prev; };
+    return () => { document.body.style.overflow = prev; release(); };
   });
 
   /* ——— the phone throw: only the grab handle starts it ——— */
@@ -142,10 +144,11 @@
   function grabMove(e) { if (held == null) return; drag = Math.max(0, e.clientY - from); }
   function grabEnd() { if (held == null) return; held = null; if (drag > 120) onclose?.(); drag = 0; }
 
+  /* scaleIn as a lightbox, sheetUp as a phone sheet (lib/motion.js). */
+  const enter = (node, opts) => play(node, { v: wide ? scaleIn : sheetUp, ...opts });
+
   /* Rendered at the end of <body> so no ancestor's stacking context (the
      page's, the strip's) can sit on top of it or clip it. */
-  const enter = (node) => (wide ? pop(node, { duration: 260 }) : slide(node, { y: 640, duration: 340, opacity: 1 }));
-
   function portal(node) {
     document.body.appendChild(node);
     return { destroy: () => node.remove() };
@@ -157,14 +160,14 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="mg-portal" use:portal>
-<div class="scrim" onclick={onclose} transition:fade={{ duration: 200 }} aria-hidden="true"></div>
+<div class="scrim" onclick={onclose} transition:play|global={fadeIn} aria-hidden="true"></div>
 
 {#key wide}
 <div class="box" class:phone={!wide} role="dialog" aria-modal="true" aria-label={clip?.filename || 'Clip'}
      tabindex="-1" bind:this={box}
      style:transform={drag ? `translate3d(0,${drag}px,0)` : null}
-     style:transition={held == null ? 'transform 0.28s var(--mc-ease-out)' : 'none'}
-     transition:enter>
+     style:transition={held == null ? `transform ${springCss(spring.smooth)}` : 'none'}
+     transition:enter|global>
 
   {#if !wide}
     <div class="grab" onpointerdown={grabStart} onpointermove={grabMove}

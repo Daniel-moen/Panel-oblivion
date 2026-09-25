@@ -6,7 +6,7 @@
      asks OpenStreetMap on our behalf — the browser never talks to a third
      party). Picking a result sets the pin and the suburb; the typed address
      stays the one on the invoice unless the field is still empty. */
-  import { slide } from '$lib/motion.js';
+  import { play, fadeIn } from '$lib/motion.js';
   import Icon from '$lib/components/glass/Icon.svelte';
   import { shoots } from '$lib/media/shoots.js';
 
@@ -55,7 +55,7 @@
       </button>
     </div>
     {#if results?.length}
-      <ul class="results mg-popover" transition:slide={{ y: -6, duration: 180 }}>
+      <ul class="results mg-popover" transition:play={fadeIn}>
         {#each results as r, i (i)}
           <li>
             <button type="button" onclick={() => pick(r)}>

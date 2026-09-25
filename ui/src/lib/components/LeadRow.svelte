@@ -11,12 +11,14 @@
   import Photo from './Photo.svelte';
   import Sheet from './glass/Sheet.svelte';
   import Icon from './glass/Icon.svelte';
-  import { slide } from '$lib/motion.js';
+  import { play, scaleIn, staggerIn } from '$lib/motion.js';
   import { waNumber, addrOf, snooze, taskDone, loadToday } from '$lib/leads.svelte.js';
   import { ago, MANDATE_LABEL } from '$lib/panel.js';
   import { fmtM } from '$lib/format.js';
 
-  let { p, task = null, reason = '', tone = '', children } = $props();
+  /* i: position in its list — rows rise in with stagger(0.04) on the list's
+     first paint only (staggerIn); a row a reload adds just appears. */
+  let { p, task = null, reason = '', tone = '', i = 0, children } = $props();
   let logging = $state(false);
   let snoozeOpen = $state(false);
   let snoozeAt = $state({ left: 0 }); // where the menu sits; outlives the close so the exit animates
@@ -27,7 +29,9 @@
   function openSnooze() {
     if (snoozeOpen) { snoozeOpen = false; return; }
     const r = snoozeBtn.getBoundingClientRect();
-    const below = window.innerHeight - r.bottom > 170;
+    /* the floating dock owns the screen's foot: measure against its top */
+    const floor = document.querySelector('nav[data-testid="dock"]:not(.quiet)')?.getBoundingClientRect().top ?? window.innerHeight;
+    const below = Math.min(window.innerHeight, floor) - r.bottom > 170;
     // right-align to the button, but never past either edge of the screen
     const W = 188;
     const left = Math.max(8, Math.min(r.right - W, window.innerWidth - W - 8));
@@ -64,7 +68,7 @@
   }
 </script>
 
-<div class="lr {tone}">
+<div class="lr {tone}" in:staggerIn|global={{ i }}>
   <div class="in">
     <a class="ph" href="/leads/properties/{p.group_id}" tabindex="-1" aria-hidden="true"><Photo r={p} /></a>
     <div class="main">
@@ -109,7 +113,7 @@
          style:top={snoozeAt.top != null ? snoozeAt.top + 'px' : null}
          style:bottom={snoozeAt.bottom != null ? snoozeAt.bottom + 'px' : null}
          style:left="{snoozeAt.left}px"
-         transition:slide={{ y: snoozeAt.top != null ? -6 : 6, duration: 180 }}>
+         in:play={scaleIn} out:play={{ v: scaleIn, exit: true }}>
       <span class="hud">Snooze until</span>
       <button type="button" role="menuitem" onclick={() => act(() => snooze(task, 1))}>Tomorrow</button>
       <button type="button" role="menuitem" onclick={() => act(() => snooze(task, 3))}>In 3 days</button>

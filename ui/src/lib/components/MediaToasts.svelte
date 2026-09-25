@@ -4,7 +4,7 @@
      first. Same plane as the app's own Toast — raised, hairline, a state dot
      rather than a red slab — and it sits ABOVE the dock on a phone. */
   import { flip } from 'svelte/animate';
-  import { rise, fade } from '$lib/motion.js';
+  import { play, fadeUp } from '$lib/motion.js';
 
   let { items = [] } = $props();
 </script>
@@ -13,8 +13,8 @@
   {#each items as t (t.id)}
     <div class="toast {t.kind}"
          animate:flip={{ duration: 220 }}
-         in:rise={{ y: 12, duration: 280 }}
-         out:fade={{ duration: 160 }}>
+         in:play={fadeUp}
+         out:play={{ v: fadeUp, exit: true }}>
       <span class="mg-dot sm {t.kind === 'error' ? 'crit' : t.kind === 'warn' ? 'warn' : 'ok'}"></span>
       <span class="msg">{t.msg}</span>
     </div>
@@ -23,7 +23,7 @@
 
 <style>
   .stack {
-    position: fixed; left: 0; right: 0; bottom: calc(var(--sab) + var(--mc-dock-h) + 16px);
+    position: fixed; left: 0; right: 0; bottom: var(--mc-dock-clear);
     z-index: 120; padding: 0 16px;
     display: flex; flex-direction: column; align-items: center; gap: 8px;
     pointer-events: none;
@@ -38,7 +38,4 @@
   }
   .msg { min-width: 0; overflow-wrap: anywhere; }
   .toast.error { border-color: var(--mc-crit-line); }
-  @media (min-width: 1024px) {
-    .stack { left: var(--mc-rail-w); bottom: calc(var(--sab) + 24px); }
-  }
 </style>

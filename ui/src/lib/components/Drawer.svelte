@@ -11,8 +11,10 @@
      From 720px up it is a panel that slides in from the right edge (560px,
      full height, raised plane, hairline on the left, a deep shadow); below
      that it rises from the bottom as a near-full-height sheet with a grab
-     handle. Both sit on a dimming scrim. Everything is transform + opacity,
-     both directions, on the settle curve.
+     handle. Both sit on a dimming scrim (`fadeIn`). The panel enters with
+     `slideIn`, the phone sheet with `sheetUp` (lib/motion.js, spring.smooth),
+     both directions. The floating dock (z-60) stays above it, so the
+     scrolling body keeps --mc-dock-clear of room at its foot.
 
      Reads `app.selectedKey`; closing clears it (the root layout's Escape
      handler does the same). The page that renders <Drawer /> has nothing
@@ -24,10 +26,11 @@
   import ErfPanel from './ErfPanel.svelte';
   import Icon from './glass/Icon.svelte';
   import Skeleton from './Skeleton.svelte';
-  import { fade, slide } from '$lib/motion.js';
+  import { play, fadeIn, slideIn, sheetUp, spring, springCss } from '$lib/motion.js';
   import { api } from '$lib/api.js';
   import { app, selected, actions, gidOf, trackProspect } from '$lib/state.svelte.js';
   import { openChannelForProperty } from '$lib/chat.svelte.js';
+  import { holdModal } from '$lib/shell.svelte.js';
   import { fmtR, fmtM, fmtInt, fmtArea, addrOf, mvLabel,
            isRent, priceTxt, furnishedTxt, photoSrc } from '$lib/format.js';
 
@@ -133,9 +136,10 @@
     ready = false;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    const release = holdModal(); // the dock goes inert behind the drawer
     tick().then(() => { if (scroller) scroller.scrollTop = 0; box?.focus?.({ preventScroll: true }); });
     let raf = requestAnimationFrame(() => { raf = requestAnimationFrame(() => (ready = true)); });
-    return () => { cancelAnimationFrame(raf); document.body.style.overflow = prev; };
+    return () => { cancelAnimationFrame(raf); document.body.style.overflow = prev; release(); };
   });
 
   /* ——— the phone throw: only the grab handle starts it ——— */
@@ -158,14 +162,14 @@
 
 {#if r}
 <div class="mg-portal" use:portal>
-  <div class="scrim" onclick={close} role="presentation" transition:fade={{ duration: 200 }}></div>
+  <div class="scrim" onclick={close} role="presentation" transition:play|global={fadeIn}></div>
 
   {#key wide}
     <aside class="drawer" class:phone={!wide} aria-label="Property detail" role="dialog" aria-modal="true"
            tabindex="-1" bind:this={box}
            style:transform={drag ? `translate3d(0,${drag}px,0)` : null}
-           style:transition={held == null ? 'transform 0.28s var(--mc-ease-out)' : 'none'}
-           transition:slide={wide ? { x: 72, duration: 320 } : { y: 640, duration: 340, opacity: 1 }}>
+           style:transition={held == null ? `transform ${springCss(spring.smooth)}` : 'none'}
+           transition:play|global={wide ? slideIn : sheetUp}>
       {#if !wide}
         <div class="grab" onpointerdown={grabStart} onpointermove={grabMove}
              onpointerup={grabEnd} onpointercancel={grabEnd} role="presentation"><i></i></div>
@@ -322,10 +326,10 @@
 {/if}
 
 <style>
-  .scrim { position: fixed; inset: 0; z-index: 80; background: var(--mc-scrim); }
+  .scrim { position: fixed; inset: 0; z-index: 57; background: var(--mc-scrim); }
 
   .drawer {
-    position: fixed; top: 0; right: 0; bottom: 0; z-index: 81;
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 58;
     width: min(560px, 100vw); display: flex; flex-direction: column; outline: none;
     background: var(--mc-glass-strong); border-left: 1px solid var(--mc-glass-line);
     box-shadow: -24px 0 64px -24px rgba(0, 0, 0, 0.65);
@@ -344,7 +348,7 @@
 
   .top { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--mc-line); }
 
-  .scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(var(--sab) + 24px); }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(var(--mc-dock-clear) + 12px); }
 
   .hero { aspect-ratio: 16 / 9; background: var(--mc-inset); border-bottom: 1px solid var(--mc-line); }
 

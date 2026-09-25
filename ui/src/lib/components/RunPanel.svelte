@@ -11,6 +11,7 @@
   import Sheet from '$lib/components/glass/Sheet.svelte';
   import Seg from '$lib/components/glass/Seg.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
+  import { pressable } from '$lib/motion.js';
 
   const PAGE_OPTS = [1, 2, 3, 4, 5].map((n) => ({ value: n, label: String(n) }));
 
@@ -248,7 +249,7 @@
         </button>
       {/if}
       <button type="button" class="mg-btn primary go" disabled={running || !sel.suburbs.length || !pickedSources.length}
-              onclick={start}>
+              onclick={start} use:pressable>
         {#if running}<span class="mg-spin"></span> A job is running…{:else}<Icon name="play" size={14} /> Start crawl{/if}
       </button>
     </div>

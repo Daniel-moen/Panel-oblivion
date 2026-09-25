@@ -10,7 +10,7 @@
      sentences themselves as ghost rows, every one of them a seek. */
   import { onMount } from 'svelte';
   import { flip } from 'svelte/animate';
-  import { rise } from '$lib/motion.js';
+  import { staggerIn } from '$lib/motion.js';
   import { mstate, boot, openClip, closeClip, stepClip, labelColor } from '$lib/media.svelte.js';
   import { media, thumbUrl, fmtDuration } from '$lib/media.js';
   import ClipDrawer from '$lib/components/ClipDrawer.svelte';
@@ -127,7 +127,7 @@
   <div class="rows">
     {#each results as r, i (r.id)}
       <article class="mg-card row" animate:flip={{ duration: 300 }}
-               in:rise={{ i }}>
+               in:staggerIn|global={{ i }}>
         <button class="th mg-tile" onclick={() => playFrom(r, 0)}
                 aria-label="Open {r.filename}">
           {#if thumbUrl(r)}

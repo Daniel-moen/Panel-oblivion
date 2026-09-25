@@ -2,36 +2,38 @@
   /* The shell — one for the whole app.
 
      Every route lands inside the same furniture: the StatusStrip along the
-     top, and either the Dock over the bottom edge (a phone, an iPad held
-     upright) or the Rail down the left (an iPad on its side, a desktop).
-     The switch is a CSS breakpoint at 1024px, the panel's own, so the two
-     never fight over the same pixels.
+     top and the floating Dock over the bottom edge — at EVERY width. There
+     is no sidebar: a phone, an iPad either way up and a desktop navigate
+     from the same pill of glass (a copy of Mission Control's dock), so the
+     page column is simply centred, with the same gutters everywhere, and
+     leaves `--mc-dock-clear` free at its foot for the dock to float over.
 
      The scene is the photograph (Backdrop) with ONE fixed sheet of glass
      (`.mg-pane`, mc.css) under the page column; the page scrolls over it.
-     That keeps the blur budget at strip + dock/rail + pane + one sheet.
+     That keeps the blur budget at strip + dock + one sheet — the pane is a
+     pre-blurred photo (Frost), not a live backdrop-filter.
 
      The page scrolls the document (not an inner pane): sticky table heads,
      iOS's rubber-banding and the home-screen app's status bar all behave
      when the body is the scroller. Two exceptions:
 
        /map   Leaflet needs the whole rectangle, so the scene is locked to
-              the viewport and the page fills what the strip leaves.
+              the viewport and the page fills what the strip leaves; its
+              floating controls keep clear of the dock themselves.
        /      Home is the photograph first: no fixed pane (Home draws its own
-              glass one viewport down), no column padding (the Rail floats
-              over the scene), and the strip only while a crawl runs or a
-              section posts a warning — pinned over the scene, so its
-              arrival never pushes the greeting.
+              glass one viewport down), no column padding, and the strip
+              only while a crawl runs or a section posts a warning — pinned
+              over the scene, so its arrival never pushes the greeting.
 
-     Page transitions fade on the SECTION, not the exact path: sub-navigation
-     inside Media or Leads must not remount their segmented rows, or the
-     highlight would jump instead of gliding. Those layouts fade their own
-     children. */
+     Page transitions rise on the SECTION (fadeUp), not the exact path:
+     sub-navigation inside Media or Leads must not remount their segmented
+     rows, or the highlight would jump instead of gliding. Those layouts
+     animate their own children. */
   import '../app.css';
   import '$lib/mc.css';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
-  import { fade } from '$lib/motion.js';
+  import { play, fadeUp } from '$lib/motion.js';
   import { app, startPolling, stopPolling } from '$lib/state.svelte.js';
   import { startChat } from '$lib/chat.svelte.js';
   import { loadMe } from '$lib/me.svelte.js';
@@ -41,7 +43,6 @@
   import Frost from '$lib/components/glass/Frost.svelte';
   import StatusStrip from '$lib/components/glass/StatusStrip.svelte';
   import Dock from '$lib/components/glass/Dock.svelte';
-  import Rail from '$lib/components/glass/Rail.svelte';
   import RunPanel from '$lib/components/RunPanel.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import ChatWidget from '$lib/components/ChatWidget.svelte';
@@ -56,8 +57,8 @@
   const showStrip = $derived(!isHome || stripWanted(app.status, shell.status));
 
   onMount(() => {
-    /* Who is signed in, once for the whole app: the Dock, the Rail and the
-       strip read it to decide which buttons are worth drawing. Fire and
+    /* Who is signed in, once for the whole app: the Dock and the strip
+       read it to decide which buttons are worth drawing. Fire and
        forget — the chrome renders complete until the answer lands. */
     loadMe();
     startPolling();
@@ -89,7 +90,6 @@
        map is its own scene: Leaflet fills the rectangle, so no pane. -->
   <Backdrop />
   {#if !isMap && !isHome}<div class="mg-pane" aria-hidden="true"><Frost /></div>{/if}
-  <Rail />
 
   <div class="col">
     {#if !isHome}
@@ -104,7 +104,7 @@
     {:else}
       <main class="mg-page">
         {#key section}
-          <div class="view" in:fade={{ duration: 180, delay: 40 }}>{@render children()}</div>
+          <div class="view" in:play={fadeUp}>{@render children()}</div>
         {/key}
       </main>
     {/if}
@@ -132,15 +132,7 @@
   .mg-scene.map .col { height: 100%; }
   .edge { flex: 1; min-height: 0; width: 100%; position: relative; overflow: hidden; }
 
-  /* from the rail breakpoint the column clears the rail and the dock's
-     bottom clearance is no longer needed */
-  @media (min-width: 1024px) {
-    .col { padding-left: var(--mc-rail-w); }
-    main.mg-page { padding-bottom: calc(var(--sab) + 48px); }
-  }
-
   /* Home: the page is the scene, edge to edge; it pads its own overview. */
-  .home .col { padding-left: 0; }
   .home main.mg-page { padding: 0; max-width: none; }
   .scenestrip { position: fixed; top: 0; left: 0; right: 0; z-index: 40; }
 </style>

@@ -6,7 +6,7 @@
      are an administrator's (media.harddelete) — everyone who can trash can
      also restore. */
   import { onMount } from 'svelte';
-  import { rise } from '$lib/motion.js';
+  import { staggerIn } from '$lib/motion.js';
   import { media, murl } from '$lib/media.js';
   import { say, can, CAP, loadClips } from '$lib/media.svelte.js';
   import Icon from '$lib/components/glass/Icon.svelte';
@@ -126,7 +126,7 @@
 {:else}
   <ul class="rows">
     {#each data.items as it, i (it.id)}
-      <li class="row mg-tile" in:rise={{ i }}>
+      <li class="row mg-tile" in:staggerIn|global={{ i }}>
         <span class="th">
           {#if it.thumbnail_path}<img src={murl(it.thumbnail_path)} alt="" loading="lazy" />
           {:else}<Icon name={it.media_type === 'photo' ? 'image' : 'film'} size={16} />{/if}

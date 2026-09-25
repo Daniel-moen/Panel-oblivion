@@ -2,7 +2,7 @@
   /* Lead management — the header row of the pane, and nothing else.
 
      What is Leads' own: the jump-to search (properties and people, one box)
-     and the four sub-sections as a segmented row. The dock / rail is the
+     and the four sub-sections as a segmented row. The dock is the
      app's navigation; this row is only the section's insides.
 
      The search results are a real popover: a solid raised plane under the
@@ -12,7 +12,7 @@
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
-  import { slide } from '$lib/motion.js';
+  import { play, fadeIn } from '$lib/motion.js';
   import { api } from '$lib/api.js';
   import { leads, loadToday } from '$lib/leads.svelte.js';
   import Icon from '$lib/components/glass/Icon.svelte';
@@ -104,7 +104,7 @@
     </div>
 
     {#if open}
-      <div class="hits mg-popover" id="lead-hits" role="listbox" transition:slide={{ y: -6, duration: 180 }}>
+      <div class="hits mg-popover" id="lead-hits" role="listbox" transition:play={fadeIn}>
         {#if !results.length && got < 2}
           <p class="none"><span class="mg-spin"></span> Searching…</p>
         {:else if !results.length}
@@ -131,7 +131,7 @@
 </div>
 
 {#key path}
-  <div in:fade={{ duration: 180, delay: 60 }}>{@render children()}</div>
+  <div in:play={{ v: fadeIn, delay: 60 }}>{@render children()}</div>
 {/key}
 
 <style>

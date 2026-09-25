@@ -10,7 +10,7 @@
      then bar · % · tools. */
   import { app, actions } from '$lib/state.svelte.js';
   import Icon from './glass/Icon.svelte';
-  import { slide } from '$lib/motion.js';
+  import { play, fadeIn } from '$lib/motion.js';
   import { fmtInt } from '$lib/format.js';
 
   /* `inline` — already inside a page's own column, so drop the shell gutters */
@@ -63,7 +63,7 @@
 {/if}
 
 {#if show}
-  <section class="strip mg-panel" class:idle={!running} class:inline transition:slide={{ y: -6, duration: 220 }}
+  <section class="strip mg-panel" class:idle={!running} class:inline transition:play={fadeIn}
            aria-label="Background work">
     <div class="top">
       <div class="lead">

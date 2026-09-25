@@ -5,8 +5,12 @@
      from option to option, not four that fade. React does that with a shared
      layout id; here we measure the buttons and transition an absolutely
      positioned pill's transform and width, which is the same motion for a
-     fraction of the machinery — and it stays on the compositor. */
+     fraction of the machinery — and it stays on the compositor. The glide
+     runs on spring.snappy (lib/motion.js), as a CSS linear() easing. */
   import Icon from './Icon.svelte';
+  import { spring, springCss } from '$lib/motion.js';
+
+  const glide = springCss(spring.snappy);
 
   let { options = [], value, onchange, label = 'View' } = $props();
 
@@ -38,7 +42,7 @@
   });
 </script>
 
-<div class="seg" bind:this={wrap} role="group" aria-label={label}>
+<div class="seg" bind:this={wrap} role="group" aria-label={label} style:--seg-glide={glide}>
   <span class="pill" aria-hidden="true" class:ready={pill.ready}
         style:transform="translateX({pill.x}px)" style:width="{pill.w}px"></span>
 
@@ -65,7 +69,7 @@
     position: absolute; left: 3px; top: 3px; bottom: 3px; width: 0; border-radius: 9999px;
     background: var(--mc-glass-on); border: 0; box-shadow: none;
     opacity: 0;
-    transition: transform 0.28s var(--mc-ease), width 0.28s var(--mc-ease), opacity 0.2s;
+    transition: transform var(--seg-glide), width var(--seg-glide), opacity 0.2s;
     will-change: transform, width;
   }
   .pill.ready { opacity: 1; }

@@ -5,7 +5,7 @@
      the way people type it, so "ocean view dr" finds "12 Ocean View Drive").
      A row opens /media/shoot?id=. */
   import { goto } from '$app/navigation';
-  import { rise } from '$lib/motion.js';
+  import { staggerIn } from '$lib/motion.js';
   import { say } from '$lib/media.svelte.js';
   import { thumbUrl } from '$lib/media.js';
   import { shoots, STATUSES, STATUS, fmtWhen, centreOf } from '$lib/media/shoots.js';
@@ -116,7 +116,7 @@
     {:else}
       <div class="list">
         {#each list as s, i (s.id)}
-          <a class="mg-card row" href="/media/shoot?id={s.id}" in:rise={{ i }}>
+          <a class="mg-card row" href="/media/shoot?id={s.id}" in:staggerIn|global={{ i }}>
             <span class="cover">
               {#if s.cover?.thumbnail_path}<img src={thumbUrl(s.cover)} alt="" loading="lazy" />
               {:else}<Icon name="camera" size={18} />{/if}

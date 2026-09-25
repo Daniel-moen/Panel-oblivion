@@ -9,8 +9,13 @@ samples requestAnimationFrame intervals while:
                   through the reveal to the bottom of the overview
   home-reveal     click button[data-home-reveal] (its smooth scroll), 900 ms
   prospects-scroll  the same stepped scroll on /prospects, for comparison
+  route-change    click a dock tab (nav[data-testid=dock] a[data-dock-item]),
+                  Prospects → Leads → Prospects, first visits, 700 ms each
+  dock-glide      the same two tabs once both routes are warm, three round
+                  trips, 600 ms each: mostly the highlight's glide
 
-for the phone (390x844, mobile + touch) and the iPad (1024x768, touch).
+for the phone (390x844, mobile + touch), the iPad (1024x768, touch) and a
+desktop (1440x900).
 
     .venv/bin/python tests/ui_perf.py                     # fails if any p95 > 33.4 ms
     .venv/bin/python tests/ui_perf.py --json perf.json --no-fail
@@ -34,7 +39,7 @@ from ui_clickthrough import REPO, VIEWPORTS, boot, sign_in  # noqa: E402
 
 LONG_MS = 33.4
 THROTTLE = 4
-DEVICES = ("phone", "ipad")
+DEVICES = ("phone", "ipad", "desktop")
 
 # rAF sampler: resolves with the frame intervals (ms), the first partial one dropped.
 SAMPLER = """
@@ -61,6 +66,17 @@ REVEAL = """(ms) => {
   const t0 = performance.now();
   const p = window.__sample(() => performance.now() - t0 >= ms);
   b.click();
+  return p;
+}"""
+
+
+# Click the dock tab for `href` and sample frames for `ms` (null if no tab).
+DOCK_CLICK = """([href, ms]) => {
+  const a = document.querySelector(`nav[data-testid="dock"] a[data-dock-item="${href}"]`);
+  if (!a) return null;
+  const t0 = performance.now();
+  const p = window.__sample(() => performance.now() - t0 >= ms);
+  a.click();
   return p;
 }"""
 
@@ -137,6 +153,30 @@ def measure_device(br, base, dev):
     to = min(page.evaluate("() => document.scrollingElement.scrollHeight - innerHeight"), 2400)
     out["prospects-scroll"] = summarize(page.evaluate(STEP_SCROLL, [0, to]) if to > 0 else [])
     out["prospects-scroll"]["px"] = to
+
+    # --- the dock: route changes (cold), then the glide between warm routes
+    def hop(href, ms):
+        frames = page.evaluate(DOCK_CLICK, [href, ms])
+        if frames is None:
+            notes.append(f"dock: no tab {href}")
+            return []
+        try:
+            page.wait_for_url(f"**{href}**", timeout=30000)
+        except Exception:                               # noqa: BLE001
+            notes.append(f"dock: {href} did not load")
+        page.wait_for_timeout(600)                      # let the new page settle
+        return frames
+
+    settle(page, 400)
+    frames = []
+    for href in ("/leads", "/prospects"):
+        frames += hop(href, 700)
+    out["route-change"] = summarize(frames)
+    frames = []
+    for _ in range(3):
+        for href in ("/leads", "/prospects"):
+            frames += hop(href, 600)
+    out["dock-glide"] = summarize(frames)
     ctx.close()
     return out, notes
 
@@ -146,13 +186,20 @@ def main() -> int:
     ap.add_argument("--json", metavar="PATH", help="write the numbers here")
     ap.add_argument("--no-fail", action="store_true", help="report only; exit 0 whatever the p95")
     ap.add_argument("--db", help="database to copy (default: prospects.db in this checkout)")
+    ap.add_argument("--only", help="comma list of devices (" + ",".join(DEVICES) + ")")
     args = ap.parse_args()
+    devices = DEVICES
+    if args.only:
+        devices = tuple(d.strip() for d in args.only.split(",") if d.strip())
+        unknown = [d for d in devices if d not in DEVICES]
+        if unknown:
+            ap.error(f"unknown device(s): {', '.join(unknown)}")
     from playwright.sync_api import sync_playwright
 
     results, notes = {}, []
     with boot(args.db, quiet=False) as base, sync_playwright() as p:
         br = p.chromium.launch()
-        for dev in DEVICES:
+        for dev in devices:
             results[dev], n = measure_device(br, base, dev)
             notes += [f"{dev} {x}" for x in n]
         br.close()

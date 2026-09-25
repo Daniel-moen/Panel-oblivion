@@ -3,7 +3,7 @@
    The per-person task tracker, the who's-online strip and the /online page
    are a feature, not chrome, so nothing in the shell knows about them by
    name. This module registers them through the shell's extension points
-   (shell.svelte.js): the "Online" section in the Dock and the Rail, and the
+   (shell.svelte.js): the "Online" section in the Dock, and the
    two Home cards. It also runs the presence heartbeat, which needs to know
    the route — that is the one thing it takes from the layout.
 

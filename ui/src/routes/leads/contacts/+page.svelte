@@ -2,6 +2,7 @@
   /* Everyone you could phone, merged across properties. A card per person;
      the whole card opens the person, and call / WhatsApp are real links of
      their own beside it (not buttons nested inside a link). */
+  import { staggerIn, pressable } from '$lib/motion.js';
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
   import { toast } from '$lib/state.svelte.js';
@@ -92,7 +93,7 @@
 {:else}
   <div class="grid">
     {#each shown as p, i (p.key)}
-      <div class="card mg-rise" style:--i={Math.min(i, 12)}>
+      <div class="card" in:staggerIn|global={{ i }} use:pressable={'lift'}>
         <span class="av" aria-hidden="true">{initials(p.name)}</span>
         <div class="cb">
           <div class="nm">
@@ -137,7 +138,7 @@
   .card {
     position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 14px 14px 14px 16px;
     background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-r);
-    box-shadow: var(--mc-sh-1); transition: border-color var(--mc-t-fast);
+    box-shadow: var(--mc-sh-1); transition: border-color var(--mc-t-fast), transform var(--mg-spring-snappy);
   }
   .card:hover { border-color: var(--mc-line2); }
   .card:has(.cover:focus-visible) { outline: 2px solid rgba(62, 207, 142, 0.7); outline-offset: 2px; }

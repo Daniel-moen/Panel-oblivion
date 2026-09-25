@@ -5,10 +5,15 @@
      rises from the bottom edge with a grab handle you can throw downwards,
      because that is where a thumb is. Both sit on a dimming scrim.
 
-     Motion: the scrim fades (200ms), the dialog pops (260ms, settle curve)
-     and the phone sheet slides up its full height (320ms, settle curve) —
-     transform and opacity only, and both directions animate, so closing is
-     as smooth as opening. Reduced motion collapses all of it to a fade.
+     Motion (lib/motion.js, Mission Control's vocabulary): the scrim is
+     `fadeIn`; the dialog is `scaleIn` and the phone sheet `sheetUp`, both on
+     spring.smooth — which one is decided when the sheet opens. Transform and
+     opacity only, both directions, so closing is as smooth as opening.
+     Reduced motion collapses all of it to a fade (play() does that).
+
+     The floating dock (z-60) stays above every sheet: the phone sheet runs
+     to the bottom edge but pads its content by --mc-dock-clear, and the
+     dialog is centred in the space above the dock.
 
      It renders through a portal: the node is moved to the end of <body> on
      mount, so no ancestor's `overflow`, `transform` or stacking context can
@@ -30,7 +35,8 @@
      that opens a Sheet has nothing to remember. */
   import { tick } from 'svelte';
   import Icon from './Icon.svelte';
-  import { fade, pop, slide } from '$lib/motion.js';
+  import { play, fadeIn, scaleIn, sheetUp, spring, springCss } from '$lib/motion.js';
+  import { holdModal } from '$lib/shell.svelte.js';
 
   let { open = false, title = '', size = 'md', onclose, children, footer } = $props();
 
@@ -56,10 +62,13 @@
     return () => mq.removeEventListener('change', sync);
   });
 
-  /* Open: lock the page behind, take focus, and keep Tab inside. */
+  /* Open: lock the page behind (the dock too), take focus, keep Tab inside,
+     and hand focus back to whatever opened it on the way out. */
   $effect(() => {
     if (!open) return;
     drag = 0;
+    const opener = document.activeElement;
+    const release = holdModal();
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     tick().then(() => {
@@ -87,6 +96,12 @@
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey, true);
+      release();
+      /* after the flush: the opener may sit in the dock, which is inert
+         until the release lands, and an inert element refuses focus */
+      tick().then(() => {
+        if (opener?.isConnected && opener !== document.body) opener.focus?.({ preventScroll: true });
+      });
     };
   });
 
@@ -115,12 +130,12 @@
 {#if open}
   <div class="mg-portal" use:portal>
     <div class="mg-scrim" class:bottom={!wide} onclick={() => onclose?.()} role="presentation"
-         transition:fade={{ duration: 200 }}></div>
+         transition:play|global={fadeIn}></div>
     <div class="host" class:bottom={!wide} role="presentation">
       {#if wide}
         <div class="box mg-dialog" bind:this={box} role="dialog" aria-modal="true"
              aria-label={title || 'Dialog'} tabindex="-1" style:max-width="{max}px"
-             transition:pop={{ duration: 260 }}>
+             transition:play|global={scaleIn}>
           {#if title}
             <div class="head">
               <h2>{title}</h2>
@@ -135,8 +150,8 @@
         <div class="box phone mg-dialog" bind:this={box} role="dialog" aria-modal="true"
              aria-label={title || 'Dialog'} tabindex="-1"
              style:transform={drag ? `translate3d(0,${drag}px,0)` : null}
-             style:transition={held == null ? 'transform 0.28s var(--mc-ease-out)' : 'none'}
-             transition:slide={{ y: 560, duration: 320, opacity: 1 }}>
+             style:transition={held == null ? `transform ${springCss(spring.smooth)}` : 'none'}
+             transition:play|global={sheetUp}>
           <div class="grab" onpointerdown={grabStart} onpointermove={grabMove}
                onpointerup={grabEnd} onpointercancel={grabEnd} role="presentation"><i></i></div>
           {#if title}
@@ -156,15 +171,16 @@
 
 <style>
   /* .mg-scrim / .mg-dialog come from mc.css; what is here is the two shapes. */
+  .mg-scrim { z-index: 55; }
   .host {
-    position: fixed; inset: 0; z-index: 91; display: flex; justify-content: center; align-items: center;
-    padding: 24px; pointer-events: none;
+    position: fixed; inset: 0; z-index: 56; display: flex; justify-content: center; align-items: center;
+    padding: 24px 24px var(--mc-dock-clear); pointer-events: none;
   }
   .host.bottom { align-items: flex-end; padding: 0; }
   .host > .box { pointer-events: auto; }
 
   .box {
-    width: 100%; max-height: min(92dvh, calc(100dvh - 48px)); outline: none;
+    width: 100%; max-height: min(92dvh, calc(100dvh - 24px - var(--mc-dock-clear))); outline: none;
     background: var(--mc-glass-strong); border: 1px solid var(--mc-glass-line);
     border-radius: var(--mc-r-lg); box-shadow: var(--mc-sh-3), var(--mc-lit);
     -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
@@ -173,6 +189,7 @@
   .box.phone {
     max-width: none; max-height: 92dvh;
     border-radius: var(--mc-r-lg) var(--mc-r-lg) 0 0; border-bottom: 0;
-    padding-bottom: var(--sab);
+    /* runs under the dock; its content stops above it */
+    padding-bottom: var(--mc-dock-clear);
   }
 </style>

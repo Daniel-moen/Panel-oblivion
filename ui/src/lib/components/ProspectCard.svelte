@@ -4,6 +4,7 @@
   import Icon from './glass/Icon.svelte';
   import { app, gidOf, trackProspect } from '$lib/state.svelte.js';
   import { isRent, priceTxt, rentChips } from '$lib/format.js';
+  import { staggerIn, pressable } from '$lib/motion.js';
 
   /* `i` staggers the card's entrance in a grid (only the first dozen wait). */
   let { r, i = 0 } = $props();
@@ -27,7 +28,8 @@
   function track(e) { e.stopPropagation(); trackProspect(r); }
 </script>
 
-<article class="card mg-rise" class:sel={r.listing_key === app.selectedKey} style:--i={Math.min(i, 12)}
+<article class="card" class:sel={r.listing_key === app.selectedKey}
+         in:staggerIn|global={{ i }} use:pressable={'lift'}
          onclick={open} onkeydown={(e) => e.key === 'Enter' && open()}
          role="button" tabindex="0" data-prospect={r.listing_key}>
   <div class="ph">
@@ -70,10 +72,10 @@
   .card {
     position: relative; display: flex; flex-direction: column; overflow: hidden; cursor: pointer;
     background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-r);
-    transition: border-color var(--mc-t-fast), transform var(--mc-t) var(--mc-ease), box-shadow var(--mc-t);
+    /* transform: hoverLift on spring.snappy (use:pressable, lib/motion.js) */
+    transition: border-color var(--mc-t-fast), transform var(--mg-spring-snappy), box-shadow var(--mc-t);
   }
-  .card:hover { border-color: var(--mc-line2); background: var(--mc-glass-hover); transform: translateY(-2px); }
-  .card:active { transform: scale(0.99); }
+  .card:hover { border-color: var(--mc-line2); background: var(--mc-glass-hover); }
   .card.sel { border-color: var(--mc-accent); box-shadow: 0 0 0 1px var(--mc-accent); }
   .card:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
 
@@ -113,5 +115,4 @@
   .chips { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
   .ag { margin: 2px 0 0; font: 400 11.5px/1.4 var(--mc-font); color: var(--mc-ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  @media (prefers-reduced-motion: reduce) { .card:hover, .card:active { transform: none; } }
 </style>

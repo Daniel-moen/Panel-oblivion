@@ -13,7 +13,7 @@
   import ProspectCard from './ProspectCard.svelte';
   import { fmtM, fmtR } from '$lib/format.js';
   import Icon from './glass/Icon.svelte';
-  import { slide } from '$lib/motion.js';
+  import { play, fadeUp } from '$lib/motion.js';
 
   const SALE_EXAMPLES = [
     '2 bedroom in a quiet area under R3m',
@@ -111,7 +111,7 @@
   {/if}
 
   {#if res && !finder.busy}
-    <div class="answer" in:slide={{ y: 8, duration: 240 }}>
+    <div class="answer" in:play={fadeUp}>
       <p class="summary">{res.summary}</p>
 
       {#if critChips.length}

@@ -6,7 +6,7 @@
      that eventually deletes the wrong master — so resolving is per group and
      asks first. The copy being kept is marked before you press anything. */
   import { onMount } from 'svelte';
-  import { rise } from '$lib/motion.js';
+  import { staggerIn } from '$lib/motion.js';
   import { mstate, boot, say, can, CAP, loadMe } from '$lib/media.svelte.js';
   import { media, thumbUrl, fmtBytes } from '$lib/media.js';
   import Skeleton from '$lib/components/Skeleton.svelte';
@@ -102,7 +102,7 @@
 {:else}
   <div class="list">
     {#each groups as g, i (g.hash)}
-      <article class="mg-card grp" in:rise={{ i }}>
+      <article class="mg-card grp" in:staggerIn|global={{ i }}>
         <div class="gh">
           <b>{g.videos?.length || 0} copies</b>
           <span class="dim mg-tnum">{fmtBytes(g.size || g.videos?.[0]?.file_size || 0)} each</span>

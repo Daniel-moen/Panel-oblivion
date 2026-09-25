@@ -2,6 +2,7 @@
   /* One composer for every contact attempt: pick a channel and outcome with a
      tap, one line of notes, a follow-up in one click. Used in the log sheet
      on Today / the pipeline, and inline on the property and contact pages. */
+  import { pressable } from '$lib/motion.js';
   import { api } from '$lib/api.js';
   import { toast } from '$lib/state.svelte.js';
   import { label } from '$lib/panel.js';
@@ -105,7 +106,7 @@
   <div class="acts">
     <span class="mg-hint kbd">⌘↵ to save</span>
     {#if oncancel}<button type="button" class="mg-btn ghost" onclick={oncancel}>Cancel</button>{/if}
-    <button type="button" class="mg-btn primary" onclick={save} disabled={saving}>
+    <button type="button" class="mg-btn primary" onclick={save} disabled={saving} use:pressable>
       {#if saving}<span class="mg-spin"></span> Saving…{:else}<Icon name="check" size={15} stroke={2} /> Log {label(ch)}{/if}
     </button>
   </div>
