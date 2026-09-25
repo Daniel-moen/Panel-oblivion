@@ -1,20 +1,36 @@
 <script>
-  /* Home — the overview.
+  /* Home — the scene, then the overview.
 
-     Order of importance, top to bottom: a greeting and one honest sentence
-     about today; the headline figures as stat tiles; what needs YOU,
-     answerable inline (overdue follow-ups first, then today's, then mandates
-     about to expire); then whatever other features mount here (see
-     `slots.home` in $lib/shell.svelte.js — the "My tasks" card lives in that
-     column); and the quick links. */
+     Above the fold it is the photograph and nothing else, like Daniel's
+     reference: the date and a big thin clock top-left; a small "view"
+     dropdown and two round glass buttons (Search, Quick log) top-right; and
+     dead centre a greeting, ONE honest sentence about what needs you
+     ($lib/suggest.js picks it from what is fetched here) and ONE pill that
+     goes and does it. No pane, no strip (unless a crawl runs — the layout
+     decides), and the Dock / Rail step out of the way after 3 s idle.
+
+     One viewport down, the overview sits in a single sheet of glass — the
+     stat tiles, the 14-day bars, what needs you (answerable inline), the
+     `slots.home` cards (see $lib/shell.svelte.js), the activity feed and the
+     quick links. The chevron under the pill (or any scroll) reveals it;
+     scrolling back up returns to the clean scene.
+
+     No layout shift: the greeting, the sentence and the pill each own a
+     fixed box from the first frame, and their text fades in when it lands. */
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
   import { app, toast, ensureProspects } from '$lib/state.svelte.js';
-  import { slots } from '$lib/shell.svelte.js';
+  import { slots, chrome, shell, openQuickLog, stripWanted } from '$lib/shell.svelte.js';
+  import { chat, toggleChat } from '$lib/chat.svelte.js';
+  import { me } from '$lib/me.svelte.js';
+  import { filters } from '$lib/filters.svelte.js';
+  import { openSearch, searchKey } from '$lib/search.js';
+  import { suggest, VIEWS } from '$lib/suggest.js';
   import { ago, shortDate, MANDATE_LABEL } from '$lib/panel.js';
   import { rise } from '$lib/motion.js';
   import Icon from '$lib/components/glass/Icon.svelte';
+  import Frost from '$lib/components/glass/Frost.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import StatTile from '$lib/components/StatTile.svelte';
   import ActivityFeed from '$lib/components/ActivityFeed.svelte';
@@ -28,6 +44,17 @@
   let panelStats = $state(null);  // only fetched when /api/home is missing
   let expanded = $state(false);
   let busy = $state(null); // the task id currently being snoozed / ticked off
+  let meWaited = $state(false);   // /api/me had its chance; greet without a name
+  let overview = $state(null);    // the glass pane one viewport down
+
+  /* Which question the sentence answers. Per viewer, per browser. */
+  const VIEW_KEY = 'obv2.homeView';
+  let view = $state('needs');
+  try { const v = localStorage.getItem(VIEW_KEY); if (VIEWS.some((x) => x.value === v)) view = v; } catch { /* private mode */ }
+  function pickView(v) {
+    view = v;
+    try { localStorage.setItem(VIEW_KEY, v); } catch { /* private mode */ }
+  }
 
   async function loadToday() {
     try { today = await api.panelToday(); todayFailed = false; }
@@ -53,7 +80,11 @@
   }
 
   onMount(() => {
-    const t = setInterval(() => (now = new Date()), 1000 * 15);
+    /* The clock: re-read at every minute boundary (then every 15 s), and at
+       once when the tab comes back, so the minute is never wrong. */
+    let t = 0;
+    const tick = () => (now = new Date());
+    const t0 = setTimeout(() => { tick(); t = setInterval(tick, 15000); }, 60000 - (Date.now() % 60000) + 50);
     loadToday();
     loadHome();
     /* Every 30 s while the tab is in view, every 5 s while a crawl runs. */
@@ -62,22 +93,108 @@
       const gap = app.status.running ? 5000 : 30000;
       if (Date.now() - homeAt >= gap - 250) loadHome();
     }, 5000);
-    const onVis = () => { if (!document.hidden && Date.now() - homeAt > 5000) loadHome(); };
+    const onVis = () => { if (document.hidden) return; tick(); if (Date.now() - homeAt > 5000) loadHome(); };
     document.addEventListener('visibilitychange', onVis);
     /* Nothing here waits on the prospect list any more, but it is the most
        likely next tap, so it is warmed once the greeting is up. */
     const t2 = setTimeout(ensureProspects, 600);
+    const t4 = setTimeout(() => (meWaited = true), 1200);
+    const stopIdle = quietChrome();
     return () => {
-      clearInterval(t); clearInterval(t3); clearTimeout(t2);
+      clearTimeout(t0); clearInterval(t); clearInterval(t3); clearTimeout(t2); clearTimeout(t4);
       document.removeEventListener('visibilitychange', onVis);
+      stopIdle();
     };
   });
 
+  /* The Dock / Rail are the navigation, so they stay — but on the scene they
+     slide away after 3 s without input and come back on any tap, scroll or
+     key. Once the overview is in view they stay put (you are reading, and
+     may want to go somewhere). Reduced motion: never hidden. */
+  function quietChrome() {
+    const still = matchMedia('(prefers-reduced-motion: reduce)');
+    let timer = 0, raf = 0;
+    const inScene = () => window.scrollY < window.innerHeight * 0.5;
+    /* Never pull the navigation out from under a resting cursor or a
+       keyboard focus: that is someone using it. */
+    const inUse = () =>
+      !!document.activeElement?.closest?.('.rail, .dock') ||
+      !!document.querySelector('.rail:hover, .dock:hover');
+    const arm = () => {
+      clearTimeout(timer);
+      if (chrome.quiet) chrome.quiet = false;
+      if (still.matches) return;
+      timer = setTimeout(() => { if (inScene() && !inUse()) chrome.quiet = true; }, 3000);
+    };
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => { raf = 0; arm(); });
+    };
+    const onMove = (e) => { if (e.pointerType === 'mouse') onScroll(); };
+    arm();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('pointerdown', arm, { passive: true });
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('keydown', arm);
+    window.addEventListener('focusin', arm);
+    still.addEventListener?.('change', arm);
+    return () => {
+      clearTimeout(timer); cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('pointerdown', arm);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('keydown', arm);
+      window.removeEventListener('focusin', arm);
+      still.removeEventListener?.('change', arm);
+      chrome.quiet = false;
+    };
+  }
+
+  function reveal() {
+    if (!overview) return;
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: overview.getBoundingClientRect().top + window.scrollY, behavior: still ? 'auto' : 'smooth' });
+  }
+
+  /* The clock: the browser's own locale (en-ZA when it has none worth
+     trusting), always 24-hour. Formatters are built once. */
+  const LOCALES = (() => { try { return [navigator.language, 'en-ZA'].filter(Boolean); } catch { return ['en-ZA']; } })();
+  const fmtDate = new Intl.DateTimeFormat(LOCALES, { weekday: 'long', day: 'numeric', month: 'long' });
+  const fmtTime = new Intl.DateTimeFormat(LOCALES, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  const date = $derived(fmtDate.format(now));
+  const clock = $derived(fmtTime.format(now));
+
   const hour = $derived(now.getHours());
+  /* First name only, capitalised: an account named after its login
+     ("daniel") still reads like a greeting. */
+  const first = $derived.by(() => {
+    const f = String(me.display_name || '').trim().split(/\s+/)[0] || '';
+    return f ? f[0].toUpperCase() + f.slice(1) : '';
+  });
   const greeting = $derived(
-    hour < 5 ? 'Still up?' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+    (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening') + (first ? `, ${first}!` : '!')
   );
-  const date = $derived(now.toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long' }));
+  const greetReady = $derived(me.loaded || meWaited);
+
+  /* The one sentence and the one pill. null = still loading: the boxes stay
+     reserved and empty, so nothing below them moves when it lands. */
+  const sug = $derived(suggest({ view, now, today, todayFailed, home, homeFailed, status: app.status }));
+  /* The live region follows the rule that fired, so a running crawl's
+     progress does not re-announce every 5 s. */
+  let announce = $state('');
+  let announcedKey = '';
+  $effect(() => {
+    const k = sug ? view + ':' + sug.key : '';
+    if (k && k !== announcedKey) { announcedKey = k; announce = sug.text; }
+  });
+  const viewLabel = $derived(VIEWS.find((v) => v.value === view)?.label || '');
+
+  function act(c) {
+    if (c.filters) Object.assign(filters, c.filters);
+    if (c.log) app.logOpen = true;
+    if (c.run) app.runOpen = true;
+    goto(c.href);
+  }
 
   const stats = $derived(home?.stats ?? app.stats ?? null);
   const listHot = $derived(app.prospects.filter((r) => r.tier === 'hot').length);
@@ -86,26 +203,6 @@
   const dueCount = $derived(today ? today.overdue.length + today.due_today.length : null);
   const crawling = $derived(!!app.status.running);
   const series = $derived(home?.series ?? null);
-
-  /* One sentence, and it has to be true. `null` = still loading (skeleton). */
-  const line = $derived.by(() => {
-    if (todayFailed) return hot ? `${hot} hot prospect${hot > 1 ? 's' : ''} waiting in the engine.` : 'The engine is up.';
-    if (!today) return null;
-    const od = today.overdue.length, dt = today.due_today.length, ex = today.expiring.length;
-    if (od) return `${od} follow-up${od > 1 ? 's' : ''} overdue — start there.`;
-    if (dt) return `${dt} follow-up${dt > 1 ? 's' : ''} to make today.`;
-    if (ex) return `${ex} mandate${ex > 1 ? 's' : ''} expiring soon — time to renew.`;
-    if (today.stale.length) return `${today.stale.length} lead${today.stale.length > 1 ? 's have' : ' has'} gone quiet. Worth a call.`;
-    if (hot) return `All caught up. ${hot} hot prospect${hot > 1 ? 's' : ''} waiting in the engine.`;
-    return 'All caught up.';
-  });
-
-  /* The one button. Whatever is most useful right now, and nothing else. */
-  const cta = $derived.by(() => {
-    if (overdue) return { kind: 'warn', icon: 'clock', label: "Open today's follow-ups", href: '/leads' };
-    if (crawling) return { kind: 'secondary', icon: 'clock', label: 'View crawl progress', go: () => { app.logOpen = true; goto('/prospects'); } };
-    return { kind: 'primary', icon: 'plus', label: 'New crawl', go: () => (app.runOpen = true) };
-  });
 
   const share = (a, b) => (a != null && b ? (100 * a) / b : null);
   const tracked = $derived(home?.tracked ?? panelStats?.tracked ?? today?.counts?.tracked ?? null);
@@ -200,23 +297,56 @@
 </script>
 
 <svelte:head><title>Oblivion</title></svelte:head>
+<!-- the strip owns "/" everywhere else; on the scene there is no strip -->
+<svelte:window onkeydown={searchKey} />
 
-<div class="home">
-  <div class="mg-row hello">
-    <div class="titles">
-      <span class="hud">{date}</span>
-      <h1 class="mg-h1">{greeting}.</h1>
-      {#if line == null}<span class="skline"><Skeleton h="14px" w="46%" /></span>{:else}<p class="mg-sub">{line}</p>{/if}
+<div class="home" class:railout={chrome.quiet} class:striped={stripWanted(app.status, shell.status)}>
+  <section class="scene" data-home-scene aria-label="Today">
+    <div class="top">
+      <div class="when">
+        <div class="date">{date}</div>
+        <div class="clock mg-tnum">{clock}</div>
+      </div>
+      <div class="tools">
+        <label class="view" title="What the sentence talks about">
+          <span class="vis">{viewLabel}<Icon name="chevronsUpDown" size={11} stroke={2.2} /></span>
+          <select data-home-view aria-label="What should Home talk about?" value={view} onchange={(e) => pickView(e.currentTarget.value)}>
+            {#each VIEWS as v (v.value)}<option value={v.value}>{v.label}</option>{/each}
+          </select>
+        </label>
+        <button type="button" class="mg-round" aria-label="Search" title="Search" onclick={openSearch}><Icon name="search" size={18} /></button>
+        <button type="button" class="mg-round" aria-label="Quick log" title="Quick log" onclick={() => openQuickLog()}><Icon name="pencil" size={17} /></button>
+        <!-- the strip carries team chat everywhere else; the scene has no strip -->
+        <button type="button" class="mg-round chat" class:on={chat.open} onclick={toggleChat} aria-expanded={chat.open}
+                aria-label={chat.open ? 'Close team chat' : `Open team chat${chat.unread ? ` (${chat.unread} unread)` : ''}`}
+                title="Team chat">
+          <Icon name="message" size={18} />
+          {#if chat.unread && !chat.open}<i class="count" aria-hidden="true">{chat.unread > 9 ? '9+' : chat.unread}</i>{/if}
+        </button>
+      </div>
     </div>
-    <div class="mg-actions">
-      {#if cta.href}
-        <a class="mg-btn {cta.kind}" href={cta.href}><Icon name={cta.icon} size={16} />{cta.label}</a>
-      {:else}
-        <button type="button" class="mg-btn {cta.kind}" onclick={cta.go}><Icon name={cta.icon} size={16} />{cta.label}</button>
-      {/if}
-    </div>
-  </div>
 
+    <div class="centre">
+      <h1 data-home-greeting class:in={greetReady}>{greeting}</h1>
+      <p class="line" data-home-line class:in={!!sug}>{sug?.text ?? ''}</p>
+      <!-- read out when the suggestion changes kind, not on every crawl tick -->
+      <span class="mg-sr" aria-live="polite">{announce}</span>
+      <div class="cta">
+        {#if sug}
+          {#key sug.cta.label + sug.cta.href}
+            <button type="button" class="pill" data-home-cta onclick={() => act(sug.cta)}>{sug.cta.label}</button>
+          {/key}
+        {/if}
+      </div>
+      <button type="button" class="reveal" data-home-reveal onclick={reveal} aria-label="Show the overview" title="Overview">
+        <Icon name="chevronDown" size={20} stroke={1.8} />
+      </button>
+    </div>
+  </section>
+
+  <section class="overview" data-home-overview bind:this={overview} aria-label="Overview">
+  <Frost />
+  <div class="inner">
   <div class="tiles">
     {#each tiles as t, i (t.k)}
       <StatTile label={t.k} value={t.v} sub={t.sub} tone={t.tone || ''} href={t.href} live={!!t.live}
@@ -336,17 +466,159 @@
       </div>
     </div>
   </div>
+  </div>
+  </section>
 </div>
 
 <style>
-  .home { display: flex; flex-direction: column; gap: 16px; }
+  .home { display: flex; flex-direction: column; }
 
-  .hello { margin: 4px 0 2px; align-items: flex-end; }
-  .hello .mg-h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
-  @media (min-width: 640px) { .hello .mg-h1 { font-size: 34px; } }
-  @media (max-width: 640px) { .hello .mg-actions { flex-basis: 100%; margin-left: 0; } .hello .mg-actions :global(.mg-btn) { flex: 1; } }
-  .titles { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  .skline { display: block; padding: 4px 0 3px; }
+  /* ——— the scene: one viewport of photograph ——— */
+  .scene {
+    position: relative; height: 100vh; height: 100svh; min-height: 480px;
+    color: #fff; overflow: hidden;
+  }
+  .top {
+    position: absolute; left: 0; right: 0; top: 0;
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: calc(var(--sat) + 22px) calc(var(--sar, 0px) + 18px) 0 calc(var(--sal) + 20px);
+    transition: transform 260ms var(--mc-ease);
+  }
+  .when { min-width: 0; transition: transform 260ms var(--mc-ease); }
+  .date { font: 400 13px/1.3 var(--mc-font); color: rgba(255, 255, 255, 0.92); text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35); white-space: nowrap; }
+  .clock { margin-top: 2px; font: 300 30px/1 var(--mc-font); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; text-shadow: 0 1px 16px rgba(0, 0, 0, 0.35); }
+
+  .tools { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: none; }
+  /* A phone has no room for the date, the view and two buttons on one row:
+     the view drops under the buttons, still right-aligned. */
+  @media (max-width: 559px) {
+    .tools { flex-wrap: wrap; max-width: 60%; row-gap: 10px; }
+    .view { order: 3; margin-right: 0; }
+  }
+  .chat { position: relative; }
+  .count {
+    position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px; padding: 0 4px;
+    display: inline-flex; align-items: center; justify-content: center; border-radius: 9999px;
+    background: var(--mc-crit); color: #fff; border: 2px solid rgba(0, 0, 0, 0.5);
+    font: 700 9.5px/1 var(--mc-font); font-style: normal; font-variant-numeric: tabular-nums;
+  }
+  .view { position: relative; display: inline-flex; align-items: center; height: 32px; margin-right: 4px; }
+  .view .vis {
+    display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 11px;
+    border-radius: 9999px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14);
+    font: 600 12.5px/1 var(--mc-font); color: #fff; white-space: nowrap; pointer-events: none;
+  }
+  .view select {
+    position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer;
+    font-size: 16px; /* iOS: no zoom on focus */ -webkit-appearance: none; appearance: none;
+  }
+  .view:has(select:focus-visible) .vis { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 2px; }
+  .view:hover .vis { background: rgba(255, 255, 255, 0.14); }
+
+  /* The greeting block hangs from a fixed line a little above the middle, so
+     a sentence that wraps (or arrives late) only ever pushes DOWN. */
+  .centre {
+    --gs: 36px;
+    position: absolute; left: 0; right: 0; top: calc(40% - 2.2 * var(--gs));
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    padding: 0 calc(var(--sar, 0px) + 20px) 0 calc(var(--sal) + 20px);
+    transition: transform 260ms var(--mc-ease);
+  }
+  /* Two lines are reserved and the text sits at the bottom of them: a name
+     that arrives late, or a long one that wraps, never moves what is below. */
+  h1 {
+    margin: 0; max-width: 16ch; height: 2.2em;
+    display: flex; align-items: flex-end; justify-content: center;
+    font: 700 var(--gs)/1.1 var(--mc-font); letter-spacing: -0.025em; color: #fff;
+    text-shadow: 0 2px 28px rgba(0, 0, 0, 0.35);
+    opacity: 0; transition: opacity 320ms ease;
+  }
+  .line {
+    margin: 10px 0 0; max-width: 30ch; min-height: 2.5em;
+    font: 400 19px/1.25 var(--mc-font); color: rgba(255, 255, 255, 0.94);
+    text-shadow: 0 1px 18px rgba(0, 0, 0, 0.4);
+    opacity: 0; transition: opacity 320ms ease;
+  }
+  h1.in, .line.in { opacity: 1; }
+  .cta { height: 34px; margin-top: 14px; display: flex; justify-content: center; }
+  .pill {
+    height: 34px; padding: 0 16px; border-radius: 9999px; cursor: pointer;
+    background: rgba(38, 38, 42, 0.62); border: 1px solid rgba(255, 255, 255, 0.10); color: #fff;
+    font: 500 13px/1 var(--mc-font); white-space: nowrap;
+    animation: pill-in 320ms ease both;
+    transition: background var(--mc-t-fast), transform 120ms var(--mc-ease);
+  }
+  .pill:hover { background: rgba(58, 58, 64, 0.72); }
+  .pill:active { transform: scale(0.96); }
+  @keyframes pill-in { from { opacity: 0; } to { opacity: 1; } }
+  .reveal {
+    margin-top: 22px; width: 44px; height: 44px; border: 0; border-radius: 9999px; background: none; cursor: pointer;
+    display: grid; place-items: center; color: rgba(255, 255, 255, 0.7);
+    transition: color var(--mc-t-fast), transform 160ms var(--mc-ease);
+  }
+  .reveal:hover { color: #fff; transform: translateY(2px); }
+
+  @media (min-width: 640px) {
+    .top { padding: calc(var(--sat) + 44px) calc(var(--sar, 0px) + 44px) 0 calc(var(--sal) + 48px); }
+    .date { font-size: 15px; }
+    .clock { font-size: 34px; }
+    .centre { --gs: 56px; top: calc(44% - 2.2 * var(--gs)); }
+    h1 { max-width: 20ch; }
+    .line { font-size: 24px; max-width: 34ch; }
+    .cta { margin-top: 22px; }
+  }
+  @media (min-width: 1100px) {
+    .centre { --gs: 64px; }
+    .line { font-size: 28px; max-width: none; }
+  }
+  /* A short landscape phone: tighter, so the pill never meets the dock. */
+  @media (max-height: 560px) { .centre { --gs: 32px; top: 18%; } .line { font-size: 17px; } }
+
+  /* A crawl brings the strip back over the scene (the layout pins it to the
+     top); the date and tools step down under it — a transform, not a reflow. */
+  .striped .top { transform: translateY(var(--mc-strip-h)); }
+
+  /* From 1024px the Rail floats over the scene. While it is out, the clock
+     and the greeting shift clear of it; when it steps away they glide back to
+     the reference's composition. */
+  @media (min-width: 1024px) {
+    .when { transform: translateX(var(--mc-rail-w)); }
+    .centre { transform: translateX(calc(var(--mc-rail-w) / 2)); }
+    .railout .when, .railout .centre { transform: none; }
+  }
+
+  /* ——— the overview: ONE sheet of glass, one viewport down ———
+     Frosted by glass/Frost (the photo pre-blurred, cut to this box), not a
+     live backdrop-filter: a live blur moving across the photo on every
+     scrolled frame is what made the reveal stutter on an iPad. */
+  .overview {
+    position: relative; z-index: 1; isolation: isolate;
+    min-height: 100vh; min-height: 100svh;
+    border: 1px solid var(--mc-glass-line); border-bottom: 0;
+    border-radius: var(--mc-r-lg) var(--mc-r-lg) 0 0;
+    box-shadow: var(--mc-sh-3);
+    --frost-r: var(--mc-r-lg) var(--mc-r-lg) 0 0;
+  }
+  .inner {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; gap: 16px;
+    padding: 20px 16px calc(var(--mc-dock-h) + var(--sab) + 24px);
+    max-width: 1200px; margin: 0 auto;
+  }
+  @media (min-width: 640px) {
+    .overview { margin: 0 var(--mc-gutter); --frost-tint: var(--mc-glass); }
+    .inner { padding: 28px 20px calc(var(--mc-dock-h) + var(--sab) + 24px); }
+  }
+  @media (min-width: 1024px) {
+    .overview { margin: 0 var(--mc-gutter) 16px calc(var(--mc-rail-w) + var(--mc-gutter)); border-bottom: 1px solid var(--mc-glass-line); border-radius: var(--mc-r-lg); --frost-r: var(--mc-r-lg); }
+    .inner { padding: 28px 24px 32px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .top, .when, .centre { transition: none; }
+    h1, .line { transition: none; }
+    .pill { animation: none; }
+  }
 
   .tiles { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   @media (min-width: 900px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

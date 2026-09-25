@@ -52,6 +52,12 @@
   // one load per gid (the old onMount + effect pair fetched everything twice)
   $effect(() => { gid; untrack(() => { d = null; err = null; load(); }); });
   const refresh = async () => { await load(); loadToday(); };
+  // the global Quick log sheet saved something about this property
+  $effect(() => {
+    const on = (e) => { if (String(e.detail?.gid) === String(gid)) refresh(); };
+    window.addEventListener('mc:logged', on);
+    return () => window.removeEventListener('mc:logged', on);
+  });
 
   // keep the current stage in view on a narrow stepper
   $effect(() => {

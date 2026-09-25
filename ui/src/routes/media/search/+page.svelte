@@ -90,7 +90,7 @@
     <span class="ic"><Icon name="search" size={18} /></span>
     <!-- svelte-ignore a11y_autofocus -->
     <input class="mg-input" type="search" bind:value={q} autofocus
-           aria-label="Search the library"
+           aria-label="Search the library" data-page-search
            placeholder="sea view, drone, &ldquo;the kitchen&rdquo;…" />
     {#if q}
       <button class="clear" type="button" onclick={() => (q = '')} aria-label="Clear search">

@@ -48,7 +48,7 @@
 
     <label class="mg-search">
       <span class="ic"><Icon name="search" size={16} /></span>
-      <input type="search" class="mg-input"
+      <input type="search" class="mg-input" data-page-search
              placeholder={rent ? 'Search title, street, agency…' : 'Search title, street, erf, agency…'}
              bind:value={filters.q} />
       {#if filters.q}
