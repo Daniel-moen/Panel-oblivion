@@ -111,6 +111,7 @@ PUBLIC_PATHS = frozenset({
     "/hero-morning.jpg",
     "/hero-day.jpg",
     "/hero-dusk.jpg",
+    "/hero-night.jpg",
     "/api/passkeys/login/options",
     "/api/passkeys/login/verify",
     # Sign-up by invite: the page, and the two halves of the registration
@@ -1782,12 +1783,13 @@ __CSS__</style>
 def _render_login(next_path: str, error: str = "") -> Response:
     import html as _html
 
-    # The hero is picked here rather than in the browser: the same three files
-    # and the same thresholds as components/glass/Backdrop.svelte (before 10
-    # morning, before 17 day, else dusk), so the sign-in is lit like the hour
-    # you opened it — and the photo is in the HTML, not one frame later.
+    # The hero is picked here rather than in the browser: the same four files
+    # and the same thresholds as components/glass/Backdrop.svelte (20-05
+    # night, before 10 morning, before 17 day, else dusk), so the sign-in is
+    # lit like the hour you opened it — and the photo is in the HTML, not one frame later.
     hour = datetime.now().hour
-    hero = "morning" if hour < 10 else "day" if hour < 17 else "dusk"
+    hero = ("night" if hour >= 20 or hour < 5 else "morning" if hour < 10
+            else "day" if hour < 17 else "dusk")
 
     # __CSS__ first: the stylesheet itself carries the __HERO__ placeholder.
     page = (_LOGIN_HTML
@@ -2054,7 +2056,8 @@ def _render_signup(*, mode: str, token: str, username: str = "",
     import html as _html
 
     hour = datetime.now().hour
-    hero = "morning" if hour < 10 else "day" if hour < 17 else "dusk"
+    hero = ("night" if hour >= 20 or hour < 5 else "morning" if hour < 10
+            else "day" if hour < 17 else "dusk")
 
     if error:
         h1, sub, body = "That link did not work", "", """

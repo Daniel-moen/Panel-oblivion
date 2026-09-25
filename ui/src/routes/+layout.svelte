@@ -17,6 +17,11 @@
 
        /map   Leaflet needs the whole rectangle, so the scene is locked to
               the viewport and the page fills what the strip leaves.
+       /      Home is the photograph first: no fixed pane (Home draws its own
+              glass one viewport down), no column padding (the Rail floats
+              over the scene), and the strip only while a crawl runs or a
+              section posts a warning — pinned over the scene, so its
+              arrival never pushes the greeting.
 
      Page transitions fade on the SECTION, not the exact path: sub-navigation
      inside Media or Leads must not remount their segmented rows, or the
@@ -31,19 +36,24 @@
   import { startChat } from '$lib/chat.svelte.js';
   import { loadMe } from '$lib/me.svelte.js';
   import { installTeam } from '$lib/team.svelte.js';
+  import { shell, stripWanted } from '$lib/shell.svelte.js';
   import Backdrop from '$lib/components/glass/Backdrop.svelte';
+  import Frost from '$lib/components/glass/Frost.svelte';
   import StatusStrip from '$lib/components/glass/StatusStrip.svelte';
   import Dock from '$lib/components/glass/Dock.svelte';
   import Rail from '$lib/components/glass/Rail.svelte';
   import RunPanel from '$lib/components/RunPanel.svelte';
   import Toast from '$lib/components/Toast.svelte';
   import ChatWidget from '$lib/components/ChatWidget.svelte';
+  import QuickLogSheet from '$lib/components/QuickLogSheet.svelte';
 
   let { children } = $props();
 
   const path = $derived(page.url.pathname);
   const section = $derived('/' + (path.split('/')[1] || ''));
   const isMap = $derived(path.startsWith('/map'));
+  const isHome = $derived(path === '/');
+  const showStrip = $derived(!isHome || stripWanted(app.status, shell.status));
 
   onMount(() => {
     /* Who is signed in, once for the whole app: the Dock, the Rail and the
@@ -74,15 +84,19 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="mg-scene" class:map={isMap}>
+<div class="mg-scene" class:map={isMap} class:home={isHome}>
   <!-- The photograph, and the one sheet of glass the page scrolls over. The
        map is its own scene: Leaflet fills the rectangle, so no pane. -->
   <Backdrop />
-  {#if !isMap}<div class="mg-pane" aria-hidden="true"></div>{/if}
+  {#if !isMap && !isHome}<div class="mg-pane" aria-hidden="true"><Frost /></div>{/if}
   <Rail />
 
   <div class="col">
-    <StatusStrip />
+    {#if !isHome}
+      <StatusStrip />
+    {:else if showStrip}
+      <div class="scenestrip"><StatusStrip scene /></div>
+    {/if}
 
     {#if isMap}
       <!-- edge to edge: the map is the page -->
@@ -103,6 +117,7 @@
   <RunPanel />
   <Toast />
   <ChatWidget />
+  <QuickLogSheet />
 </div>
 
 <style>
@@ -123,4 +138,9 @@
     .col { padding-left: var(--mc-rail-w); }
     main.mg-page { padding-bottom: calc(var(--sab) + 48px); }
   }
+
+  /* Home: the page is the scene, edge to edge; it pads its own overview. */
+  .home .col { padding-left: 0; }
+  .home main.mg-page { padding: 0; max-width: none; }
+  .scenestrip { position: fixed; top: 0; left: 0; right: 0; z-index: 40; }
 </style>

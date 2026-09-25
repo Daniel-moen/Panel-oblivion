@@ -130,3 +130,40 @@ export const SECTIONS = [
 
 /** True when `path` is inside the section at `href`. */
 export const inSection = (href, path) => (href === '/' ? path === '/' : path.startsWith(href));
+
+/* ——— the scene (Home) and the two global tools ———
+
+     chrome.quiet     true when the Dock / Rail should step out of the way
+                      (Home, after 3 s without input). They slide off with
+                      a transform only; any tap, scroll or key brings them
+                      back. Never set for prefers-reduced-motion.
+     chrome.frost     the url glass/Frost.svelte shows (the hour's pre-blurred
+                      photo), set by Backdrop; `frostLive` when it is a
+                      custom photo that has to be blurred by a filter.
+     chrome.quickLog  { open, gid } — the global Quick log sheet
+                      (components/QuickLogSheet.svelte, mounted once by the
+                      layout). gid null = pick a property first.
+
+   Home owns `quiet` (armed on mount, cleared on destroy). The layout decides
+   the scene itself, from the route, so the first frame is already right. */
+export const chrome = $state({
+  quiet: false,
+  frost: '',
+  frostLive: false,
+  quickLog: { open: false, gid: null }
+});
+
+/** Open the Quick log sheet, optionally already about one property group. */
+export function openQuickLog(gid = null) {
+  chrome.quickLog = { open: true, gid: gid == null ? null : String(gid) };
+}
+
+export function closeQuickLog() {
+  chrome.quickLog = { open: false, gid: null };
+}
+
+/** The strip is worth drawing on the scene only while something is happening. */
+export function stripWanted(status, posted) {
+  if (status?.running) return true;
+  return !!posted && (posted.tone === 'warn' || posted.tone === 'crit');
+}

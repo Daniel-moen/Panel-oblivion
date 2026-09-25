@@ -6,12 +6,18 @@
      takes over.
 
      Sections added with `addNav()` (shell.svelte.js) appear after the
-     built-in six. */
+     built-in six.
+
+     Quiet (`chrome.quiet`, set by Home after a few idle seconds): it slides
+     off the left edge — transform and opacity only — and takes no clicks
+     while hidden. Being fixed, it never moved the page, so hiding it can't
+     either; on the scene the layout stops reserving its width. Reduced
+     motion keeps it put. */
   import { page } from '$app/state';
   import Icon from './Icon.svelte';
   import PrimaryButton from './PrimaryButton.svelte';
   import { app } from '$lib/state.svelte.js';
-  import { shell, slots, engineStatus, SECTIONS, inSection } from '$lib/shell.svelte.js';
+  import { shell, slots, chrome, engineStatus, SECTIONS, inSection } from '$lib/shell.svelte.js';
   import { me, can } from '$lib/me.svelte.js';
 
   const ITEMS = $derived([...SECTIONS, ...slots.nav].filter((it) => !it.need || can(it.need)));
@@ -22,7 +28,7 @@
   const initial = $derived((who[0] || 'O').toUpperCase());
 </script>
 
-<aside class="rail">
+<aside class="rail" class:quiet={chrome.quiet}>
   <div class="brand">
     <span class="mg-dot {status.tone === 'off' ? '' : status.tone}">{#if status.ping}<i class="mg-ping"></i>{/if}</span>
     <a class="name" href="/">Oblivion</a>
@@ -66,8 +72,17 @@
     background: var(--mc-glass);
     border-right: 1px solid var(--mc-glass-line);
     -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
+    transition: transform 260ms var(--mc-ease), opacity 260ms var(--mc-ease);
   }
+  /* hidden = also out of the screen-reader and tab order (after the slide);
+     a focus inside brings it straight back */
+  .rail.quiet { transform: translateX(-100%); opacity: 0; pointer-events: none; visibility: hidden;
+    transition: transform 260ms var(--mc-ease), opacity 260ms var(--mc-ease), visibility 0s linear 260ms; }
+  .rail.quiet:focus-within { transform: none; opacity: 1; pointer-events: auto; visibility: visible; transition: none; }
   @media (min-width: 1024px) { .rail { display: flex; } }
+  @media (prefers-reduced-motion: reduce) {
+    .rail, .rail.quiet { transform: none; opacity: 1; pointer-events: auto; visibility: visible; transition: none; }
+  }
 
   .brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px; }
   .name { font: 600 15px/1 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }

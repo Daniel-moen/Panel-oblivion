@@ -93,7 +93,7 @@
   <div class="find" bind:this={box} onfocusin={() => (focused = true)} onfocusout={onout}>
     <div class="mg-search">
       <span class="ic"><Icon name="search" size={16} /></span>
-      <input class="mg-input" type="search" placeholder="Find a property or person…" bind:value={q}
+      <input class="mg-input" type="search" data-page-search placeholder="Find a property or person…" bind:value={q}
              onkeydown={onkey} aria-label="Find a property or person" autocomplete="off"
              role="combobox" aria-expanded={open} aria-controls="lead-hits" />
       {#if q}

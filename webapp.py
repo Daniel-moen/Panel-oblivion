@@ -1987,6 +1987,49 @@ def _home_tracked(conn) -> tuple[int, int]:
             sum(r[1] for r in rows if r[0] in panel.ACTIVE_STAGES))
 
 
+def _next_auto_crawl(stamps: dict, now=None):
+    """When the auto-crawl loop will next start something, as UTC ISO Z, or
+    None when AUTO_CRAWL is off. `stamps` is _auto_stamps() (naive local
+    datetimes, like `now`). Mirrors _auto_crawl_loop: the nightly pass is due
+    in AUTO_CRAWL_HOUR once AUTO_FULL_MIN_HOURS have passed since the last one
+    started; a sweep AUTO_SWEEP_HOURS after the newer finished sweep / pass,
+    but a sweep that started and never finished is retried no sooner than
+    _AUTO_SWEEP_RETRY_S after it started. The loop checks once a minute, so
+    anything already due — and every answer — is rounded UP to the minute."""
+    if not config.AUTO_CRAWL:
+        return None
+    now = now or datetime.now()
+    soon = now + timedelta(minutes=1)
+    # The nightly pass: this hour if still due, else the next such hour that
+    # clears the minimum gap.
+    full_started = stamps.get(_AUTO_LAST_FULL_STARTED)
+    gap = timedelta(hours=config.AUTO_FULL_MIN_HOURS)
+    full = now.replace(hour=config.AUTO_CRAWL_HOUR, minute=0, second=0,
+                       microsecond=0)
+    if _full_due(now, full_started):
+        full = soon
+    else:
+        if full <= now:
+            full += timedelta(days=1)
+        while full_started is not None and full - full_started < gap:
+            full += timedelta(days=1)
+    cands = [full]
+    if config.AUTO_SWEEP_HOURS > 0:
+        done = [t for t in (stamps.get(_AUTO_LAST_SWEEP),
+                            stamps.get(_AUTO_LAST_FULL)) if t is not None]
+        sweep = (max(done) + timedelta(hours=config.AUTO_SWEEP_HOURS)
+                 if done else now)
+        started = stamps.get(_AUTO_LAST_SWEEP_STARTED)
+        if started is not None and (stamps.get(_AUTO_LAST_SWEEP)
+                                    or datetime.min) < started:
+            sweep = max(sweep, started + timedelta(seconds=_AUTO_SWEEP_RETRY_S))
+        cands.append(max(sweep, soon))
+    nxt = min(cands)
+    if nxt.second or nxt.microsecond:
+        nxt = nxt.replace(second=0, microsecond=0) + timedelta(minutes=1)
+    return nxt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def _build_home() -> dict:
     days, cutoff = _home_days()
     with db.connect() as conn:
@@ -1996,6 +2039,13 @@ def _build_home() -> dict:
             last_sweep = db.get_state(conn, _AUTO_LAST_SWEEP)
         except sqlite3.Error:
             last_full = last_sweep = None
+        try:
+            next_crawl = (_next_auto_crawl({k: _parse_stamp(db.get_state(conn, k))
+                                            for k in (_AUTO_LAST_FULL_STARTED, _AUTO_LAST_FULL,
+                                                      _AUTO_LAST_SWEEP_STARTED, _AUTO_LAST_SWEEP)})
+                          if config.AUTO_CRAWL else None)
+        except sqlite3.Error:
+            next_crawl = None
         return {
             "hot_sql": (None if _home_hot_cached() is not None
                         else _home_hot_sql(conn)),
@@ -2006,6 +2056,7 @@ def _build_home() -> dict:
             "events": _home_events(conn, cutoff),
             "last_full": last_full,
             "last_sweep": last_sweep,
+            "next_crawl": next_crawl,
         }
 
 
@@ -2051,7 +2102,8 @@ def api_home():
         "crawl": {"running": live["running"], "phase": live["phase"],
                   "done": live["done"], "total": live["total"],
                   "last_full": base["last_full"],
-                  "last_sweep": base["last_sweep"]},
+                  "last_sweep": base["last_sweep"],
+                  "next_crawl": base["next_crawl"]},
     })
 
 

@@ -9,8 +9,9 @@
      missing photo never shows as a white flash — the glass simply frosts the
      gradient until the JPEG lands, and the photo fades in over it.
 
-     Which photo: by the hour, the same three files and thresholds auth.py
-     uses for the sign-in page (before 10 morning, before 17 day, else dusk),
+     Which photo: by the hour, the same four files and thresholds auth.py
+     uses for the sign-in page (20:00–05:00 night, before 10 morning, before
+     17 day, else dusk),
      so every surface is lit like the hour you opened it. The clock ticks
      every 5 minutes, which is as often as the answer can change.
 
@@ -20,21 +21,19 @@
 
      Props:
        dim    0–1, the veil over the photo (default 0.2)
-       hero   force a photo: 'morning' | 'day' | 'dusk' (default: by hour) */
+       hero   force a photo: 'morning' | 'day' | 'dusk' | 'night' (default: by hour) */
   import { onMount } from 'svelte';
+  import { heroFor, heroSrc, frostSrc, readBackdropOverride } from '$lib/hero.js';
+  import { chrome } from '$lib/shell.svelte.js';
 
   let { dim = 0.2, hero = null } = $props();
 
-  const LS_KEY = 'mc.backdrop';
   let now = $state(new Date());
   let override = $state({});
   let loaded = $state(false);
   let scrolling = $state(false);
 
-  function readOverride() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null') || {}; }
-    catch { return {}; }
-  }
+  const readOverride = readBackdropOverride;
 
   onMount(() => {
     override = readOverride();
@@ -61,13 +60,15 @@
     };
   });
 
-  const pick = $derived.by(() => {
-    if (hero) return hero;
-    const h = now.getHours();
-    return h < 10 ? 'morning' : h < 17 ? 'day' : 'dusk';
-  });
-  const src = $derived(override.url || `/hero-${pick}.jpg`);
+  const pick = $derived(hero || heroFor(now));
+  const src = $derived(override.url || heroSrc(pick));
   const veil = $derived(typeof override.dim === 'number' ? override.dim : dim);
+
+  /* The glass (glass/Frost.svelte) shows this photo's pre-blurred twin. */
+  $effect(() => {
+    chrome.frost = override.url || frostSrc(pick);
+    chrome.frostLive = !!override.url;
+  });
 
   /* The photo paints only once it is decoded: no half-loaded progressive
      frame, no flash — it fades in over the graphite. */

@@ -76,10 +76,29 @@ sheet or drawer. The pane (`.mg-pane`) is a fixed sheet of glass under the
 page column that the document scrolls over — drawn once by the root layout,
 never by a page — and everything inside it (sections, tiles, cards, chips,
 inputs, rows) is `glass-soft`: a white 6 % lift with a 12 % hairline and no
-blur of its own. Blur never animates. The map is its own scene: Leaflet fills
-the rectangle unblurred and only the floating chrome is glass.
+blur of its own. The pane itself is not live-blurred any more:
+`glass/Frost.svelte` fills it with the hour's photo pre-blurred
+(`ui/static/hero-*-frost.jpg`, 480 px, a few KB each) on a fixed layer cut to
+the pane by a clip-path, so scrolling never re-blurs anything (iPad scroll
+p95 at 4× throttle went from ~50 ms to ~10 ms). Regenerate a twin whenever a
+hero photo changes (Gaussian radius 12 at 480 px, colour ×1.5, brightness
+×0.8). Blur never animates. The map is its own scene: Leaflet fills the
+rectangle unblurred and only the floating chrome is glass.
 
-The shell is one root layout: a sticky status strip on top, a tab-bar dock
+Home is photo-first, like the panel's lock screen: the date and a thin clock
+top-left, a view dropdown (What needs me · Mandates expiring · Today's crawl
+· Pipeline) and round Search / Quick log buttons top-right, and dead centre a
+greeting, one sentence (`ui/src/lib/suggest.js`, a pure, unit-tested
+function) and one pill that acts on it. The overview (tiles, bars, what
+needs you, Home cards, activity, links) sits in one frosted pane one viewport
+down; the chevron or any scroll reveals it. On Home there is no fixed pane,
+the strip shows only while a crawl runs or a section posts a warning, and the
+dock / rail slide away after 3 s idle (never with reduced motion). Four hero
+tones by the hour: morning < 10, day < 17, dusk < 20, night 20–05.
+
+The shell is one root layout: a sticky status strip on top (the date and
+clock at the left, round glass buttons at the right: the page's own actions,
+Search — "/" too — Quick log, team chat, account), a tab-bar dock
 along the bottom on phones and an iPad held upright (below 1024 px), and a
 left rail from 1024 px. Sections register themselves through
 `ui/src/lib/shell.svelte.js`: `addNav()` adds a top-level section to the
@@ -373,6 +392,16 @@ DATA_DIR=$(mktemp -d) .venv/bin/python tests/dashboard_latency_check.py  # dashb
 The latency check crawls a fake portal (`tests/fake_source.py`, loaded via
 `CRAWL_SOURCES_PLUGIN=tests.fake_source`) — a test hook only, never set it on
 a deploy. `LATENCY_BUDGET_S` (default 1.0) is the p95 it enforces.
+
+The UI has its own checks. Build first (`cd ui && npm run build`); the two
+Playwright scripts boot `webapp.py` themselves on a scratch `DATA_DIR` holding
+a *copy* of `prospects.db` (`--db PATH`; the live one is refused):
+
+```bash
+cd ui && npm test                                  # suggest.js unit tests (node --test, no deps)
+.venv/bin/python tests/ui_clickthrough.py --shots /tmp/shots --label after  # every route, phone + 2 iPads, console errors
+.venv/bin/python tests/ui_perf.py --json /tmp/perf.json   # rAF frame times at 4x CPU throttle; fails if a p95 > 33.4 ms (--no-fail)
+```
 
 ---
 
