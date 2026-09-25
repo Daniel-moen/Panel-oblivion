@@ -155,6 +155,9 @@ job = {
     # Which book(s) the running job is crawling — ["sale"], ["rent"] or both.
     # Surfaced in /api/status so the progress strip can say so.
     "listing_types": ["sale"],
+    # "manual" (the Scrape button), "full" / "sweep" (the auto-crawl loop),
+    # or "rescore". A finished "full"/"sweep" writes its auto-crawl stamp.
+    "kind": "manual",
 }
 job_lock = threading.Lock()
 _stop = threading.Event()
@@ -174,7 +177,17 @@ def _crawl_phase(listing_types) -> str:
 
 
 def _job_finished(phase: str) -> None:
-    """Called once when a crawl job ends, in both crawler modes."""
+    """Called once when a crawl job ends, in both crawler modes: a scheduled
+    job that finished cleanly stamps its auto-crawl finish time."""
+    key = {"full": _AUTO_LAST_FULL, "sweep": _AUTO_LAST_SWEEP}.get(
+        job.get("kind"))
+    if phase != "done" or key is None:
+        return
+    try:
+        with db.connect() as conn:
+            db.set_state(conn, key, datetime.now().isoformat())
+    except Exception as e:                              # noqa: BLE001
+        log(f"auto-crawl: could not record {key}: {type(e).__name__}: {e}")
 
 
 def _run(suburbs, source_names, pages, use_ai, listing_types=("sale",)):
@@ -313,7 +326,7 @@ def _run_in_process(suburbs, source_names, pages, use_ai, listing_types):
 
 
 def _start_job(suburbs, srcs, pages, use_ai=True,
-               listing_types=("sale",)) -> bool:
+               listing_types=("sale",), kind: str = "manual") -> bool:
     """Claim the single job slot and launch a crawl; False if already busy.
 
     Check-and-set under job_lock so the dashboard button and the auto-crawl
@@ -328,7 +341,7 @@ def _start_job(suburbs, srcs, pages, use_ai=True,
             return False
         job.update(running=True, phase="starting", log=[], done=0, total=0,
                    per_source={}, started=datetime.now().isoformat(),
-                   listing_types=list(listing_types))
+                   listing_types=list(listing_types), kind=kind)
     _stop.clear()
     threading.Thread(target=_run,
                      args=(suburbs, srcs, pages, use_ai, listing_types),
@@ -384,7 +397,58 @@ def api_scrape():
 # scheduler shares the same _start_job guard and shows up in the same
 # progress display. On a Mac that sleeps overnight the pass simply fires on
 # wake (the loop checks the calendar, not an interval).
-_auto = {"last_full": None, "last_sweep": None}
+#
+# The stamps live in the database (db.get_state/set_state), not in memory:
+# in memory they reset on every boot, so 60 s after every deploy a sweep
+# fired, and a redeploy during AUTO_CRAWL_HOUR re-ran the nightly pass.
+_AUTO_LAST_FULL_STARTED = "auto_last_full_started"
+_AUTO_LAST_FULL = "auto_last_full"            # finished
+_AUTO_LAST_SWEEP_STARTED = "auto_last_sweep_started"
+_AUTO_LAST_SWEEP = "auto_last_sweep"          # finished
+# A sweep that started but never finished (a deploy killed it, or it failed)
+# is retried, but no sooner than this after it started — otherwise a sweep
+# that fails every time would be relaunched every minute.
+_AUTO_SWEEP_RETRY_S = 30 * 60
+
+
+def _parse_stamp(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _auto_stamps() -> dict:
+    """The four auto-crawl stamps as datetimes (None when never)."""
+    with db.connect() as conn:
+        return {k: _parse_stamp(db.get_state(conn, k)) for k in (
+            _AUTO_LAST_FULL_STARTED, _AUTO_LAST_FULL,
+            _AUTO_LAST_SWEEP_STARTED, _AUTO_LAST_SWEEP)}
+
+
+def _full_due(now: datetime, last_started) -> bool:
+    """The nightly pass is due: it is AUTO_CRAWL_HOUR and the last one
+    started at least AUTO_FULL_MIN_HOURS ago (or never)."""
+    if now.hour != config.AUTO_CRAWL_HOUR:
+        return False
+    return last_started is None or (
+        (now - last_started).total_seconds()
+        >= config.AUTO_FULL_MIN_HOURS * 3600)
+
+
+def _sweep_due(now: datetime, last_sweep, last_full) -> bool:
+    """A freshness sweep is due: sweeps are on and the newer of the last
+    finished sweep / finished full pass (a full pass refreshes everything a
+    sweep would) is at least AUTO_SWEEP_HOURS old, or neither ever finished."""
+    if config.AUTO_SWEEP_HOURS <= 0:
+        return False
+    stamps = [t for t in (last_sweep, last_full) if t is not None]
+    if not stamps:
+        return True
+    return ((now - max(stamps)).total_seconds()
+            >= config.AUTO_SWEEP_HOURS * 3600)
 
 
 def _auto_sources(include_p24: bool) -> list[str]:
@@ -393,7 +457,27 @@ def _auto_sources(include_p24: bool) -> list[str]:
             and (include_p24 or n != "property24")]
 
 
+def _set_stamp(key: str, when: datetime) -> None:
+    with db.connect() as conn:
+        db.set_state(conn, key, when.isoformat())
+
+
+def _log_auto_stamps() -> None:
+    try:
+        st = _auto_stamps()
+    except Exception as e:                              # noqa: BLE001
+        print(f"auto-crawl: could not read stamps: {type(e).__name__}: {e}",
+              flush=True)
+        return
+    fmt = (lambda t: t.isoformat(timespec="seconds") if t else "never")
+    print(f"auto-crawl: last full pass finished {fmt(st[_AUTO_LAST_FULL])}, "
+          f"last sweep {fmt(st[_AUTO_LAST_SWEEP])}", flush=True)
+
+
 def _auto_crawl_loop():
+    if config.AUTO_CRAWL:
+        # One line per boot, so a deploy log shows why nothing started.
+        _log_auto_stamps()
     while True:
         time.sleep(60)
         try:
@@ -401,8 +485,12 @@ def _auto_crawl_loop():
                 continue
             now = datetime.now()
             suburbs = list(config.SUBURBS)
-            if now.hour == config.AUTO_CRAWL_HOUR and \
-                    _auto["last_full"] != now.date():
+            st = _auto_stamps()
+            sweep_started = st[_AUTO_LAST_SWEEP_STARTED]
+            sweep_retry_ok = sweep_started is None or (
+                (now - sweep_started).total_seconds() >= _AUTO_SWEEP_RETRY_S
+                or (st[_AUTO_LAST_SWEEP] or datetime.min) >= sweep_started)
+            if _full_due(now, st[_AUTO_LAST_FULL_STARTED]):
                 # Nightly full pass — Property24 included: overnight is the
                 # right time for its 12-18s pacing. Both books too: the rental
                 # crawl is the same fetches against each portal's to-rent
@@ -413,14 +501,12 @@ def _auto_crawl_loop():
                     else ("sale",)
                 if _start_job(suburbs, _auto_sources(include_p24=True),
                               pages=config.MAX_PAGES_PER_SUBURB,
-                              listing_types=types):
-                    _auto["last_full"] = now.date()
+                              listing_types=types, kind="full"):
+                    _set_stamp(_AUTO_LAST_FULL_STARTED, now)
                     log("auto-crawl: nightly full pass started "
                         f"({'+'.join(types)})")
-            elif config.AUTO_SWEEP_HOURS > 0 and (
-                    _auto["last_sweep"] is None
-                    or (now - _auto["last_sweep"]).total_seconds()
-                    >= config.AUTO_SWEEP_HOURS * 3600):
+            elif sweep_retry_ok and _sweep_due(now, st[_AUTO_LAST_SWEEP],
+                                               st[_AUTO_LAST_FULL]):
                 # Freshness sweep: page 1 of the fast portals only. Keeps
                 # last_seen current, which is what the proof-freshness gate,
                 # the delisting sweep and price history all feed on.
@@ -434,8 +520,8 @@ def _auto_crawl_loop():
                 # — to refresh a timestamp nobody queries. Rentals get their
                 # refresh on the nightly pass instead.
                 if _start_job(suburbs, _auto_sources(include_p24=False),
-                              pages=1):
-                    _auto["last_sweep"] = now
+                              pages=1, kind="sweep"):
+                    _set_stamp(_AUTO_LAST_SWEEP_STARTED, now)
                     log("auto-crawl: freshness sweep started (fast portals, "
                         "page 1)")
         except Exception as e:                          # noqa: BLE001
@@ -496,7 +582,7 @@ def api_rescore():
     # Re-score is for-sale work only, so the status strip should not still be
     # advertising the last crawl's book.
     job.update(running=True, phase="starting", log=[], done=0, total=0,
-               listing_types=["sale"])
+               listing_types=["sale"], kind="rescore")
     threading.Thread(target=rescore, daemon=True).start()
     return jsonify({"ok": True})
 
@@ -516,10 +602,14 @@ def api_status():
     out["crawler"] = "thread" if config.CRAWL_IN_PROCESS else "process"
     out["auto_crawl"] = config.AUTO_CRAWL
     if config.AUTO_CRAWL:
-        out["auto_last_full"] = (str(_auto["last_full"])
-                                 if _auto["last_full"] else None)
-        out["auto_last_sweep"] = (_auto["last_sweep"].isoformat()
-                                  if _auto["last_sweep"] else None)
+        # Finished stamps, persisted (see the auto-crawl section).
+        try:
+            with db.connect() as conn:
+                out["auto_last_full"] = db.get_state(conn, _AUTO_LAST_FULL)
+                out["auto_last_sweep"] = db.get_state(conn, _AUTO_LAST_SWEEP)
+        except sqlite3.Error:
+            out["auto_last_full"] = out["auto_last_sweep"] = None
+        out["auto_full_min_hours"] = config.AUTO_FULL_MIN_HOURS
     return jsonify(out)
 
 

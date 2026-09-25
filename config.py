@@ -476,6 +476,12 @@ VERIFY_MAX_FETCHES = 40
 AUTO_CRAWL = os.environ.get("AUTO_CRAWL") == "1"
 AUTO_CRAWL_HOUR = int(os.environ.get("AUTO_CRAWL_HOUR", "1"))   # local hour
 AUTO_SWEEP_HOURS = float(os.environ.get("AUTO_SWEEP_HOURS", "6"))  # 0 = off
+# The auto-crawl stamps live in the database (app_state), so a redeploy no
+# longer re-fires a crawl: the nightly pass starts only when the last one
+# STARTED at least AUTO_FULL_MIN_HOURS ago (a redeploy during
+# AUTO_CRAWL_HOUR used to start a second one), and a sweep only when the
+# newer of the last finished sweep / full pass is AUTO_SWEEP_HOURS old.
+AUTO_FULL_MIN_HOURS = float(os.environ.get("AUTO_FULL_MIN_HOURS", "20"))
 
 # The nightly pass crawls both books — for-sale and to-rent — so the rental
 # view fills itself on a hosted deploy instead of only ever from the CLI.
