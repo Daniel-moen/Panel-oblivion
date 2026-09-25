@@ -54,24 +54,24 @@
 {/if}
 
 <style>
-  .none { margin: 0; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
+  .none { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .sum { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
-  .sum b { color: var(--mg-i); font-weight: 600; }
+  .sum b { color: var(--mc-ink); font-weight: 600; }
   .strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
-  .pick { flex: none; width: 168px; margin: 0; padding: 6px; border-radius: var(--mg-r-in); }
+  .pick { flex: none; width: 168px; margin: 0; padding: 6px; border-radius: var(--mc-r-md); }
   .shot { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden;
-          border-radius: 10px; background: var(--mg-term); }
+          border-radius: 10px; background: var(--mc-inset); }
   .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .noimg { position: absolute; inset: 0; display: grid; place-items: center;
-           font: 400 10.5px/1 var(--mg-font); color: var(--mg-i3); }
+           font: 400 10.5px/1 var(--mc-font); color: var(--mc-ink3); }
   .heart { position: absolute; right: 5px; bottom: 5px; width: 22px; height: 22px; border-radius: 50%;
-           display: grid; place-items: center; font-size: 11px; color: var(--mg-ok);
+           display: grid; place-items: center; font-size: 11px; color: var(--mc-accent);
            background: rgba(8, 8, 10, 0.72); border: 1px solid rgba(62, 207, 142, 0.35); }
   figcaption { display: flex; flex-direction: column; gap: 2px; padding: 8px 4px 3px; min-width: 0; }
-  figcaption b { font: 500 12px/1.3 var(--mg-font); color: var(--mg-i);
+  figcaption b { font: 500 12px/1.3 var(--mc-font); color: var(--mc-ink);
                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .by { font: 400 11px/1.3 var(--mg-font); color: var(--mg-i3); }
-  figcaption p { margin: 3px 0 0; font: 400 11.5px/1.45 var(--mg-font); color: var(--mg-i2);
+  .by { font: 400 11px/1.3 var(--mc-font); color: var(--mc-ink3); }
+  figcaption p { margin: 3px 0 0; font: 400 11.5px/1.45 var(--mc-font); color: var(--mc-ink2);
                  display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3;
                  -webkit-box-orient: vertical; overflow: hidden; }
 </style>

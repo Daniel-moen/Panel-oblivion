@@ -266,35 +266,35 @@
 {/if}
 
 <style>
-  .loading { color: var(--mg-i3); font-size: 13px; }
+  .loading { color: var(--mc-ink3); font-size: 13px; }
   .ttl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .lay { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-  .mark, .list { border-radius: var(--mg-r-card); padding: 12px 14px 14px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .mark, .list { border-radius: var(--mc-r-md); padding: 12px 14px 14px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
   .save { display: flex; gap: 8px; flex-wrap: wrap; }
   .save .mg-input { flex: 1 1 200px; min-width: 0; }
-  .hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--mg-i3); }
-  .hint.warn { color: var(--mg-warn); }
-  kbd { font: 600 11px/1 var(--mg-mono); padding: 2px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); color: var(--mg-i2); }
+  .hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--mc-ink3); }
+  .hint.warn { color: var(--mc-warn); }
+  kbd { font: 600 11px/1 var(--mc-mono); padding: 2px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); color: var(--mc-ink2); }
   .lh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .lh .sp, .bulk .sp { flex: 1; }
   .rows { display: flex; flex-direction: column; gap: 6px; }
   .r {
     display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px; border-radius: 12px;
-    border: 1px solid var(--mg-line); background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--mc-line); background: rgba(255, 255, 255, 0.03);
   }
-  .r.on { border-color: var(--mg-ok); }
+  .r.on { border-color: var(--mc-accent); }
   .pk { display: grid; place-items: center; width: 36px; height: 40px; cursor: pointer; }
-  .pk input { width: 18px; height: 18px; accent-color: var(--mg-ok); }
-  .info { flex: 1 1 160px; min-width: 0; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: var(--mg-i2); }
-  .info img { width: 64px; height: 36px; object-fit: cover; border-radius: 6px; background: var(--mg-term); flex: none; }
+  .pk input { width: 18px; height: 18px; accent-color: var(--mc-accent); }
+  .info { flex: 1 1 160px; min-width: 0; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: var(--mc-ink2); }
+  .info img { width: 64px; height: 36px; object-fit: cover; border-radius: 6px; background: var(--mc-inset); flex: none; }
   .tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 12px; }
-  .tx b { color: var(--mg-i); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tx b { color: var(--mc-ink); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acts { display: flex; gap: 2px; margin-left: auto; }
   .bulk { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .job { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--mg-line); }
+  .job { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--mc-line); }
   .jh { display: flex; align-items: center; gap: 8px; }
-  .jh b { font-size: 13px; color: var(--mg-i); }
-  .pc { margin-left: auto; font-size: 12.5px; color: var(--mg-i2); }
-  .err { margin: 0; width: 100%; max-height: 100px; overflow: auto; white-space: pre-wrap; font: 11px/1.45 var(--mg-mono); color: var(--mg-crit); }
+  .jh b { font-size: 13px; color: var(--mc-ink); }
+  .pc { margin-left: auto; font-size: 12.5px; color: var(--mc-ink2); }
+  .err { margin: 0; width: 100%; max-height: 100px; overflow: auto; white-space: pre-wrap; font: 11px/1.45 var(--mc-mono); color: var(--mc-crit); }
   @media (max-width: 900px) { .lay { grid-template-columns: minmax(0, 1fr); } }
 </style>

@@ -89,7 +89,9 @@
   .score.wait { color: var(--mc-accent); font-size: 13px; }
   .c-avail, .c-furn { white-space: nowrap; font-size: 13px; }
 
-  @media (max-width: 1000px) {
-    .c-dom, .c-mand, .c-low, .c-avail, .c-furn { display: none; }
-  }
+  /* columns leave as the pane narrows: L·O·W first, then days, then the
+     mandate chips; price and score stay to the last */
+  @media (max-width: 1400px) { .c-low { display: none; } }
+  @media (max-width: 1200px) { .c-dom { display: none; } .title, .meta, .ag { max-width: 34ch; } }
+  @media (max-width: 760px) { .c-mand, .c-avail, .c-furn { display: none; } .title, .meta, .ag { max-width: 24ch; } }
 </style>

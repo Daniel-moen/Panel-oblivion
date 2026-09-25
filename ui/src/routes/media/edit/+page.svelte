@@ -17,6 +17,8 @@
   import Icon from '$lib/components/glass/Icon.svelte';
   import Seg from '$lib/components/glass/Seg.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
+  import { pop, fade } from '$lib/motion.js';
   import { photoUrl } from '$lib/media.js';
   import {
     pe, developedUrl, baseUrl, tileUrl, sourceUV, displayToSourceScale, fullRecipe, MASK_DEFAULTS, isDefault
@@ -349,20 +351,20 @@
 
   <div class="ed">
     <!-- ———————————————————————————————————————————————— the picture ——— -->
-    <div class="view mg-glass">
+    <div class="view mg-panel">
       <div class="pv">
         <Preview {src} {before} {showBefore} busy={ed.saving || removeBusy || !!selecting} {mode}
                  bind:crop={ed.recipe.crop} {cropAspect} {brush} overlay={windowOverlay}
                  onstroke={onStroke} onpoint={onPoint} />
         {#if loupe}
-          <div class="loupe mg-glass-strong">
+          <div class="loupe mg-raised" transition:pop={{ duration: 220, y: 8 }}>
             <div class="lh"><span>Original · 100%</span>
               <button type="button" class="mg-btn ghost icon sm" onclick={() => { loupe = false; loupeAt = null; }} aria-label="Close"><Icon name="close" size={13} /></button></div>
             {#if loupeSrc}<img src={loupeSrc} alt="100% crop of the original" />{:else}<p>Tap the photo to look closer.</p>{/if}
           </div>
         {/if}
-        {#if mode === 'point' && !loupe}<span class="tip mg-chip">Tap the object to select</span>{/if}
-        {#if mode === 'brush'}<span class="tip mg-chip">Paint over what should go</span>{/if}
+        {#if mode === 'point' && !loupe}<span class="tip mg-chip" transition:fade={{ duration: 150 }}>Tap the object to select</span>{/if}
+        {#if mode === 'brush'}<span class="tip mg-chip" transition:fade={{ duration: 150 }}>Paint over what should go</span>{/if}
       </div>
 
       {#if siblings.length > 1}
@@ -377,11 +379,16 @@
     </div>
 
     <!-- ———————————————————————————————————————————————— the panels ——— -->
-    <aside class="side mg-glass">
+    <aside class="side mg-panel">
       <div class="tools mg-noscroll"><Seg options={TOOLS} value={tool} onchange={(v) => (tool = v)} label="Editor tools" /></div>
       <div class="panel">
         {#if !ed.loaded}
-          <div class="ld"><span class="mg-spin"></span></div>
+          <div class="ld" aria-busy="true" aria-label="Loading the edit">
+            <Skeleton h="32px" r="10px" />
+            <Skeleton lines={6} />
+            <Skeleton h="32px" r="10px" delay={120} />
+            <Skeleton lines={4} delay={120} />
+          </div>
         {:else if tool === 'adjust'}
           <AdjustPanel {api} {ed} {disabled} onauto={runAuto} {autoBusy} />
         {:else if tool === 'geometry'}
@@ -408,18 +415,18 @@
   .head { align-items: center; }
   .ttl { min-width: 0; flex: 1 1 200px; display: flex; flex-direction: column; gap: 4px; }
   .ttl .mg-h2 { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sub { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mg-i3); flex-wrap: wrap; }
+  .sub { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mc-ink3); flex-wrap: wrap; }
   .sub .mg-chip { padding: 3px 9px; font-size: 11px; }
-  .st.crit { color: var(--mg-crit); }
-  .rate { display: flex; align-items: center; gap: 0; padding: 0 4px; border-radius: 9999px;
-          background: var(--mg-glass-soft); border: 1px solid var(--mg-line); height: 40px; }
-  .flag, .star { width: 32px; height: 38px; border: 0; background: none; cursor: pointer; color: var(--mg-i3);
+  .st.crit { color: var(--mc-crit); }
+  .rate { display: flex; align-items: center; gap: 0; padding: 0 4px; border-radius: var(--mc-r-md);
+          background: var(--mc-raised); border: 1px solid var(--mc-line); height: 40px; }
+  .flag, .star { width: 32px; height: 38px; border: 0; background: none; cursor: pointer; color: var(--mc-ink3);
                  display: grid; place-items: center; padding: 0; font-size: 15px; }
   .flag:disabled, .star:disabled { cursor: default; opacity: 0.5; }
-  .flag.pk { color: var(--mg-ok); }
-  .flag.rej { color: var(--mg-crit); }
-  .star.on { color: var(--mg-warn); }
-  @media (pointer: coarse) { .flag, .star { width: 40px; } }
+  .flag.pk { color: var(--mc-accent); }
+  .flag.rej { color: var(--mc-crit); }
+  .star.on { color: var(--mc-warn); }
+  @media (pointer: coarse) { .flag, .star { width: 40px; height: 44px; } .rate { height: 46px; } }
 
   .ed {
     display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px;
@@ -428,25 +435,25 @@
   .view { display: flex; flex-direction: column; min-height: 0; padding: 10px; gap: 10px; overflow: hidden; }
   .pv { position: relative; flex: 1; min-height: 0; }
   .side { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-  .tools { flex: none; padding: 10px 10px 6px; overflow-x: auto; border-bottom: 1px solid var(--mg-line); }
+  .tools { flex: none; padding: 10px 10px 6px; overflow-x: auto; border-bottom: 1px solid var(--mc-line); }
   .tools :global(.seg) { max-width: none; }
   .panel { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 20px; display: flex; flex-direction: column; }
-  .ld { display: grid; place-items: center; padding: 40px 0; }
+  .ld { display: flex; flex-direction: column; gap: 14px; padding: 12px 0; }
 
   .strip { flex: none; display: flex; gap: 6px; overflow-x: auto; }
   .th { flex: none; width: 76px; height: 52px; padding: 0; border: 2px solid transparent; border-radius: 9px;
-        overflow: hidden; background: #000; cursor: pointer; opacity: 0.65; transition: opacity 0.15s, border-color 0.15s; }
+        overflow: hidden; background: var(--mc-inset); cursor: pointer; opacity: 0.65; transition: opacity 0.15s, border-color 0.15s; }
   .th:hover { opacity: 1; }
-  .th.on { border-color: var(--mg-ok); opacity: 1; }
+  .th.on { border-color: var(--mc-accent); opacity: 1; }
   .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
   .loupe { position: absolute; right: 10px; bottom: 10px; width: min(320px, calc(100% - 20px));
-           padding: 8px; border-radius: 16px; display: flex; flex-direction: column; gap: 6px; }
-  .lh { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--mg-i2); padding-left: 4px; }
-  .loupe img { width: 100%; border-radius: 10px; display: block; image-rendering: pixelated; }
-  .loupe p { margin: 0; padding: 20px 8px; text-align: center; font-size: 12px; color: var(--mg-i3); }
+           padding: 8px; border-radius: var(--mc-r); display: flex; flex-direction: column; gap: 6px; }
+  .lh { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--mc-ink2); padding-left: 4px; }
+  .loupe img { width: 100%; border-radius: var(--mc-r-sm); display: block; image-rendering: pixelated; }
+  .loupe p { margin: 0; padding: 20px 8px; text-align: center; font-size: 12px; color: var(--mc-ink3); }
   .tip { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); pointer-events: none;
-         background: rgba(14, 14, 18, 0.8); }
+         background: var(--mc-raised); border-color: var(--mc-line2); color: var(--mc-ink); box-shadow: var(--mc-sh-2); }
 
   @media (max-width: 1100px) {
     .ed { grid-template-columns: minmax(0, 1fr) 320px; }
@@ -456,7 +463,10 @@
     .view { height: 58vh; height: 58svh; min-height: 300px; padding: 6px; }
     .side { overflow: visible; }
     .panel { overflow: visible; padding: 6px 14px 20px; }
-    .tools { position: sticky; top: 0; z-index: 2; }
+    /* sticks under the status strip, on the panel's own fill so the controls
+       scrolling beneath it never show through */
+    .tools { position: sticky; top: calc(var(--mc-strip-h) + var(--sat)); z-index: 3; background: var(--mc-surface);
+             border-radius: var(--mc-r) var(--mc-r) 0 0; }
     .head .mg-actions { margin-left: 0; width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; padding-bottom: 2px; }
     .head .mg-actions::-webkit-scrollbar { display: none; }
   }

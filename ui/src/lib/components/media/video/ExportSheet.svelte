@@ -170,19 +170,19 @@
 
 <style>
   section { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 18px; }
-  section + section { border-top: 1px solid var(--mg-line); padding-top: 16px; }
-  h3 { margin: 0; display: flex; align-items: center; gap: 8px; font: 600 14px/1.3 var(--mg-font); color: var(--mg-i); }
+  section + section { border-top: 1px solid var(--mc-line); padding-top: 16px; }
+  h3 { margin: 0; display: flex; align-items: center; gap: 8px; font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); }
   .row { overflow-x: auto; }
   .f { display: flex; flex-direction: column; gap: 5px; }
   .full, .full > select { width: 100%; }
-  .why { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--mg-i3); }
-  .why b { color: var(--mg-i2); font-weight: 600; }
-  .tg { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13px; color: var(--mg-i2); cursor: pointer; }
-  .tg input { width: 18px; height: 18px; accent-color: var(--mg-ok); }
+  .why { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--mc-ink3); }
+  .why b { color: var(--mc-ink2); font-weight: 600; }
+  .tg { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13px; color: var(--mc-ink2); cursor: pointer; }
+  .tg input { width: 18px; height: 18px; accent-color: var(--mc-accent); }
   .btns { display: flex; gap: 8px; flex-wrap: wrap; }
-  .job { border-radius: var(--mg-r-in); padding: 12px 14px; border-top: 0 !important; margin-top: 4px; }
+  .job { border-radius: var(--mc-r-md); padding: 12px 14px; border-top: 0 !important; margin-top: 4px; }
   .jh { display: flex; align-items: center; gap: 8px; }
-  .jh b { font-size: 13px; color: var(--mg-i); }
-  .pc { margin-left: auto; font-size: 12.5px; color: var(--mg-i2); }
-  .err { margin: 0; max-height: 120px; overflow: auto; white-space: pre-wrap; font: 11px/1.45 var(--mg-mono); color: var(--mg-crit); }
+  .jh b { font-size: 13px; color: var(--mc-ink); }
+  .pc { margin-left: auto; font-size: 12.5px; color: var(--mc-ink2); }
+  .err { margin: 0; max-height: 120px; overflow: auto; white-space: pre-wrap; font: 11px/1.45 var(--mc-mono); color: var(--mc-crit); }
 </style>

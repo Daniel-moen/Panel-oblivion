@@ -358,41 +358,41 @@
   .lay { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
   .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .side { position: sticky; top: 16px; }
-  .card { border-radius: var(--mg-r-card); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card { border-radius: var(--mc-r-md); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .hd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .hd .mg-label { margin-right: auto; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .grow { flex: 1; display: flex; flex-direction: column; gap: 6px; }
   .fld { display: flex; flex-direction: column; gap: 5px; }
   .fld .mg-input { width: 100%; }
-  .ta { width: 100%; height: auto; min-height: 84px; padding: 10px 12px; resize: vertical; font: 400 13px/1.5 var(--mg-font); }
-  .hint { margin: 0; font: 400 12px/1.5 var(--mg-font); color: var(--mg-i3); }
-  .err { color: var(--mg-crit); }
-  .lnk { color: var(--mg-ok) !important; text-decoration: underline !important; }
-  .ph { border-radius: 12px; overflow: hidden; background: var(--mg-term); }
+  .ta { width: 100%; height: auto; min-height: 84px; padding: 10px 12px; resize: vertical; font: 400 13px/1.5 var(--mc-font); }
+  .hint { margin: 0; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
+  .err { color: var(--mc-crit); }
+  .lnk { color: var(--mc-accent) !important; text-decoration: underline !important; }
+  .ph { border-radius: 12px; overflow: hidden; background: var(--mc-inset); }
   .ph img { display: block; width: 100%; max-height: 420px; object-fit: contain; }
   .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-  .meta b { font: 600 13px/1.3 var(--mg-font); color: var(--mg-i); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+  .meta b { font: 600 13px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
   .chips .mg-chip { min-height: 36px; cursor: pointer; gap: 6px; }
-  .mg-chip.tw:not(.on) { color: var(--mg-mgr); border-color: rgba(167, 139, 250, 0.35); }
+  .mg-chip.tw:not(.on) { color: var(--mc-mgr); border-color: rgba(167, 139, 250, 0.35); }
   .mg-btn.lg { flex: 1 1 auto; max-width: 360px; }
 
   .res { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
   .ri { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   .rm { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .rm b { font: 600 13px/1.3 var(--mg-font); color: var(--mg-i); }
-  details summary { cursor: pointer; font: 500 12px/1.4 var(--mg-font); color: var(--mg-i2); }
+  .rm b { font: 600 13px/1.3 var(--mc-font); color: var(--mc-ink); }
+  details summary { cursor: pointer; font: 500 12px/1.4 var(--mc-font); color: var(--mc-ink2); }
   .amt { display: flex; align-items: center; gap: 10px; }
-  .amt input { flex: 1; accent-color: var(--mg-ok); height: 28px; }
-  .amt .v { font: 500 12px/1 var(--mg-font); color: var(--mg-i); width: 36px; text-align: right; }
+  .amt input { flex: 1; accent-color: var(--mc-accent); height: 28px; }
+  .amt .v { font: 500 12px/1 var(--mc-font); color: var(--mc-ink); width: 36px; text-align: right; }
   .acts { display: flex; gap: 6px; flex-wrap: wrap; }
 
   .looks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-  .looks li { border: 1px solid var(--mg-line); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .looks li { border: 1px solid var(--mc-line); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
   .looks li.on { border-color: rgba(62, 207, 142, 0.5); background: rgba(62, 207, 142, 0.06); }
   .pick { border: 0; background: none; padding: 2px 4px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px; color: inherit; min-height: 40px; }
-  .pick b { display: inline-flex; align-items: center; gap: 6px; font: 600 13px/1.3 var(--mg-font); color: var(--mg-i); }
+  .pick b { display: inline-flex; align-items: center; gap: 6px; font: 600 13px/1.3 var(--mc-font); color: var(--mc-ink); }
   .exs { display: flex; gap: 4px; }
   .exs img { width: 56px; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 6px; }
   .la { display: flex; gap: 2px; justify-content: flex-end; }

@@ -106,11 +106,11 @@
   section .mg-label { margin-bottom: 8px; }
   ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
   li { display: flex; align-items: center; gap: 2px; padding: 3px 3px 3px 11px; border-radius: 12px; min-height: 40px; }
-  li b { flex: 1; min-width: 0; font: 500 12.5px/1.3 var(--mg-font); color: var(--mg-i);
+  li b { flex: 1; min-width: 0; font: 500 12.5px/1.3 var(--mc-font); color: var(--mc-ink);
          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   li input { flex: 1; min-width: 0; height: 32px; }
   form { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
   form input { flex: 1; min-width: 0; }
-  .dim { margin: 0 0 6px; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
+  .dim { margin: 0 0 6px; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   @media (pointer: coarse) { li .mg-btn.icon { width: 40px; height: 40px; } }
 </style>

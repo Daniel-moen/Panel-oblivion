@@ -1,7 +1,7 @@
 <script>
   /* The Media section, re-homed.
 
-     The photograph, the clock, the status pill and the dock are the app's
+     The status strip, the rail and the dock are the app's
      now — routes/+layout.svelte draws them for every route, and this file
      draws only what is Media's own: the two strips that explain a missing
      drive or a dead backend, the row of eight sub-sections, and the page.
@@ -18,7 +18,7 @@
   import { page } from '$app/state';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { fade } from 'svelte/transition';
+  import { fade } from '$lib/motion.js';
   import { mstate, mtoast, boot, watchJobs } from '$lib/media.svelte.js';
   import { setStatus, clearStatus } from '$lib/shell.svelte.js';
   import MediaToasts from '$lib/components/MediaToasts.svelte';
@@ -52,6 +52,18 @@
       '/media'
     )
   );
+
+  /* Keep the active section in view when the row scrolls (a phone, or a deep
+     link to Settings, which sits past the right edge). */
+  let row = $state(null);
+  $effect(() => {
+    here;
+    const on = row?.querySelector('button.on');
+    if (!on) return;
+    const b = on.getBoundingClientRect(), w = row.getBoundingClientRect();
+    if (b.left < w.left + 16 || b.right > w.right - 16)
+      row.scrollBy({ left: b.left - w.left - (w.width - b.width) / 2, behavior: 'smooth' });
+  });
 
   /* One line describing whatever the backend is doing, for the status pill. */
   const working = $derived.by(() => {
@@ -102,7 +114,7 @@
   </div>
 {/if}
 
-<div class="sections mg-noscroll">
+<div class="sections mg-noscroll" bind:this={row}>
   <Seg options={SECTIONS} value={here} onchange={(v) => goto(v)} label="Media sections" />
 </div>
 
@@ -113,9 +125,17 @@
 <MediaToasts items={mtoast.items} />
 
 <style>
-  .sections { display: flex; margin-bottom: 16px; overflow-x: auto; padding-bottom: 2px; }
-  @media (max-width: 720px) {
-    /* the row keeps one line and scrolls; the pane's gutter stays clear */
-    .sections { margin-left: -2px; margin-right: -2px; }
+  /* The Seg keeps its natural width (never squeezed to the pane, which would
+     clip its last buttons and the highlight inside them); the row scrolls. */
+  .sections { display: flex; margin-bottom: 16px; overflow-x: auto; overscroll-behavior-x: contain; }
+  .sections :global(.seg) { max-width: none; }
+  @media (max-width: 639px) {
+    /* bleed to the screen edge so a scrolled row is not cut at the gutter */
+    .sections { margin-left: -16px; margin-right: -16px; padding: 0 16px; scroll-padding: 0 16px; }
+    .sections::after { content: ''; flex: none; width: 16px; }
+  }
+  @media (min-width: 640px) and (max-width: 1023px) {
+    .sections { margin-left: -24px; margin-right: -24px; padding: 0 24px; }
+    .sections::after { content: ''; flex: none; width: 24px; }
   }
 </style>

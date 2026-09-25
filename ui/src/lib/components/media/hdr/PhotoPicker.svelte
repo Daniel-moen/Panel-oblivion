@@ -62,13 +62,13 @@
 <style>
   .bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
   .s { flex: 1 1 180px; }
-  .err { color: var(--mg-crit); font: 400 13px/1.5 var(--mg-font); }
+  .err { color: var(--mc-crit); font: 400 13px/1.5 var(--mc-font); }
   .grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   .tile {
-    display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--mg-line);
-    border-radius: 12px; background: var(--mg-glass-soft); color: var(--mg-i2); cursor: pointer; text-align: left; min-width: 0;
+    display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--mc-line);
+    border-radius: 12px; background: var(--mc-raised); color: var(--mc-ink2); cursor: pointer; text-align: left; min-width: 0;
   }
-  .tile:hover { border-color: var(--mg-line2); background: var(--mg-glass-hover); }
-  .tile img, .ph { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 9px; display: grid; place-items: center; background: var(--mg-term); }
-  .nm { font: 400 11.5px/1.3 var(--mg-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile:hover { border-color: var(--mc-line2); background: var(--mc-line); }
+  .tile img, .ph { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 9px; display: grid; place-items: center; background: var(--mc-inset); }
+  .nm { font: 400 11.5px/1.3 var(--mc-font); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

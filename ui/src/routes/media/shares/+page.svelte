@@ -177,5 +177,5 @@
 <style>
   .list { display: flex; flex-direction: column; gap: 12px; }
   .filter { overflow-x: auto; margin-bottom: 12px; max-width: 100%; }
-  .none { margin: 8px 2px; font: 400 13px/1.5 var(--mg-font); color: var(--mg-i3); }
+  .none { margin: 8px 2px; font: 400 13px/1.5 var(--mc-font); color: var(--mc-ink3); }
 </style>

@@ -252,40 +252,40 @@
   .sk { display: flex; flex-direction: column; gap: 12px; }
   .head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; min-width: 0; }
   .cover { flex: none; width: 96px; height: 68px; border-radius: 14px; overflow: hidden; display: grid; place-items: center;
-           background: var(--mg-term); color: var(--mg-i3); }
+           background: var(--mc-inset); color: var(--mc-ink3); }
   .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .ttl { min-width: 0; flex: 1; }
   .ttl .mg-h2 { overflow-wrap: anywhere; }
-  .sub { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font: 400 12.5px/1.4 var(--mg-font); color: var(--mg-i3); }
+  .sub { margin: 6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font: 400 12.5px/1.4 var(--mc-font); color: var(--mc-ink3); }
   .sub span { display: inline-flex; align-items: center; gap: 4px; }
   .statusrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-  .stamps { font: 400 12px/1.3 var(--mg-font); color: var(--mg-i3); }
+  .stamps { font: 400 12px/1.3 var(--mc-font); color: var(--mc-ink3); }
 
   .cols { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
   .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   @media (min-width: 980px) { .cols { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); align-items: start; } }
 
   .hd { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  h3 { margin: 0; flex: 1; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mg-font); color: var(--mg-i); }
+  h3 { margin: 0; flex: 1; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); }
   .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   .note { white-space: pre-wrap; }
-  .none { margin: 0; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
-  .more { margin: 8px 0 0; font: 400 12px/1.4 var(--mg-font); color: var(--mg-i3); }
+  .none { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
+  .more { margin: 8px 0 0; font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); }
 
   .thumbs { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
-  figure { position: relative; margin: 0; aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden; background: var(--mg-term);
+  figure { position: relative; margin: 0; aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden; background: var(--mc-inset);
            border: 1px solid transparent; }
   figure.cov { border-color: rgba(62, 207, 142, 0.6); }
   figure a { display: block; width: 100%; height: 100%; }
   figure img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .ph { display: grid; place-items: center; width: 100%; height: 100%; color: var(--mg-i3); }
+  .ph { display: grid; place-items: center; width: 100%; height: 100%; color: var(--mc-ink3); }
   .vid { position: absolute; left: 5px; bottom: 5px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
-         background: rgba(8, 8, 10, 0.72); color: var(--mg-i); }
+         background: rgba(8, 8, 10, 0.72); color: var(--mc-ink); }
   .setc { position: absolute; right: 3px; top: 3px; width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0;
-          display: grid; place-items: center; background: rgba(8, 8, 10, 0.6); color: var(--mg-i2); cursor: pointer;
+          display: grid; place-items: center; background: rgba(8, 8, 10, 0.6); color: var(--mc-ink2); cursor: pointer;
           opacity: 0; transition: opacity 0.18s; }
   figure:hover .setc, .setc:focus-visible, .setc.on { opacity: 1; }
-  .setc.on { color: var(--mg-ok); cursor: default; }
+  .setc.on { color: var(--mc-accent); cursor: default; }
   @media (hover: none) { .setc { opacity: 0.85; } }
 
   .foot { margin-top: 20px; display: flex; justify-content: flex-end; }

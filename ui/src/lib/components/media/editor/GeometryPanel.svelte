@@ -163,7 +163,7 @@
   .row .mg-chip { min-height: 32px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 6px; }
   .chips .mg-chip { min-height: 32px; }
-  .hint { margin: 0 0 6px; font-size: 11.5px; color: var(--mg-i3); line-height: 1.4; }
+  .hint { margin: 0 0 6px; font-size: 11.5px; color: var(--mc-ink3); line-height: 1.4; }
   .flip { display: inline-flex; transform: scaleX(-1); }
   .fill { align-self: flex-start; }
 </style>

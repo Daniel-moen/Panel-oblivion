@@ -48,18 +48,18 @@
 {/if}
 
 <style>
-  .none { margin: 0; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
+  .none { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .sum { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-  .sum b { color: var(--mg-i); font-weight: 600; }
-  .dl { margin: 0 0 10px; font: 400 12px/1.5 var(--mg-font); color: var(--mg-i2); overflow-wrap: anywhere; }
+  .sum b { color: var(--mc-ink); font-weight: 600; }
+  .dl { margin: 0 0 10px; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink2); overflow-wrap: anywhere; }
   .ev { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px;
         max-height: 320px; overflow-y: auto; }
   .ev li { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 10px; padding: 6px 2px;
-           border-bottom: 1px solid var(--mg-line); font: 400 12.5px/1.45 var(--mg-font); color: var(--mg-i2); }
+           border-bottom: 1px solid var(--mc-line); font: 400 12.5px/1.45 var(--mc-font); color: var(--mc-ink2); }
   .ev li:last-child { border-bottom: 0; }
-  .t { color: var(--mg-i3); font-size: 12px; }
+  .t { color: var(--mc-ink3); font-size: 12px; }
   .w { min-width: 0; overflow-wrap: anywhere; }
-  .w b { color: var(--mg-i); font-weight: 500; }
-  .w small { display: block; color: var(--mg-i3); font-size: 11.5px; }
+  .w b { color: var(--mc-ink); font-weight: 500; }
+  .w small { display: block; color: var(--mc-ink3); font-size: 11.5px; }
   @media (max-width: 420px) { .ev li { grid-template-columns: minmax(0, 1fr); gap: 0; } }
 </style>

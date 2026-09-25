@@ -116,19 +116,19 @@
   .addr { display: flex; gap: 8px; }
   .addr .mg-input { flex: 1; min-width: 0; }
 
-  .results { list-style: none; margin: 4px 0 0; padding: 4px; border-radius: var(--mg-r-in);
+  .results { list-style: none; margin: 4px 0 0; padding: 4px; border-radius: var(--mc-r-md);
              max-height: 240px; overflow-y: auto; }
   .results button {
     width: 100%; min-height: 40px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-    padding: 7px 10px; border: 0; border-radius: 10px; background: none; color: var(--mg-i);
+    padding: 7px 10px; border: 0; border-radius: 10px; background: none; color: var(--mc-ink);
     text-align: left; cursor: pointer; font: inherit;
   }
-  .results button:hover { background: var(--mg-glass-hover); }
-  .results b { font: 500 13px/1.3 var(--mg-font); }
-  .results span { font: 400 11.5px/1.3 var(--mg-font); color: var(--mg-i3); }
+  .results button:hover { background: var(--mc-line); }
+  .results b { font: 500 13px/1.3 var(--mc-font); }
+  .results span { font: 400 11.5px/1.3 var(--mc-font); color: var(--mc-ink3); }
 
-  .hint { margin: 2px 0 0; font: 400 11.5px/1.45 var(--mg-font); color: var(--mg-i3); }
-  .pin { display: flex; align-items: center; gap: 6px; color: var(--mg-ok); }
-  .lnk { border: 0; background: none; padding: 4px; color: var(--mg-i3); text-decoration: underline; cursor: pointer; font: inherit; }
+  .hint { margin: 2px 0 0; font: 400 11.5px/1.45 var(--mc-font); color: var(--mc-ink3); }
+  .pin { display: flex; align-items: center; gap: 6px; color: var(--mc-accent); }
+  .lnk { border: 0; background: none; padding: 4px; color: var(--mc-ink3); text-decoration: underline; cursor: pointer; font: inherit; }
 
 </style>

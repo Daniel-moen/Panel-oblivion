@@ -8,6 +8,7 @@
      pick and the card opens the listing itself. Sale picks also offer the
      engine's own view of the property, where the drawer does have it. */
   import Photo from './Photo.svelte';
+  import Icon from './glass/Icon.svelte';
   import { isRent, priceTxt, furnishedTxt } from '$lib/format.js';
 
   let { pick } = $props();
@@ -52,58 +53,71 @@
     </div>
   </a>
 
-  {#if pick.why}<p class="why">{pick.why}</p>{/if}
-
-  {#if !rent && r.listing_key}
-    <a class="engine" href="/prospects?open={encodeURIComponent(r.listing_key)}">
-      Open in the engine →
-    </a>
+  {#if pick.why || (!rent && r.listing_key)}
+    <div class="foot">
+      {#if pick.why}<p class="why">{pick.why}</p>{/if}
+      {#if !rent && r.listing_key}
+        <a class="engine" href="/prospects?open={encodeURIComponent(r.listing_key)}">
+          Open in the engine <Icon name="arrowRight" size={12} />
+        </a>
+      {/if}
+    </div>
   {/if}
 </article>
 
 <style>
-  .pick { display: flex; flex-direction: column; gap: 0.4rem; min-width: 0; }
-
-  .card {
-    display: flex; flex-direction: column; overflow: hidden; color: inherit;
-    background: var(--bg-2); border: 1px solid var(--line);
-    border-radius: var(--r-lg); box-shadow: var(--shadow-1);
-    transition: transform 0.15s ease, box-shadow 0.15s, border-color 0.15s;
+  /* One card: the photo, the price line, and Z's reason on the same plane
+     under a hairline — so a pick reads as one object, not three. */
+  .pick {
+    display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+    background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: 14px;
+    box-shadow: var(--mc-sh-1);
+    transition: border-color var(--mc-t-fast);
   }
-  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-2);
-                border-color: var(--accent-line); color: inherit; }
-  .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .pick:hover { border-color: var(--mc-line2); }
 
-  .ph { position: relative; aspect-ratio: 16 / 10; background: var(--bg-3); }
-  .ph :global(img) { transition: transform 0.35s ease; }
+  .card { display: flex; flex-direction: column; color: inherit; }
+  .card:focus-visible { outline-offset: -2px; }
+
+  .ph { position: relative; aspect-ratio: 16 / 10; background: var(--mc-inset); overflow: hidden; }
+  .ph :global(img) { transition: transform var(--mc-t-slow) var(--mc-ease); }
   .card:hover .ph :global(img) { transform: scale(1.03); }
 
   .fit {
-    position: absolute; top: 0.6rem; right: 0.6rem;
-    display: inline-flex; align-items: center; justify-content: center;
-    min-width: 34px; height: 26px; padding: 0 0.45rem; border-radius: 8px;
-    font-size: 0.82rem; font-weight: 700; font-variant-numeric: tabular-nums;
-    background: var(--overlay); backdrop-filter: blur(4px);
-    box-shadow: 0 1px 3px rgba(16, 24, 40, 0.18);
+    position: absolute; top: 8px; right: 8px;
+    display: inline-grid; place-items: center; min-width: 32px; height: 24px; padding: 0 7px;
+    border-radius: var(--mc-r-sm); background: var(--mc-raised); border: 1px solid var(--mc-line2);
+    font: 600 12px/1 var(--mc-mono); font-variant-numeric: tabular-nums; box-shadow: var(--mc-sh-1);
   }
-  .fit.hi { color: var(--open); }
-  .fit.mid { color: var(--warm-ink); }
-  .fit.lo { color: var(--cold-ink); }
+  .fit.hi { color: var(--mc-accent); }
+  .fit.mid { color: var(--mc-warn); }
+  .fit.lo { color: var(--mc-ink2); }
 
-  .body { display: flex; flex-direction: column; gap: 0.3rem;
-          padding: 0.75rem 0.9rem 0.85rem; flex: 1; }
-  .topline { display: flex; justify-content: space-between; align-items: baseline; gap: 0.7rem; }
-  .cprice { font-size: 1.05rem; }
-  .suburb { font-size: 0.74rem; font-weight: 500; color: var(--ink-3);
+  .body { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; flex: 1; min-width: 0; }
+  .topline { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; min-width: 0; }
+  .cprice { font-size: 16px; }
+  .suburb { font: 500 12px/1.3 var(--mc-font); color: var(--mc-ink3);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  h3 { margin: 0; font-size: 0.84rem; font-weight: 500; line-height: 1.4; color: var(--ink-2);
-       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-       overflow: hidden; }
-  .meta { margin: 0; font-size: 0.74rem; color: var(--ink-3); }
+  h3 { margin: 0; font: 500 13px/1.4 var(--mc-font); color: var(--mc-ink2);
+       display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .meta { margin: 0; font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); }
 
-  .why { margin: 0; padding: 0 0.15rem; font-size: 0.8rem; line-height: 1.45;
-         color: var(--ink-2); }
-  .engine { padding: 0 0.15rem; font-size: 0.74rem; font-weight: 600;
-            color: var(--ink-3); }
-  .engine:hover { color: var(--accent-2); }
+  .foot { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px 12px; border-top: 1px solid var(--mc-line); }
+  .why { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink2); }
+  .engine { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start;
+            font: 600 12px/1.4 var(--mc-font); color: var(--mc-ink3); transition: color var(--mc-t-fast); }
+  .engine:hover { color: var(--mc-accent); }
+
+  /* in a narrow thread (a phone) the card lies on its side: a square photo
+     left, the facts right — five picks fit a screen instead of one */
+  @container (max-width: 520px) {
+    .card { flex-direction: row; }
+    .ph { flex: none; width: 104px; aspect-ratio: auto; min-height: 104px; }
+    .body { padding: 10px 12px; }
+    .topline { flex-direction: column; gap: 2px; }
+    .cprice { font-size: 15px; }
+    .fit { top: 6px; right: auto; left: 6px; min-width: 28px; height: 22px; font-size: 11px; }
+    .foot { padding: 8px 12px 10px; }
+  }
+  @media (pointer: coarse) { .engine { min-height: 32px; } }
 </style>

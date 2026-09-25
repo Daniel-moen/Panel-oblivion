@@ -1,19 +1,21 @@
 <script>
   /* One composer for every contact attempt: pick a channel and outcome with a
-     tap, one line of notes, a follow-up in one click. Used inline on Today,
-     the pipeline and the property page. */
+     tap, one line of notes, a follow-up in one click. Used in the log sheet
+     on Today / the pipeline, and inline on the property and contact pages. */
   import { api } from '$lib/api.js';
   import { toast } from '$lib/state.svelte.js';
   import { label } from '$lib/panel.js';
+  import Icon from '$lib/components/glass/Icon.svelte';
 
   let { gid, contacts = [], channel = 'call', onsaved = () => {}, oncancel = null, compact = false } = $props();
 
-  const CHANNELS = [['call', '📞', 'Call'], ['whatsapp', '💬', 'WhatsApp'], ['sms', '✉️', 'SMS'],
-                    ['email', '📧', 'Email'], ['visit', '🚪', 'Visit'], ['letter', '📮', 'Letter']];
+  const CHANNELS = [['call', 'phone', 'Call'], ['whatsapp', 'message', 'WhatsApp'], ['sms', 'text', 'SMS'],
+                    ['email', 'send', 'Email'], ['visit', 'home', 'Visit'], ['letter', 'inbox', 'Letter']];
   const OUTCOMES = [['no_answer', 'No answer'], ['left_message', 'Left message'], ['spoke', 'Spoke'],
                     ['callback_requested', 'Call back'], ['interested', 'Interested'],
                     ['meeting_set', 'Meeting set'], ['not_interested', 'Not interested']];
   const FOLLOW = [['', 'None'], [1, 'Tomorrow'], [3, '3 days'], [7, 'Next week'], [30, 'Next month']];
+  const GOOD = ['spoke', 'interested', 'meeting_set'];
 
   let ch = $state(channel);
   let outcome = $state('no_answer');
@@ -23,9 +25,17 @@
   let contactId = $state(contacts[0]?.id ?? null);
   let saving = $state(false);
 
+  /* The contact list can change under us (the contact page switches the
+     property being logged about) — never log against a contact that is no
+     longer on offer. */
+  $effect(() => {
+    if (!contacts.some((c) => c.id === contactId)) contactId = contacts[0]?.id ?? null;
+  });
+
   const plus = (d) => new Date(Date.now() + d * 86400000).toISOString().slice(0, 10);
 
   async function save() {
+    if (saving) return;
     saving = true;
     try {
       await api.child.add(gid, 'interactions', {
@@ -41,56 +51,79 @@
   }
 
   function onkey(e) { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') save(); }
+  const tone = (k) => (outcome !== k ? '' : GOOD.includes(k) ? 'ok' : k === 'not_interested' ? 'crit' : 'on');
 </script>
 
-<div class="ql" class:compact onkeydown={onkey} role="form">
-  <div class="row chips">
-    {#each CHANNELS as [k, ico, l] (k)}
-      <button class:on={ch === k} onclick={() => (ch = k)} title={l}><span>{ico}</span>{#if !compact}{l}{/if}</button>
-    {/each}
-    {#if contacts.length > 1}
-      <select bind:value={contactId} class="who">
-        {#each contacts as c (c.id)}<option value={c.id}>{c.name || c.phone}</option>{/each}
-      </select>
-    {/if}
+<div class="ql" class:compact onkeydown={onkey} role="form" aria-label="Log a contact attempt">
+  <div class="grp">
+    <span class="hud">Channel</span>
+    <div class="chips">
+      {#each CHANNELS as [k, ico, l] (k)}
+        <button type="button" class="mg-chip" class:on={ch === k} aria-pressed={ch === k}
+                onclick={() => (ch = k)} title={l} aria-label={l}>
+          <Icon name={ico} size={14} />{#if !compact}{l}{/if}
+        </button>
+      {/each}
+    </div>
   </div>
-  <div class="row chips oc">
-    {#each OUTCOMES as [k, l] (k)}
-      <button class:on={outcome === k} class="o-{k}" onclick={() => (outcome = k)}>{l}</button>
-    {/each}
+
+  {#if contacts.length > 1}
+    <div class="grp">
+      <span class="hud">With</span>
+      <div class="mg-select who">
+        <select bind:value={contactId} aria-label="Who you spoke to">
+          {#each contacts as c (c.id)}<option value={c.id}>{c.name || c.phone}</option>{/each}
+        </select>
+        <span class="ic"><Icon name="chevronDown" size={14} /></span>
+      </div>
+    </div>
+  {/if}
+
+  <div class="grp">
+    <span class="hud">Outcome</span>
+    <div class="chips">
+      {#each OUTCOMES as [k, l] (k)}
+        <button type="button" class="mg-chip {tone(k)}" aria-pressed={outcome === k} onclick={() => (outcome = k)}>{l}</button>
+      {/each}
+    </div>
   </div>
-  <input type="text" placeholder="What was said? (optional)" bind:value={summary} />
-  <div class="row bottom">
-    <span class="fl">Follow up:</span>
+
+  <input class="mg-input" type="text" placeholder="What was said? (optional)" bind:value={summary} aria-label="Summary" />
+
+  <div class="grp">
+    <span class="hud">Follow up</span>
     <div class="chips">
       {#each FOLLOW as [d, l] (l)}
-        <button class:on={follow === d && !customDate} onclick={() => { follow = d; customDate = ''; }}>{l}</button>
+        <button type="button" class="mg-chip" class:on={follow === d && !customDate} aria-pressed={follow === d && !customDate}
+                onclick={() => { follow = d; customDate = ''; }}>{l}</button>
       {/each}
-      <input type="date" bind:value={customDate} onchange={() => (follow = '')} title="Pick a date" />
+      <input class="mg-input date" type="date" bind:value={customDate} onchange={() => (follow = '')}
+             title="Pick a date" aria-label="Follow-up date" class:set={!!customDate} />
     </div>
-    <div class="acts">
-      {#if oncancel}<button class="btn sm" onclick={oncancel}>Cancel</button>{/if}
-      <button class="btn sm primary" onclick={save} disabled={saving}>{saving ? 'Saving…' : 'Log ' + label(ch)}</button>
-    </div>
+  </div>
+
+  <div class="acts">
+    <span class="mg-hint kbd">⌘↵ to save</span>
+    {#if oncancel}<button type="button" class="mg-btn ghost" onclick={oncancel}>Cancel</button>{/if}
+    <button type="button" class="mg-btn primary" onclick={save} disabled={saving}>
+      {#if saving}<span class="mg-spin"></span> Saving…{:else}<Icon name="check" size={15} stroke={2} /> Log {label(ch)}{/if}
+    </button>
   </div>
 </div>
 
 <style>
-  .ql { display: flex; flex-direction: column; gap: 0.55rem; }
-  .row { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
-  .chips { display: flex; gap: 0.3rem; flex-wrap: wrap; }
-  .chips button { background: var(--bg-3); border: 1px solid transparent; color: var(--ink-2); font-size: 0.78rem;
-                  font-weight: 500; padding: 0.3rem 0.65rem; border-radius: 999px; cursor: pointer;
-                  display: inline-flex; gap: 0.3rem; align-items: center; transition: all 0.12s; }
-  .chips button:hover { border-color: var(--line-3); color: var(--ink); }
-  .chips button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .oc button.on.o-spoke, .oc button.on.o-interested, .oc button.on.o-meeting_set { background: var(--open); border-color: var(--open); }
-  .oc button.on.o-not_interested { background: var(--bad); border-color: var(--bad); }
-  .who { margin-left: auto; font-size: 0.78rem; padding: 0.25rem 1.6rem 0.25rem 0.5rem; }
-  input[type='text'] { width: 100%; }
-  .bottom { justify-content: space-between; }
-  .fl { font-size: 0.76rem; color: var(--ink-3); }
-  .bottom input[type='date'] { font-size: 0.74rem; padding: 0.2rem 0.4rem; }
-  .acts { display: flex; gap: 0.4rem; margin-left: auto; }
-  .compact .chips button { padding: 0.25rem 0.5rem; }
+  .ql { display: flex; flex-direction: column; gap: 14px; }
+  .grp { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chips .mg-chip { height: 32px; }
+  .who { width: 100%; max-width: 320px; }
+  .date { width: auto; height: 32px; padding: 0 10px; font-size: 12.5px; color: var(--mc-ink2); border-radius: 9999px; }
+  .date.set { border-color: var(--mc-ok-line); color: var(--mc-accent); }
+  .acts { display: flex; align-items: center; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .kbd { margin-right: auto; }
+  @media (pointer: coarse) {
+    .chips .mg-chip, .date { height: 40px; }
+    .acts .mg-btn { height: 44px; }
+    .kbd { display: none; }
+  }
 </style>

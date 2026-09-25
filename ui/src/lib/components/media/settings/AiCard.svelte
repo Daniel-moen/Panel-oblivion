@@ -202,8 +202,8 @@
 
 <style>
   .hd { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-  .hd b { font: 600 14px/1.2 var(--mg-font); color: var(--mg-i); }
-  .dim { color: var(--mg-i3); font-weight: 400; }
+  .hd b { font: 600 14px/1.2 var(--mc-font); color: var(--mc-ink); }
+  .dim { color: var(--mc-ink3); font-weight: 400; }
   .pane .hint { display: block; margin: 10px 0 0; }
   .btnrow { margin-top: 12px; }
 </style>

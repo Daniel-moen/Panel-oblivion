@@ -53,11 +53,11 @@
 <style>
   .fl { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px;
         grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
-  li { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; border-radius: var(--mg-r-in); min-width: 0; }
+  li { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; border-radius: var(--mc-r-md); min-width: 0; }
   li .mg-dot { margin-top: 5px; flex: none; }
   .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .tx b { font: 500 13px/1.3 var(--mg-font); color: var(--mg-i); }
-  li.off .tx b { color: var(--mg-i2); }
-  .st { flex: none; font: 500 11.5px/1.6 var(--mg-font); color: var(--mg-ok); }
-  li.off .st { color: var(--mg-i3); }
+  .tx b { font: 500 13px/1.3 var(--mc-font); color: var(--mc-ink); }
+  li.off .tx b { color: var(--mc-ink2); }
+  .st { flex: none; font: 500 11.5px/1.6 var(--mc-font); color: var(--mc-accent); }
+  li.off .st { color: var(--mc-ink3); }
 </style>

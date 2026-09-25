@@ -39,6 +39,27 @@ cd ui && npm run dev                    # live dev at :5173, proxies /api and /c
 No server restart after a rebuild — Flask reads the build directory per
 request. `npm run dev` needs `webapp.py` running alongside it for the API.
 
+### Look and feel
+
+The UI speaks the Mission Control panel's design language ("Studio": warm
+graphite planes, hairline borders, Inter for UI and IBM Plex Mono for numbers,
+one green accent, colour reserved for state). It is dark only. The whole
+vocabulary lives in `ui/src/lib/mc.css` — tokens (`--mc-*`, aliased as
+`--mg-*`) and the `.mg-*` classes every route uses (panels, buttons, inputs,
+chips, tables, lists, strips, tiles, dialogs) — plus the shared components in
+`ui/src/lib/components/glass/` (Sheet, Seg, Icon, Empty, StatusStrip, Dock,
+Rail, PrimaryButton) and the Svelte transitions in `ui/src/lib/motion.js`
+(`fade`, `slide`, `pop`, `rise`: transform/opacity only, 150–320 ms, all
+honouring `prefers-reduced-motion`).
+
+The shell is one root layout: a sticky status strip on top, a tab-bar dock
+along the bottom on phones and an iPad held upright (below 1024 px), and a
+left rail from 1024 px. Sections register themselves through
+`ui/src/lib/shell.svelte.js`: `addNav()` adds a top-level section to the
+dock and the rail, `addHomeCard()` mounts a card on the Home overview, and
+`setStatus()` / `setActions()` post a section's status readout and icon
+buttons into the strip.
+
 ### Find me… (AI brief)
 
 `/prospects` carries a **Find me…** field that takes a plain-English brief —

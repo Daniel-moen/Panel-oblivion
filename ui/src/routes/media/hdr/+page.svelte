@@ -15,6 +15,7 @@
   import { me, can } from '$lib/media/hdr.js';
   import Seg from '$lib/components/glass/Seg.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import HdrPanel from '$lib/components/media/hdr/HdrPanel.svelte';
   import LooksPanel from '$lib/components/media/hdr/LooksPanel.svelte';
 
@@ -60,7 +61,10 @@
 {#if mstate.error}
   <Empty icon="alert" title="Media library unavailable" hint={mstate.error} />
 {:else if !mstate.ready}
-  <div class="mg-bar indeterminate"><i></i></div>
+  <div class="ld" aria-busy="true" aria-label="Loading">
+    <div class="mg-panel"><Skeleton h="14px" w="40%" /><Skeleton lines={3} delay={80} /></div>
+    <div class="mg-panel"><Skeleton h="140px" r="12px" delay={140} /></div>
+  </div>
 {:else if tab === 'hdr'}
   <HdrPanel {ids} {features} allowed={!who || can(who, 'media.upload')}
             onlook={(id) => nav({ tab: 'looks', id, ids: null })} />
@@ -68,3 +72,8 @@
   <LooksPanel {photoId} {features} canEdit={!who || can(who, 'media.annotate')}
               onphoto={(id) => nav({ tab: 'looks', id })} />
 {/if}
+
+<style>
+  .ld { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .ld .mg-panel { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+</style>

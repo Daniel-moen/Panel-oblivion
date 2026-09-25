@@ -179,9 +179,9 @@
 
 <style>
   .hd { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-  h3 { margin: 0; flex: 1; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mg-font); color: var(--mg-i); }
-  .note { margin: 0 0 10px; display: flex; gap: 6px; align-items: baseline; font: 400 12px/1.5 var(--mg-font); color: var(--mg-i3); }
-  .note.warn { color: var(--mg-warn); }
+  h3 { margin: 0; flex: 1; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); }
+  .note { margin: 0 0 10px; display: flex; gap: 6px; align-items: baseline; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
+  .note.warn { color: var(--mc-warn); }
   .grid { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin-bottom: 10px; }
   .grid .mg-select { display: block; }
   @media (max-width: 420px) { .grid { grid-template-columns: 1fr; } }
@@ -191,13 +191,13 @@
   .draft { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
   .draft textarea { min-height: 150px; }
   .acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .src { margin-left: auto; font: 400 11.5px/1 var(--mg-font); color: var(--mg-i3); }
+  .src { margin-left: auto; font: 400 11.5px/1 var(--mc-font); color: var(--mc-ink3); }
   h4.mg-label { margin: 16px 0 6px; }
   .hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
   .hist li { padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.03); }
   .meta { display: flex; align-items: center; gap: 8px; }
-  .t { font: 400 11.5px/1 var(--mg-font); color: var(--mg-i3); }
+  .t { font: 400 11.5px/1 var(--mc-font); color: var(--mc-ink3); }
   .sp { flex: 1; }
-  .hist p { margin: 6px 0 0; white-space: pre-wrap; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i2);
+  .hist p { margin: 6px 0 0; white-space: pre-wrap; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink2);
             display: -webkit-box; -webkit-line-clamp: 4; line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 </style>

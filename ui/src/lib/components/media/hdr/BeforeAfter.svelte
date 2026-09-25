@@ -33,8 +33,8 @@
 
 <style>
   .ba {
-    position: relative; overflow: hidden; border-radius: var(--mg-r-in);
-    background: var(--mg-term); touch-action: none; user-select: none; cursor: ew-resize;
+    position: relative; overflow: hidden; border-radius: var(--mc-r-md);
+    background: var(--mc-inset); touch-action: none; user-select: none; cursor: ew-resize;
   }
   img { display: block; width: 100%; height: auto; pointer-events: none; }
   .top { position: absolute; inset: 0; height: 100%; object-fit: contain; }
@@ -42,7 +42,7 @@
   /* labels: "after" is on the left because the result is revealed from the left */
   .lbl {
     position: absolute; top: 8px; padding: 4px 9px; border-radius: 9999px;
-    background: rgba(0, 0, 0, 0.55); color: #fff; font: 500 11px/1 var(--mg-font); pointer-events: none;
+    background: rgba(0, 0, 0, 0.55); color: #fff; font: 500 11px/1 var(--mc-font); pointer-events: none;
   }
   .lbl.l { right: 8px; }
   .lbl.r { left: 8px; }
@@ -52,7 +52,7 @@
   }
   .bar i {
     position: absolute; top: 50%; left: 50%; width: 28px; height: 28px; margin: -14px 0 0 -14px;
-    border-radius: 50%; background: rgba(255, 255, 255, 0.92); box-shadow: var(--mg-sh-2);
+    border-radius: 50%; background: rgba(255, 255, 255, 0.92); box-shadow: var(--mc-sh-1);
   }
   .rng { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; opacity: 0; height: 1px; pointer-events: none; }
   .rng:focus-visible { opacity: 1; height: auto; pointer-events: auto; }

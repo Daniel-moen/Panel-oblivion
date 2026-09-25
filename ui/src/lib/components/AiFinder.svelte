@@ -174,8 +174,9 @@
   .finder { margin-bottom: 14px; padding: 12px 14px; }
   .finder.answered { border-color: var(--mc-ok-line); }
 
-  .ask { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .ask .mg-search { flex: 1 1 260px; }
+  .ask { display: flex; align-items: center; gap: 8px; }
+  .ask .mg-search { flex: 1 1 160px; min-width: 0; }
+  .ask .mg-btn { padding: 0 14px; }
   .spark { color: var(--mc-accent); }
 
   .examples { display: flex; align-items: center; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 2px; }

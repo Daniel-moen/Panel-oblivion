@@ -141,14 +141,14 @@
   .list { display: flex; flex-direction: column; gap: 10px; }
   .row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; min-height: 64px; }
   .cover { flex: none; width: 72px; height: 50px; border-radius: 10px; overflow: hidden;
-           display: grid; place-items: center; background: var(--mg-term); color: var(--mg-i3); }
+           display: grid; place-items: center; background: var(--mc-inset); color: var(--mc-ink3); }
   .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-  .main b { font: 600 14px/1.3 var(--mg-font); color: var(--mg-i); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sub { display: flex; flex-wrap: wrap; gap: 3px 12px; font: 400 12px/1.4 var(--mg-font); color: var(--mg-i3); }
+  .main b { font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub { display: flex; flex-wrap: wrap; gap: 3px 12px; font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); }
   .sub span { display: inline-flex; align-items: center; gap: 4px; }
   .side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-  .n { font: 400 11.5px/1 var(--mg-font); color: var(--mg-i3); }
+  .n { font: 400 11.5px/1 var(--mc-font); color: var(--mc-ink3); }
   @media (max-width: 520px) {
     .row { flex-wrap: wrap; }
     .cover { width: 56px; height: 42px; }

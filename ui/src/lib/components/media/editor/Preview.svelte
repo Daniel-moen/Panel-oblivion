@@ -232,5 +232,5 @@
   .rend .mg-spin { width: 11px; height: 11px; }
   .tag { position: absolute; top: 10px; left: 10px; }
   .big { width: 28px; height: 28px; }
-  .msg { color: var(--mg-i3); font-size: 13px; }
+  .msg { color: var(--mc-ink3); font-size: 13px; }
 </style>

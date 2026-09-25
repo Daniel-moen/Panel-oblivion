@@ -84,7 +84,7 @@
 {:else if loading}
   <div class="list">
     {#each Array(4) as _, i (i)}
-      <Skeleton h="180px" r="var(--mg-r-card)" delay={i * 70} />
+      <Skeleton h="180px" r="var(--mc-r-md)" delay={i * 70} />
     {/each}
   </div>
 {:else if !groups.length}
@@ -141,29 +141,29 @@
   .grp { padding: 14px; }
 
   .gh { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-  .gh b { font: 600 13.5px/1 var(--mg-font); letter-spacing: -0.01em; color: var(--mg-i); }
-  .dim { font: 400 12px/1 var(--mg-font); color: var(--mg-i3); }
+  .gh b { font: 600 13.5px/1 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
+  .dim { font: 400 12px/1 var(--mc-font); color: var(--mc-ink3); }
   .ga { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
 
   /* One row of copies that scrolls sideways: three copies of the same file are
      the same picture, so stacking them down the page would only cost height. */
   .copies { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 
-  .copy { flex: none; width: 160px; margin: 0; padding: 6px; border-radius: var(--mg-r-in); }
+  .copy { flex: none; width: 160px; margin: 0; padding: 6px; border-radius: var(--mc-r-md); }
   .copy.keep { border-color: rgba(62, 207, 142, 0.4); background: rgba(62, 207, 142, 0.08); }
 
   .shot {
     position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden;
-    border-radius: 10px; background: var(--mg-term);
+    border-radius: 10px; background: var(--mc-inset);
   }
   .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .noimg { position: absolute; inset: 0; display: grid; place-items: center;
-           font: 400 10.5px/1 var(--mg-font); color: var(--mg-i3); }
+           font: 400 10.5px/1 var(--mc-font); color: var(--mc-ink3); }
   .mark { position: absolute; left: 5px; bottom: 5px; padding: 3px 8px; font-size: 10.5px;
           background: rgba(6, 40, 26, 0.75); border-color: rgba(62, 207, 142, 0.5); }
 
   figcaption { display: flex; flex-direction: column; gap: 2px; padding: 8px 4px 3px; min-width: 0; }
-  figcaption b { font: 500 12px/1.3 var(--mg-font); color: var(--mg-i);
+  figcaption b { font: 500 12px/1.3 var(--mc-font); color: var(--mc-ink);
                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   @media (max-width: 560px) {
     .grp { padding: 12px; }
@@ -171,6 +171,6 @@
     .ga .mg-btn { height: 40px; width: 100%; }
     .copy { width: 140px; }
   }
-  .path { font: 11px/1.35 var(--mg-mono); color: var(--mg-i3);
+  .path { font: 11px/1.35 var(--mc-mono); color: var(--mc-ink3);
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

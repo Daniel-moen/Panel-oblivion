@@ -97,19 +97,22 @@
   .body { display: flex; flex-direction: column; gap: 10px; }
   .mode { display: flex; gap: 6px; flex-wrap: wrap; }
   .mode .mg-chip { min-height: 34px; }
-  .hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--mg-i3); }
+  @media (pointer: coarse) { .mode .mg-chip, .gp { min-height: 44px; } }
+  .hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--mc-ink3); }
   .groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; }
-  .gp { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 13px; color: var(--mg-i2); }
+  .gp { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 13px; color: var(--mc-ink2); }
   .hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
   .ph { position: relative; padding: 0; border: 2px solid transparent; border-radius: 12px; overflow: hidden;
-        background: #000; cursor: pointer; display: flex; flex-direction: column; }
-  .ph img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; opacity: 0.8; }
-  .ph.on { border-color: var(--mg-ok); }
+        background: var(--mc-raised); cursor: pointer; display: flex; flex-direction: column;
+        transition: border-color var(--mc-t-fast); }
+  .ph:hover { border-color: var(--mc-line2); }
+  .ph img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; opacity: 0.8; background: var(--mc-inset); display: block; }
+  .ph.on { border-color: var(--mc-accent); }
   .ph.on img { opacity: 1; }
   .ck { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; border-radius: 50%;
-        background: rgba(0, 0, 0, 0.55); border: 1.5px solid #fff; display: grid; place-items: center; color: var(--mg-ok-ink); }
-  .ph.on .ck { background: var(--mg-ok); border-color: var(--mg-ok); }
-  .nm { font-size: 10.5px; color: var(--mg-i2); padding: 4px 6px; background: rgba(0, 0, 0, 0.6);
+        background: rgba(0, 0, 0, 0.55); border: 1.5px solid #fff; display: grid; place-items: center; color: var(--mc-accent-ink); }
+  .ph.on .ck { background: var(--mc-accent); border-color: var(--mc-accent); }
+  .nm { font-size: 10.5px; color: var(--mc-ink2); padding: 5px 7px;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
 </style>

@@ -166,49 +166,49 @@
 
 <style>
   .nav { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-  .mon { margin: 0; min-width: 9.5em; text-align: center; font: 600 16px/1.2 var(--mg-font); color: var(--mg-i); }
+  .mon { margin: 0; min-width: 9.5em; text-align: center; font: 600 16px/1.2 var(--mc-font); color: var(--mc-ink); }
 
   .cal { padding: 8px; }
   .wd, .days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
-  .wd span { padding: 4px 6px 8px; font: 500 11px/1 var(--mg-font); color: var(--mg-i3); text-align: left; }
+  .wd span { padding: 4px 6px 8px; font: 500 11px/1 var(--mc-font); color: var(--mc-ink3); text-align: left; }
   .days { gap: 4px; }
   .day { position: relative; min-height: 104px; min-width: 0; padding: 4px; border-radius: 12px;
          background: rgba(255, 255, 255, 0.025); border: 1px solid transparent; display: flex; flex-direction: column; gap: 3px; }
   .day.out { opacity: 0.45; }
   .day.today { border-color: rgba(62, 207, 142, 0.45); }
-  .day.sel { background: var(--mg-glass-hover); border-color: var(--mg-line2); }
+  .day.sel { background: var(--mc-line); border-color: var(--mc-line2); }
   .dh { display: flex; align-items: center; justify-content: space-between; }
-  .num { min-width: 28px; height: 28px; border: 0; border-radius: 9999px; background: none; color: var(--mg-i2);
-         font: 500 12.5px/1 var(--mg-font); cursor: pointer; padding: 0 6px; }
-  .num:hover { background: var(--mg-glass-hover); color: var(--mg-i); }
-  .today .num { background: var(--mg-ok); color: var(--mg-ok-ink); font-weight: 600; }
-  .add { width: 28px; height: 28px; border: 0; border-radius: 50%; background: none; color: var(--mg-i3); cursor: pointer;
+  .num { min-width: 28px; height: 28px; border: 0; border-radius: 9999px; background: none; color: var(--mc-ink2);
+         font: 500 12.5px/1 var(--mc-font); cursor: pointer; padding: 0 6px; }
+  .num:hover { background: var(--mc-line); color: var(--mc-ink); }
+  .today .num { background: var(--mc-accent); color: var(--mc-accent-ink); font-weight: 600; }
+  .add { width: 28px; height: 28px; border: 0; border-radius: 50%; background: none; color: var(--mc-ink3); cursor: pointer;
          display: grid; place-items: center; opacity: 0; transition: opacity 0.15s, background 0.15s; }
   .day:hover .add, .add:focus-visible { opacity: 1; }
-  .add:hover { background: var(--mg-glass-hover); color: var(--mg-i); }
+  .add:hover { background: var(--mc-line); color: var(--mc-ink); }
 
   .evs { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .ev { display: flex; gap: 5px; align-items: baseline; min-width: 0; padding: 4px 6px; border-radius: 7px;
-        font: 500 11.5px/1.25 var(--mg-font); color: var(--mg-i); background: rgba(240, 180, 41, 0.14);
-        border-left: 2px solid var(--mg-warn); }
-  .ev.editing { background: rgba(167, 139, 250, 0.14); border-left-color: var(--mg-mgr); }
-  .ev.posted { background: rgba(62, 207, 142, 0.12); border-left-color: var(--mg-ok); }
+        font: 500 11.5px/1.25 var(--mc-font); color: var(--mc-ink); background: rgba(240, 180, 41, 0.14);
+        border-left: 2px solid var(--mc-warn); }
+  .ev.editing { background: rgba(167, 139, 250, 0.14); border-left-color: var(--mc-mgr); }
+  .ev.posted { background: rgba(62, 207, 142, 0.12); border-left-color: var(--mc-accent); }
   .ev:hover { filter: brightness(1.25); }
-  .ev b { flex: none; font-weight: 600; color: var(--mg-i2); }
+  .ev b { flex: none; font-weight: 600; color: var(--mc-ink2); }
   .ev span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .more { border: 0; background: none; padding: 2px 6px; text-align: left; font: 500 11px/1.2 var(--mg-font); color: var(--mg-i3); cursor: pointer; }
+  .more { border: 0; background: none; padding: 2px 6px; text-align: left; font: 500 11px/1.2 var(--mc-font); color: var(--mc-ink3); cursor: pointer; }
   .dots { display: none; }
 
   .agenda { margin-top: 16px; }
   .ah { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-  .ah h3 { margin: 0; flex: 1; font: 600 15px/1.3 var(--mg-font); color: var(--mg-i); }
+  .ah h3 { margin: 0; flex: 1; font: 600 15px/1.3 var(--mc-font); color: var(--mc-ink); }
   h4.mg-label { margin: 14px 0 6px; }
   .item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 8px; min-height: 52px; }
-  .tm { flex: none; width: 44px; font: 600 13px/1 var(--mg-font); color: var(--mg-i2); }
+  .tm { flex: none; width: 44px; font: 600 13px/1 var(--mc-font); color: var(--mc-ink2); }
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .main b { font: 600 13.5px/1.3 var(--mg-font); color: var(--mg-i); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .main span { font: 400 12px/1.3 var(--mg-font); color: var(--mg-i3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .none { margin: 0; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
+  .main b { font: 600 13.5px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .main span { font: 400 12px/1.3 var(--mc-font); color: var(--mc-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .none { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
 
   /* Desktop: the grid says it all; the agenda only appears for a picked day. */
   @media (min-width: 721px) {
@@ -225,8 +225,8 @@
     .num { min-width: 40px; height: 36px; }
     .add, .evs { display: none; }
     .dots { display: flex; gap: 3px; justify-content: center; border: 0; background: none; padding: 2px; cursor: pointer; }
-    .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--mg-warn); }
-    .dots i.editing { background: var(--mg-mgr); }
-    .dots i.posted { background: var(--mg-ok); }
+    .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--mc-warn); }
+    .dots i.editing { background: var(--mc-mgr); }
+    .dots i.posted { background: var(--mc-accent); }
   }
 </style>

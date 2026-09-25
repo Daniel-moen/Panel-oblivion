@@ -225,11 +225,11 @@
   /* ————————————————————————————————————————————————————————— stage ——— */
   .stage {
     position: relative; isolation: isolate; overflow: hidden;
-    border-radius: 18px; border: 1px solid var(--mg-line);
+    border-radius: 18px; border: 1px solid var(--mc-line);
     min-height: clamp(220px, 34vh, 380px);
     display: flex; flex-direction: column; justify-content: flex-end;
     padding: clamp(14px, 2.4vw, 26px);
-    background: var(--mg-term);
+    background: var(--mc-inset);
   }
   .film { position: absolute; inset: 0; z-index: -2; }
   .film video, .still-img {
@@ -247,11 +247,11 @@
   .caption { max-width: 620px; min-width: 0; }
   .caption .mg-label { color: rgba(255, 255, 255, 0.72); }
   .line {
-    margin: 4px 0 0; font: 600 clamp(19px, 2.6vw, 30px)/1.15 var(--mg-font);
+    margin: 4px 0 0; font: 600 clamp(19px, 2.6vw, 30px)/1.15 var(--mc-font);
     letter-spacing: -0.02em; color: #fff; text-shadow: 0 2px 22px rgba(0, 0, 0, 0.5);
   }
   .now {
-    margin: 7px 0 0; font: 400 12px/1.4 var(--mg-mono); color: rgba(255, 255, 255, 0.72);
+    margin: 7px 0 0; font: 400 12px/1.4 var(--mc-mono); color: rgba(255, 255, 255, 0.72);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
@@ -265,19 +265,19 @@
 
   /* ————————————————————————————————————————————————————————— tiles ——— */
   .tiles { margin-top: 12px; }
-  .tile { border-radius: var(--mg-r-in); padding: 13px 15px; }
-  .tile b { display: block; margin-top: 3px; font: 600 24px/1.1 var(--mg-font);
-            letter-spacing: -0.025em; color: var(--mg-i); }
+  .tile { border-radius: var(--mc-r-md); padding: 13px 15px; }
+  .tile b { display: block; margin-top: 3px; font: 600 24px/1.1 var(--mc-font);
+            letter-spacing: -0.025em; color: var(--mc-ink); }
 
   /* ——————————————————————————————————————————————————————— running ——— */
-  .work { margin-top: 12px; padding: 13px 15px; border-radius: var(--mg-r-in); }
+  .work { margin-top: 12px; padding: 13px 15px; border-radius: var(--mc-r-md); }
   .wh { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; flex-wrap: wrap; }
-  .wh b { font: 600 13.5px/1 var(--mg-font); color: var(--mg-i); }
-  .wh .dim { flex: 1; min-width: 0; font-size: 12.5px; color: var(--mg-i3);
+  .wh b { font: 600 13.5px/1 var(--mc-font); color: var(--mc-ink); }
+  .wh .dim { flex: 1; min-width: 0; font-size: 12.5px; color: var(--mc-ink3);
              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pct { font: 600 12.5px/1 var(--mg-font); color: var(--mg-ok); }
+  .pct { font: 600 12.5px/1 var(--mc-font); color: var(--mc-accent); }
   .dot { position: relative; display: flex; width: 8px; height: 8px; flex: none; }
-  .core, .ring { position: absolute; inset: 0; border-radius: 50%; background: var(--mg-ok); }
+  .core, .ring { position: absolute; inset: 0; border-radius: 50%; background: var(--mc-accent); }
   .ring { opacity: 0.6; }
 
   /* ——————————————————————————————————————————————————————— actions ——— */
@@ -285,11 +285,11 @@
   .act { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
   .act .ic {
     width: 34px; height: 34px; border-radius: 11px; margin-bottom: 8px;
-    display: grid; place-items: center; color: var(--mg-i2);
-    background: rgba(255, 255, 255, 0.07); border: 1px solid var(--mg-line);
+    display: grid; place-items: center; color: var(--mc-ink2);
+    background: rgba(255, 255, 255, 0.07); border: 1px solid var(--mc-line);
   }
-  .act b { font: 600 14px/1.3 var(--mg-font); letter-spacing: -0.01em; color: var(--mg-i); }
-  .act .hint { font: 400 12px/1.45 var(--mg-font); color: var(--mg-i3); }
+  .act b { font: 600 14px/1.3 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
+  .act .hint { font: 400 12px/1.45 var(--mc-font); color: var(--mc-ink3); }
 
   /* ———————————————————————————————————————————————————————— recent ——— */
   .recent { margin-top: 26px; }
@@ -301,17 +301,17 @@
     overflow: hidden; position: relative; background: rgba(255, 255, 255, 0.05);
   }
   .rcard.real { transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.2s; }
-  .rcard.real:hover { transform: translateY(-3px); border-color: var(--mg-line2); }
+  .rcard.real:hover { transform: translateY(-3px); border-color: var(--mc-line2); }
   .rcard img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .noimg { position: absolute; inset: 0; display: grid; place-items: center;
-           font-size: 11.5px; color: var(--mg-i3); }
+           font-size: 11.5px; color: var(--mc-ink3); }
   .cap {
     position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 9px 7px;
-    font: 500 11.5px/1.3 var(--mg-font); color: #fff;
+    font: 500 11.5px/1.3 var(--mc-font); color: #fff;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.85));
   }
-  .none { margin: 0; padding: 22px 0; font-size: 13px; color: var(--mg-i3); }
+  .none { margin: 0; padding: 22px 0; font-size: 13px; color: var(--mc-ink3); }
 
   @media (max-width: 560px) {
     .acts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }

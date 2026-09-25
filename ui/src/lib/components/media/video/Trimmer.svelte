@@ -190,7 +190,7 @@
   .trim { display: flex; flex-direction: column; gap: 10px; outline: none; min-width: 0; }
   .trim:focus-visible { outline: 2px solid rgba(62, 207, 142, 0.5); outline-offset: 4px; border-radius: 14px; }
   .screen {
-    background: var(--mg-term); border-radius: var(--mg-r-in); overflow: hidden;
+    background: var(--mc-inset); border-radius: var(--mc-r-md); overflow: hidden;
     aspect-ratio: 16 / 9; max-height: 46vh; display: grid; place-items: center;
   }
   .compact .screen { max-height: 30vh; }
@@ -203,10 +203,10 @@
   }
   .frames { position: absolute; inset: 0; display: flex; overflow: hidden; border-radius: 10px; }
   .frames img { flex: 1 1 0; min-width: 0; height: 100%; object-fit: cover; pointer-events: none; opacity: 0.85; }
-  .band { position: absolute; bottom: 0; height: 5px; background: var(--mg-mgr); opacity: 0.8; border-radius: 3px; pointer-events: none; }
+  .band { position: absolute; bottom: 0; height: 5px; background: var(--mc-mgr); opacity: 0.8; border-radius: 3px; pointer-events: none; }
   .shade { position: absolute; top: 0; bottom: 0; background: rgba(8, 8, 10, 0.62); pointer-events: none; }
   .sel {
-    position: absolute; top: -2px; bottom: -2px; border: 2px solid var(--mg-ok);
+    position: absolute; top: -2px; bottom: -2px; border: 2px solid var(--mc-accent);
     border-radius: 8px; pointer-events: none; box-sizing: border-box;
   }
   .head {
@@ -218,12 +218,12 @@
     border: 0; background: none; padding: 0; cursor: ew-resize; touch-action: none; z-index: 2;
     display: grid; place-items: center;
   }
-  .h i { width: 10px; height: 100%; border-radius: 5px; background: var(--mg-ok); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
+  .h i { width: 10px; height: 100%; border-radius: 5px; background: var(--mc-accent); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
 
   .bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .bar .sp { flex: 1; }
-  .now { font: 500 13px/1 var(--mg-mono); color: var(--mg-i); min-width: 64px; text-align: center; }
-  .pt b { font: 500 12px/1 var(--mg-mono); color: var(--mg-ok); margin-left: 4px; }
+  .now { font: 500 13px/1 var(--mc-mono); color: var(--mc-ink); min-width: 64px; text-align: center; }
+  .pt b { font: 500 12px/1 var(--mc-mono); color: var(--mc-accent); margin-left: 4px; }
   @media (max-width: 560px) {
     .bar .sp { flex-basis: 100%; height: 0; }
     .strip { height: 48px; }

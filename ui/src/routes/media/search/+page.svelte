@@ -189,7 +189,7 @@
   .big .mg-input { height: 48px; padding-left: 46px; padding-right: 50px; font-size: 15px; }
   .big > .ic { left: 17px; }
   .big > .clear { right: 6px; width: 36px; height: 36px; }
-  .hint { margin: 9px 2px 0; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); text-align: center; }
+  .hint { margin: 9px 2px 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); text-align: center; }
 
   /* ———————————————————————————————————————————————————————— results ——— */
   .rows { display: flex; flex-direction: column; gap: 10px; max-width: 900px; margin: 0 auto; }
@@ -201,40 +201,40 @@
     border-radius: 12px; overflow: hidden; cursor: pointer;
     transition: border-color 0.18s;
   }
-  .th:hover { border-color: var(--mg-line2); }
+  .th:hover { border-color: var(--mc-line2); }
   .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .noimg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--mg-i3); }
+  .noimg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--mc-ink3); }
   .dur {
     position: absolute; right: 4px; bottom: 4px; padding: 1px 4px; border-radius: 5px;
-    background: rgba(0, 0, 0, 0.72); color: #fff; font: 600 10px/1.5 var(--mg-font);
+    background: rgba(0, 0, 0, 0.72); color: #fff; font: 600 10px/1.5 var(--mc-font);
   }
 
   .body { min-width: 0; flex: 1; }
-  h3 { margin: 0; font: 600 13.5px/1.35 var(--mg-font); letter-spacing: -0.01em; }
+  h3 { margin: 0; font: 600 13.5px/1.35 var(--mc-font); letter-spacing: -0.01em; }
   .name {
-    border: 0; background: none; padding: 0; font: inherit; color: var(--mg-i);
+    border: 0; background: none; padding: 0; font: inherit; color: var(--mc-ink);
     text-align: left; overflow-wrap: anywhere; cursor: pointer;
   }
   .name:hover { text-decoration: underline; text-underline-offset: 3px; }
-  .where { margin: 3px 0 8px; font: 400 12px/1.4 var(--mg-font); color: var(--mg-i3); }
+  .where { margin: 3px 0 8px; font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); }
 
   /* ——————————————————————————————————————————— the spoken-word hits ——— */
   .quotes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
   .quotes li {
     display: flex; gap: 9px; align-items: flex-start;
     padding: 7px 10px; border-radius: 11px; background: rgba(255, 255, 255, 0.04);
-    font: 400 12.5px/1.55 var(--mg-font); color: var(--mg-i2);
+    font: 400 12.5px/1.55 var(--mc-font); color: var(--mc-ink2);
   }
   .quotes q { quotes: '“' '”'; overflow-wrap: anywhere; min-width: 0; }
-  .more { color: var(--mg-i3); font-size: 12px; background: none; padding: 2px 2px 0; }
+  .more { color: var(--mc-ink3); font-size: 12px; background: none; padding: 2px 2px 0; }
 
   .tc {
     display: inline-flex; align-items: center; gap: 4px; flex: none; height: 32px;
-    padding: 0 10px; border: 1px solid var(--mg-line); background: var(--mg-glass-soft);
-    color: var(--mg-i2); font: 500 11.5px/1 var(--mg-font); cursor: pointer;
+    padding: 0 10px; border: 1px solid var(--mc-line); background: var(--mc-raised);
+    color: var(--mc-ink2); font: 500 11.5px/1 var(--mc-font); cursor: pointer;
     transition: background 0.18s, border-color 0.18s, color 0.18s;
   }
-  .tc:hover { background: rgba(62, 207, 142, 0.12); border-color: rgba(62, 207, 142, 0.4); color: var(--mg-ok); }
+  .tc:hover { background: rgba(62, 207, 142, 0.12); border-color: rgba(62, 207, 142, 0.4); color: var(--mc-accent); }
   .tc:active { transform: scale(0.97); }
 
   mark {

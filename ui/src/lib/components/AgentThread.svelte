@@ -1,9 +1,15 @@
 <script>
   /* The Agent Z conversation itself — thread plus composer, rendered by the
-     /agent page over the module state in $lib/agent.svelte.js. */
+     /agent page over the module state in $lib/agent.svelte.js.
+
+     It is one panel that fills the height it is given: the thread scrolls
+     inside it and the composer is pinned to its foot. You speak in accent-
+     tinted bubbles on the right; Z answers on the left on the raised plane,
+     under a violet label (violet = the agent, everywhere in the app). */
   import { tick } from 'svelte';
   import { agent, ask, retry } from '$lib/agent.svelte.js';
   import AgentPick from './AgentPick.svelte';
+  import Icon from './glass/Icon.svelte';
 
   const EXAMPLES = [
     'Find me a lock-up-and-go in Blouberg under R1.8m',
@@ -14,7 +20,7 @@
 
   let text = $state('');
   let box = $state(null);        // the composer textarea
-  let tail = $state(null);       // scroll anchor under the last turn
+  let thread = $state(null);     // the scrolling thread
 
   const empty = $derived(agent.turns.length === 0);
   const canSend = $derived(text.trim().length > 1 && !agent.busy);
@@ -30,9 +36,10 @@
   }
 
   /* Newest turn in view — after the question lands and again when the answer
-     does, which is what the length/busy read below tracks. */
+     does, which is what the length/busy read below tracks. The thread is its
+     own scroller, so only it moves; the page stays put. */
   function scrollDown() {
-    tail?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    thread?.scrollTo({ top: thread.scrollHeight, behavior: 'smooth' });
   }
   $effect(() => {
     agent.turns.length;
@@ -65,18 +72,20 @@
   }
 </script>
 
-<div class="wrap">
-  <div class="thread">
+<div class="chat mg-panel">
+  <div class="thread" bind:this={thread} aria-live="polite">
     {#if empty}
-      <div class="hello">
-        <div class="glyph" aria-hidden="true"><span class="mono xl">Z</span></div>
-        <p class="lead">What are we looking for?</p>
-        <p class="sub">Plain words are fine — a budget, an area, the feel of the
+      <div class="hello mg-rise">
+        <span class="mark xl" aria-hidden="true">Z</span>
+        <h2 class="mg-h2">What are we looking for?</h2>
+        <p class="mg-sub">Plain words are fine — a budget, an area, the feel of the
           place. Come back with “cheaper” or “what about Parklands?” and it
           picks up where you left off.</p>
-        <div class="chips">
+        <div class="examples">
           {#each EXAMPLES as ex, i (ex)}
-            <button type="button" class="ex" style:--i={i} onclick={() => send(ex)}>{ex}</button>
+            <button type="button" class="ex mg-rise" style:--i={i + 2} onclick={() => send(ex)}>
+              <Icon name="sparkles" size={13} />{ex}
+            </button>
           {/each}
         </div>
       </div>
@@ -84,55 +93,55 @@
 
     {#each agent.turns as t (t.id)}
       {#if t.role === 'user'}
-        <div class="turn me"><p class="bubble">{t.text}</p></div>
+        <div class="turn me mg-rise"><p class="bubble">{t.text}</p></div>
       {:else}
-        <div class="turn z-turn">
-          <span class="mono sm" aria-hidden="true">Z</span>
-          <div class="said">
-            {#if t.error}
-              <p class="bubble err">{t.text}</p>
-              <button class="btn sm" onclick={retry}>Try again</button>
-            {:else}
-              <p class="bubble">{t.text}</p>
+        <div class="turn z-turn mg-rise">
+          <span class="who"><span class="mark" aria-hidden="true">Z</span>Agent Z</span>
+          {#if t.error}
+            <div class="mg-strip crit err">
+              <span class="ic"><Icon name="alert" size={14} /></span>
+              <span><b>Z could not answer.</b> {t.text}</span>
+              <button type="button" class="mg-btn secondary sm" onclick={retry}>
+                <Icon name="refresh" size={13} /> Try again
+              </button>
+            </div>
+          {:else}
+            <p class="bubble">{t.text}</p>
 
-              {#if t.areas?.length}
-                <div class="areas">
-                  {#each t.areas as a (a.suburb)}
-                    <button type="button" class="area" title={a.why}
-                            onclick={() => send('What about ' + a.suburb + '?')}>
-                      {a.suburb}
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-
-              {#if t.picks?.length}
-                <div class="grid">
-                  {#each t.picks as p, i (p.listing_key)}
-                    <div class="cell" style:--i={i}><AgentPick pick={p} /></div>
-                  {/each}
-                </div>
-              {/if}
-
-              {#if note(t.meta)}<p class="note">{note(t.meta)}</p>{/if}
+            {#if t.areas?.length}
+              <div class="areas">
+                {#each t.areas as a (a.suburb)}
+                  <button type="button" class="mg-chip" title={a.why}
+                          onclick={() => send('What about ' + a.suburb + '?')}>
+                    <Icon name="mapPin" size={12} />{a.suburb}
+                  </button>
+                {/each}
+              </div>
             {/if}
-          </div>
+
+            {#if t.picks?.length}
+              <div class="grid">
+                {#each t.picks as p, i (p.listing_key)}
+                  <div class="cell mg-rise" style:--i={i}><AgentPick pick={p} /></div>
+                {/each}
+              </div>
+            {/if}
+
+            {#if note(t.meta)}<p class="note">{note(t.meta)}</p>{/if}
+          {/if}
         </div>
       {/if}
     {/each}
 
     {#if agent.busy}
-      <div class="turn z-turn">
-        <span class="mono sm pulse" aria-hidden="true">Z</span>
-        <div class="said">
-          <p class="bubble thinking" aria-live="polite">
-            <i></i><i></i><i></i><span class="shimmer">Z is reading the book…</span>
-          </p>
-        </div>
+      <div class="turn z-turn mg-rise">
+        <span class="who"><span class="mark" aria-hidden="true">Z</span>Agent Z</span>
+        <p class="bubble working">
+          <span class="mg-dot mgr"><i class="mg-ping"></i></span>
+          <span>Reading the book…</span>
+        </p>
       </div>
     {/if}
-
-    <div bind:this={tail} class="tail"></div>
   </div>
 
   <div class="composer">
@@ -143,165 +152,114 @@
                            : 'Refine it — cheaper, another suburb, one more bedroom…'}
         aria-label="Message Agent Z"
         oninput={grow} onkeydown={onKey}></textarea>
-      <button class="btn primary send" onclick={() => send()} disabled={!canSend}
+      <button type="button" class="mg-btn accent icon send" onclick={() => send()} disabled={!canSend}
               aria-label="Send">
-        {#if agent.busy}<span class="spin light"></span>{:else}↑{/if}
+        {#if agent.busy}<span class="mg-spin"></span>{:else}<Icon name="send" size={16} />{/if}
       </button>
     </div>
-    <p class="hint">Enter to send · Shift + Enter for a new line</p>
+    <p class="mg-hint hint">Enter to send · Shift + Enter for a new line</p>
   </div>
 </div>
 
 <style>
-  .wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
-  /* ——— the Z mark: one accent gradient, used at three sizes ——— */
-  .mono {
-    flex: none; display: inline-flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px; border-radius: 9px;
-    background: linear-gradient(140deg, var(--accent) 0%, var(--accent-2) 100%);
-    color: #fff; font-weight: 800; font-size: 0.86rem; letter-spacing: -0.02em;
-    box-shadow: 0 1px 6px rgba(37, 99, 235, 0.28);
+  /* ——— the Z mark: violet, the agent's colour ——— */
+  .mark {
+    flex: none; display: inline-grid; place-items: center;
+    width: 18px; height: 18px; border-radius: 6px;
+    background: var(--mc-mgr-soft); border: 1px solid var(--mc-mgr-line); color: var(--mc-mgr);
+    font: 700 10.5px/1 var(--mc-font);
   }
-  .mono.xl { width: 56px; height: 56px; border-radius: 18px; font-size: 1.7rem;
-             background: linear-gradient(140deg, var(--accent) 0%, var(--accent-2) 55%, var(--accent) 100%);
-             background-size: 220% 220%;
-             animation: drift 9s ease-in-out infinite;
-             box-shadow: 0 8px 24px rgba(37, 99, 235, 0.32); }
-  .mono.pulse { animation: breathe 1.6s ease-in-out infinite; }
-  @keyframes breathe { 50% { opacity: 0.55; } }
-  @keyframes drift { 50% { background-position: 100% 50%; } }
+  .mark.xl { width: 48px; height: 48px; border-radius: var(--mc-r-md); font-size: 20px; margin-bottom: 16px; }
 
   /* ——— thread ——— */
-  .thread { flex: 1; display: flex; flex-direction: column; gap: 1.5rem;
-            padding-bottom: 1.2rem; }
-  .tail { height: 1px; }
+  .thread {
+    flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: 20px; padding: 20px 16px 16px;
+  }
 
-  .turn { display: flex; gap: 0.7rem;
-          animation: turn-in 0.34s cubic-bezier(0.22, 0.68, 0.3, 1) both; }
-  .turn.me { justify-content: flex-end; }
-  .said { min-width: 0; flex: 1; display: flex; flex-direction: column;
-          align-items: flex-start; gap: 0.75rem; }
-  @keyframes turn-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .turn { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .turn.me { align-items: flex-end; }
+  .z-turn { align-items: flex-start; container-type: inline-size; }
 
-  .bubble { margin: 0; font-size: 0.92rem; line-height: 1.55; color: var(--ink); }
+  .who { display: inline-flex; align-items: center; gap: 7px;
+         font: 600 11px/1.4 var(--mc-font); letter-spacing: 0.05em; text-transform: uppercase; color: var(--mc-mgr); }
+
+  .bubble {
+    margin: 0; max-width: min(82%, 620px); padding: 10px 14px;
+    font: 400 14px/1.55 var(--mc-font); color: var(--mc-ink); white-space: pre-wrap; overflow-wrap: anywhere;
+  }
   .me .bubble {
-    max-width: min(74%, 620px); padding: 0.6rem 0.95rem;
-    border-radius: 16px 16px 4px 16px; white-space: pre-wrap;
-    background: var(--accent-soft); color: var(--accent-ink);
-    border: 1px solid var(--accent-line);
+    background: var(--mc-ok-soft); border: 1px solid var(--mc-ok-line);
+    border-radius: var(--mc-r) var(--mc-r) 4px var(--mc-r);
   }
-  .z-turn .bubble { padding-top: 0.25rem; }
-  .bubble.err { color: var(--bad); }
-
-  .thinking { display: inline-flex; align-items: center; gap: 0.3rem;
-              color: var(--ink-3); font-size: 0.85rem; }
-  .thinking i { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-3);
-                animation: blink 1.2s infinite; }
-  .thinking i:nth-child(2) { animation-delay: 0.18s; }
-  .thinking i:nth-child(3) { animation-delay: 0.36s; }
-  .thinking span { margin-left: 0.4rem; }
-  @keyframes blink { 0%, 60%, 100% { opacity: 0.25; } 30% { opacity: 1; } }
-
-  /* a slow light runs left to right across the line while Z works */
-  .shimmer {
-    background: linear-gradient(100deg,
-      var(--ink-3) 0%, var(--ink-3) 36%, var(--accent-2) 50%, var(--ink-3) 64%, var(--ink-3) 100%);
-    background-size: 280% 100%;
-    -webkit-background-clip: text; background-clip: text;
-    color: transparent;
-    animation: sheen 2.4s linear infinite;
+  .z-turn .bubble {
+    background: var(--mc-raised); border: 1px solid var(--mc-line);
+    border-radius: 4px var(--mc-r) var(--mc-r) var(--mc-r);
   }
-  @keyframes sheen { from { background-position: 120% 0; } to { background-position: -120% 0; } }
 
-  .areas { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-  .area { background: var(--bg-3); border: 1px solid var(--line-2); color: var(--ink-2);
-          border-radius: 999px; padding: 0.2rem 0.7rem;
-          font: 600 0.76rem/1.4 var(--font-ui);
-          transition: color 0.15s, border-color 0.15s, background 0.15s; }
-  .area:hover { color: var(--accent-2); border-color: var(--accent-line);
-                background: var(--accent-soft); }
+  .working { display: inline-flex; align-items: center; gap: 10px; color: var(--mc-ink2); }
+  .working span:last-child { font: 400 12.5px/1.4 var(--mc-mono); }
 
-  .grid { width: 100%; display: grid; gap: 1rem;
-          grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
-  /* the picks land one after another rather than all at once */
-  .cell { min-width: 0;
-          animation: cell-in 0.42s cubic-bezier(0.22, 0.68, 0.3, 1) both;
-          animation-delay: calc(var(--i, 0) * 55ms); }
-  @keyframes cell-in { from { opacity: 0; transform: translateY(12px) scale(0.985); }
-                       to { opacity: 1; transform: none; } }
+  .err { margin: 0; width: 100%; max-width: 620px; align-items: center; flex-wrap: wrap; }
+  .err > span:nth-child(2) { flex: 1 1 200px; min-width: 0; }
 
-  .note { margin: 0; font-size: 0.73rem; color: var(--ink-3); }
+  .areas { display: flex; flex-wrap: wrap; gap: 6px; }
+  .areas .mg-chip { color: var(--mc-ink2); }
+  .areas .mg-chip:hover { border-color: var(--mc-mgr-line); color: var(--mc-mgr); }
+
+  .grid { width: 100%; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .cell { min-width: 0; }
+  @container (max-width: 520px) { .grid { grid-template-columns: 1fr; gap: 8px; } }
+
+  .note { margin: 0; font: 400 11.5px/1.5 var(--mc-mono); color: var(--mc-ink3); }
 
   /* ——— empty state ——— */
-  .hello { padding: 2.5rem 0.2rem 1rem; animation: turn-in 0.4s ease both; }
-  .glyph { position: relative; width: max-content; margin-bottom: 1.1rem; }
-  /* soft ambient light behind the mark */
-  .glyph::before {
-    content: ''; position: absolute; inset: -28px; border-radius: 50%;
-    background: radial-gradient(closest-side, var(--accent) 0%, transparent 72%);
-    opacity: 0.22; filter: blur(14px); z-index: 0;
-    animation: halo 5.5s ease-in-out infinite;
+  .hello { margin: auto 0; padding: 12px 4px; display: flex; flex-direction: column; align-items: flex-start; }
+  .hello .mg-sub { margin-top: 6px; max-width: 54ch; }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+  .ex {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px 14px;
+    background: var(--mc-raised); border: 1px solid var(--mc-line); border-radius: var(--mc-r-md);
+    color: var(--mc-ink2); font: 500 13px/1.4 var(--mc-font); text-align: left; cursor: pointer;
+    transition: border-color var(--mc-t-fast), color var(--mc-t-fast);
   }
-  .glyph .mono { position: relative; z-index: 1; }
-  @keyframes halo { 0%, 100% { opacity: 0.16; transform: scale(0.96); }
-                    50% { opacity: 0.3; transform: scale(1.06); } }
+  .ex :global(svg) { flex: none; color: var(--mc-mgr); }
+  .ex:hover { border-color: var(--mc-line2); color: var(--mc-ink); }
 
-  .lead { margin: 0; font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }
-  .sub { margin: 0.4rem 0 1.2rem; font-size: 0.9rem; color: var(--ink-2);
-         max-width: 54ch; line-height: 1.6; }
-  .chips { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-  .ex { background: var(--bg-2); border: 1px solid var(--line-2); color: var(--ink-2);
-        border-radius: 999px; padding: 0.4rem 0.9rem; text-align: left;
-        font: 500 0.82rem/1.4 var(--font-ui); box-shadow: var(--shadow-1);
-        animation: turn-in 0.4s ease both; animation-delay: calc(140ms + var(--i, 0) * 60ms);
-        transition: color 0.15s, border-color 0.15s, background 0.15s,
-                    transform 0.15s, box-shadow 0.15s; }
-  .ex:hover { color: var(--accent-2); border-color: var(--accent-line);
-              background: var(--accent-soft); transform: translateY(-2px);
-              box-shadow: var(--shadow-2); }
-
-  /* ——— composer ——— */
-  .composer { position: sticky; bottom: 0; z-index: 5; padding: 0.7rem 0 1rem;
-              background: linear-gradient(180deg, transparent, var(--bg) 26%); }
-
-  .field { display: flex; align-items: flex-end; gap: 0.5rem;
-           background: color-mix(in srgb, var(--bg-2) 82%, transparent);
-           backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-           border: 1px solid var(--line-2);
-           border-radius: var(--r-lg); padding: 0.45rem 0.45rem 0.45rem 0.85rem;
-           box-shadow: var(--shadow-1);
-           transition: border-color 0.18s, box-shadow 0.18s, background 0.18s; }
-  .field:hover { border-color: var(--line-3); }
-  .field:focus-within { border-color: var(--accent); background: var(--bg-2);
-                        box-shadow: 0 0 0 4px var(--accent-soft),
-                                    0 6px 20px rgba(37, 99, 235, 0.16); }
+  /* ——— composer: pinned to the foot of the panel ——— */
+  .composer { flex: none; padding: 12px; border-top: 1px solid var(--mc-line); background: var(--mc-surface); }
+  .field {
+    display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 14px;
+    background: var(--mc-inset); border: 1px solid var(--mc-line); border-radius: 14px;
+    transition: border-color var(--mc-t-fast), box-shadow var(--mc-t-fast);
+  }
+  .field:hover { border-color: var(--mc-line2); }
+  .field:focus-within { border-color: rgba(62, 207, 142, 0.6); box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.18); }
   textarea {
-    flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: none;
-    color: var(--ink); font: 400 0.92rem/1.5 var(--font-ui);
-    padding: 0.35rem 0; max-height: 160px;
+    flex: 1; min-width: 0; resize: none; border: 0; background: none;
+    color: var(--mc-ink); font: 400 14px/1.5 var(--mc-font);
+    padding: 7px 0; max-height: 160px;
   }
-  textarea::placeholder { color: var(--ink-3); }
-  .btn.send { width: 38px; height: 38px; padding: 0; flex: none; border-radius: 10px;
-              font-size: 1.05rem;
-              background: linear-gradient(140deg, var(--accent) 0%, var(--accent-2) 100%);
-              border-color: transparent;
-              transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s; }
-  .btn.send:not(:disabled):hover { transform: translateY(-1px);
-                                   box-shadow: 0 4px 14px rgba(37, 99, 235, 0.38); }
-  .spin.light { border-color: rgba(255, 255, 255, 0.35); border-top-color: #fff; }
-  .hint { margin: 0.45rem 0 0; text-align: center; font-size: 0.72rem; color: var(--ink-3); }
+  /* the field draws the focus ring; the textarea's own would be a second one */
+  textarea:focus, textarea:focus-visible { outline: none; }
+  textarea::placeholder { color: var(--mc-ink3); }
+  /* a long placeholder stays one line (ellipsis) instead of wrapping under the fold */
+  textarea:placeholder-shown { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .send { width: 36px; height: 36px; border-radius: 10px; }
+  .hint { margin-top: 8px; text-align: center; font-size: 11.5px; }
 
-  @media (max-width: 640px) {
-    .me .bubble { max-width: 88%; }
-    .grid { grid-template-columns: 1fr; }
+  @media (pointer: coarse) {
+    .send { width: 44px; height: 44px; }
+    .ex { min-height: 44px; }
+    .areas .mg-chip { height: 36px; }
+    .hint { display: none; }
   }
-
-  @media (prefers-reduced-motion: reduce) {
-    .turn, .cell, .hello, .ex { animation: none !important; }
-    .mono.xl, .mono.pulse, .glyph::before, .shimmer, .thinking i { animation: none !important; }
-    .shimmer { color: var(--ink-3); background: none; -webkit-background-clip: border-box;
-               background-clip: border-box; }
-    .ex:hover, .btn.send:not(:disabled):hover { transform: none; }
+  @media (max-width: 639px) {
+    .thread { padding: 16px 12px 12px; gap: 16px; }
+    .bubble { max-width: 88%; }
+    .z-turn .bubble { max-width: 100%; }
+    .composer { padding: 8px; }
   }
 </style>

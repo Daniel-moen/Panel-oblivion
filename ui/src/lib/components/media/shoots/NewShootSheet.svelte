@@ -87,5 +87,5 @@
 <style>
   .f { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; }
   .mg-select { display: block; }
-  .err { margin: 12px 0 0; font: 400 12.5px/1.45 var(--mg-font); color: var(--mg-crit); }
+  .err { margin: 12px 0 0; font: 400 12.5px/1.45 var(--mc-font); color: var(--mc-crit); }
 </style>

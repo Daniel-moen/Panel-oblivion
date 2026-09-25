@@ -107,17 +107,17 @@
 <style>
   .wrap { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
   .wrap > .mg-btn { align-self: flex-start; }
-  .hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--mg-i3); }
+  .hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--mc-ink3); }
   .res { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .tg { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--mg-i2); min-height: 32px; }
+  .tg { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--mc-ink2); min-height: 32px; }
   .cands { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
   .cand {
     position: relative; display: flex; flex-direction: column; gap: 4px; padding: 6px; text-align: left;
-    border-radius: var(--mg-r-in); cursor: pointer; color: inherit; font: inherit;
+    border-radius: var(--mc-r-md); cursor: pointer; color: inherit; font: inherit;
   }
   .cand:disabled { opacity: 0.5; cursor: default; }
   .cand img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 8px; background: #000; }
-  .nm { font-size: 11.5px; color: var(--mg-i2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta { font-size: 11px; color: var(--mg-i3); }
+  .nm { font-size: 11.5px; color: var(--mc-ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meta { font-size: 11px; color: var(--mc-ink3); }
   .sp { position: absolute; top: 12px; right: 12px; }
 </style>

@@ -4,10 +4,11 @@
 import { api } from './api.js';
 import { toast } from './state.svelte.js';
 
-export const leads = $state({ today: null, meta: null });
+export const leads = $state({ today: null, meta: null, failed: false });
 
 export async function loadToday() {
-  try { leads.today = await api.panelToday(); } catch { /* transient */ }
+  try { leads.today = await api.panelToday(); leads.failed = false; }
+  catch { leads.failed = !leads.today; /* transient once we have a payload */ }
   if (!leads.meta) { try { leads.meta = await api.panelMeta(); } catch { /* ignore */ } }
 }
 

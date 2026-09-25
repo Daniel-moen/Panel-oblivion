@@ -1,9 +1,18 @@
 <script>
+  /* Today — what lead management needs from you right now.
+
+     Left: the work, in order of urgency (overdue → today → ready to call →
+     gone quiet → coming up), every row actionable in place. Right: what is
+     worth knowing (mandates expiring, hot prospects not tracked yet, recent
+     wins, what the engine noticed). One column until there is room for two. */
   import { onMount } from 'svelte';
   import { api } from '$lib/api.js';
   import { app, toast } from '$lib/state.svelte.js';
   import { leads, loadToday } from '$lib/leads.svelte.js';
   import LeadRow from '$lib/components/LeadRow.svelte';
+  import Icon from '$lib/components/glass/Icon.svelte';
+  import Empty from '$lib/components/glass/Empty.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import { ago, shortDate, MANDATE_LABEL } from '$lib/panel.js';
   import { fmtM } from '$lib/format.js';
 
@@ -11,126 +20,189 @@
   const t = $derived(leads.today);
   const hour = new Date().getHours();
   const hello = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const date = new Date().toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const clear = $derived(t && !t.overdue.length && !t.due_today.length && !t.expiring.length && !t.stale.length && !t.ready.length);
+  const followUps = $derived(t ? t.overdue.length + t.due_today.length : 0);
+  const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 
+  let tracking = $state(null);
+  let retrying = $state(false);
   async function trackHot(h) {
-    try { await api.track(h.group_id, { stage: 'researching' }); app.tracked[h.group_id] = 'researching';
-          toast('Tracking — find the owner next', 'ok'); await loadToday(); }
-    catch (e) { toast(e.message, 'error'); }
+    tracking = h.group_id;
+    try {
+      await api.track(h.group_id, { stage: 'researching' }); app.tracked[h.group_id] = 'researching';
+      toast('Tracking — find the owner next', 'ok'); await loadToday();
+    } catch (e) { toast(e.message, 'error'); }
+    finally { tracking = null; }
   }
+  async function retry() { retrying = true; await loadToday(); retrying = false; }
 </script>
 
 <svelte:head><title>Today — Leads</title></svelte:head>
 
-{#if !t}
-  <p class="dim">Loading your day…</p>
+{#if !t && leads.failed}
+  <div class="mg-strip crit">
+    <span class="ic"><Icon name="alert" size={15} /></span>
+    <span><b>Couldn't load your day</b> — lead management isn't answering.</span>
+  </div>
+  <Empty icon="clock" title="Today is unavailable" hint="The follow-ups, ready-to-call list and mandates will show here once the server answers.">
+    <button type="button" class="mg-btn secondary" onclick={retry} disabled={retrying}>
+      {#if retrying}<span class="mg-spin"></span>{:else}<Icon name="refresh" size={15} />{/if} Try again
+    </button>
+  </Empty>
+{:else if !t}
+  <div class="mg-row hd">
+    <div class="titles"><Skeleton h="11px" w="120px" /><Skeleton h="26px" w="220px" /><Skeleton h="13px" w="320px" /></div>
+  </div>
+  <div class="cols">
+    <div class="col">
+      {#each Array(2) as _, s (s)}
+        <section class="mg-section">
+          <div class="head"><Skeleton h="13px" w="110px" /></div>
+          <div class="mg-list">
+            {#each Array(3) as _, i (i)}
+              <div class="skrow"><Skeleton h="52px" w="52px" r="10px" delay={i * 60} />
+                <span class="sk"><Skeleton h="14px" w="55%" delay={i * 60} /><Skeleton h="11px" w="35%" delay={i * 60 + 40} /></span></div>
+            {/each}
+          </div>
+        </section>
+      {/each}
+    </div>
+  </div>
 {:else}
-  <header class="hd">
-    <div>
-      <h1>{hello}.</h1>
-      <p class="sub">
-        {#if clear}Nothing is waiting on you. {t.counts.active} active lead{t.counts.active === 1 ? '' : 's'}, {t.counts.interactions_7d} contact{t.counts.interactions_7d === 1 ? '' : 's'} this week.
-        {:else}{t.overdue.length + t.due_today.length} follow-up{t.overdue.length + t.due_today.length === 1 ? '' : 's'} · {t.ready.length} ready to call · {t.stale.length} gone quiet · {t.expiring.length} expiring · {t.counts.interactions_7d} contacts this week{/if}
+  <div class="mg-row hd">
+    <div class="titles">
+      <span class="hud">{date}</span>
+      <h1 class="mg-h1">{hello}.</h1>
+      <p class="mg-sub">
+        {#if clear}Nothing is waiting on you. {plural(t.counts.active, 'active lead')}, {plural(t.counts.interactions_7d, 'contact')} this week.
+        {:else}{plural(followUps, 'follow-up')} · {t.ready.length} ready to call · {t.stale.length} gone quiet · {t.expiring.length} expiring{/if}
       </p>
     </div>
-    <div class="kp">
-      <div><b>{t.counts.active}</b><span>active</span></div>
-      <div><b>{t.counts.tracked}</b><span>tracked</span></div>
-      <div><b>{t.counts.interactions_7d}</b><span>contacts / 7d</span></div>
+    <div class="mg-actions kp">
+      <span class="mg-stat pill"><span class="v">{t.counts.active}</span><span class="k">active</span></span>
+      <span class="mg-stat pill"><span class="v">{t.counts.tracked}</span><span class="k">tracked</span></span>
+      <span class="mg-stat pill"><span class="v">{t.counts.interactions_7d}</span><span class="k">contacts / 7d</span></span>
     </div>
-  </header>
+  </div>
 
   <div class="cols">
-    <div class="col main">
+    <div class="col">
       {#if t.overdue.length}
-        <section class="panel">
-          <h2 class="bad">Overdue <span>{t.overdue.length}</span></h2>
-          {#each t.overdue as k (k.id)}<LeadRow p={k.property} task={k} tone="late" reason="due {ago(k.due_at)}" />{/each}
+        <section class="mg-section mg-rise" style:--i={0}>
+          <div class="head"><span class="mg-dot crit"></span><h2 class="crit">Overdue</h2><span class="mg-count">{t.overdue.length}</span></div>
+          <div class="mg-list">
+            {#each t.overdue as k (k.id)}<LeadRow p={k.property} task={k} tone="late" reason="due {ago(k.due_at)}" />{/each}
+          </div>
         </section>
       {/if}
 
-      <section class="panel">
-        <h2>Today <span>{t.due_today.length}</span></h2>
-        {#if !t.due_today.length}<p class="empty">No follow-ups due today{t.overdue.length ? ' — clear the overdue ones above' : ''}.</p>{/if}
-        {#each t.due_today as k (k.id)}<LeadRow p={k.property} task={k} />{/each}
+      <section class="mg-section mg-rise" style:--i={1}>
+        <div class="head"><span class="mg-dot" class:warn={t.due_today.length}></span><h2>Today</h2><span class="mg-count">{t.due_today.length}</span></div>
+        {#if !t.due_today.length}
+          <p class="note"><Icon name="check" size={14} /> No follow-ups due today{t.overdue.length ? ' — clear the overdue ones above' : ''}.</p>
+        {:else}
+          <div class="mg-list">
+            {#each t.due_today as k (k.id)}<LeadRow p={k.property} task={k} />{/each}
+          </div>
+        {/if}
       </section>
 
       {#if t.ready.length}
-        <section class="panel">
-          <h2 class="go">Ready to call <span>{t.ready.length}</span></h2>
-          <p class="hint">Owner details found, no contact attempt yet. Hit ✎ after the call.</p>
-          {#each t.ready as p (p.group_id)}<LeadRow {p} reason={p.tier === 'hot' ? 'hot prospect' : ''} />{/each}
+        <section class="mg-section mg-rise" style:--i={2}>
+          <div class="head"><span class="mg-dot ok"></span><h2>Ready to call</h2><span class="mg-count">{t.ready.length}</span></div>
+          <p class="note">Owner details found, no contact attempt yet. Tap <Icon name="pencil" size={13} /> after the call.</p>
+          <div class="mg-list">
+            {#each t.ready as p (p.group_id)}<LeadRow {p} reason={p.tier === 'hot' ? 'hot prospect' : ''} />{/each}
+          </div>
         </section>
       {/if}
 
       {#if t.stale.length}
-        <section class="panel">
-          <h2 class="warn">Gone quiet <span>{t.stale.length}</span></h2>
-          <p class="hint">Active leads with no contact attempt in {t.stale[0].days_quiet >= 10 ? '10+' : ''} days and nothing scheduled.</p>
-          {#each t.stale as p (p.group_id)}<LeadRow {p} tone="warn" reason="{p.days_quiet} days quiet" />{/each}
+        <section class="mg-section mg-rise" style:--i={3}>
+          <div class="head"><span class="mg-dot warn"></span><h2>Gone quiet</h2><span class="mg-count">{t.stale.length}</span></div>
+          <p class="note">Active leads with no contact attempt in {t.stale[0].days_quiet >= 10 ? '10+ ' : ''}days and nothing scheduled.</p>
+          <div class="mg-list">
+            {#each t.stale as p (p.group_id)}<LeadRow {p} tone="warn" reason="{p.days_quiet} days quiet" />{/each}
+          </div>
         </section>
       {/if}
 
       {#if t.upcoming.length}
-        <section class="panel">
-          <h2>Coming up <span>{t.upcoming.length}</span></h2>
-          {#each t.upcoming as k (k.id)}<LeadRow p={k.property} task={k} reason="{shortDate(k.due_at)} · {ago(k.due_at)}" />{/each}
+        <section class="mg-section mg-rise" style:--i={4}>
+          <div class="head"><span class="mg-dot"></span><h2>Coming up</h2><span class="mg-count">{t.upcoming.length}</span></div>
+          <div class="mg-list">
+            {#each t.upcoming as k (k.id)}<LeadRow p={k.property} task={k} reason="{shortDate(k.due_at)} · {ago(k.due_at)}" />{/each}
+          </div>
         </section>
       {/if}
     </div>
 
     <div class="col side">
       {#if t.expiring.length}
-        <section class="panel pad">
-          <h2>Mandates expiring</h2>
-          {#each t.expiring as m (m.id)}
-            <a class="mini" href="/leads/properties/{m.group_id}">
-              <b>{m.property.street_address_raw || m.property.title}</b>
-              <span><i class="mand">{MANDATE_LABEL[m.type]}</i> expires {shortDate(m.expires_at)} · {ago(m.expires_at)}</span>
-            </a>
-          {/each}
+        <section class="mg-section mg-rise" style:--i={2}>
+          <div class="head"><span class="mg-dot warn"></span><h2>Mandates expiring</h2><span class="mg-count">{t.expiring.length}</span></div>
+          <div class="mg-list">
+            {#each t.expiring as m (m.id)}
+              <a class="mg-listrow" href="/leads/properties/{m.group_id}">
+                <span class="t"><b>{m.property.street_address_raw || m.property.title}</b>
+                  <span>{MANDATE_LABEL[m.type]} · expires {shortDate(m.expires_at)} · {ago(m.expires_at)}</span></span>
+                <Icon name="chevronRight" size={15} class="chev" />
+              </a>
+            {/each}
+          </div>
         </section>
       {/if}
 
       {#if t.hot_untracked.length}
-        <section class="panel pad">
-          <h2>Hot in the engine</h2>
-          <p class="hint">Open-mandate, top-scored — not tracked yet.</p>
-          {#each t.hot_untracked as h (h.group_id)}
-            <div class="mini row">
-              <div>
-                <b>{h.street_address_raw || h.title}</b>
-                <span>{h.suburb} · {h.price_zar ? fmtM(h.price_zar) : 'POA'} · score {h.prospect_score}</span>
+        <section class="mg-section mg-rise" style:--i={3}>
+          <div class="head"><span class="mg-dot crit"></span><h2>Hot in the engine</h2>
+            <div class="mg-actions"><a class="mg-btn sm ghost" href="/prospects">All <Icon name="arrowRight" size={13} /></a></div></div>
+          <p class="note">Open-mandate, top-scored — not tracked yet.</p>
+          <div class="mg-list">
+            {#each t.hot_untracked as h (h.group_id)}
+              <div class="mg-listrow">
+                <a class="t" href="/prospects?open={encodeURIComponent(h.listing_key || h.group_id)}">
+                  <b>{h.street_address_raw || h.title}</b>
+                  <span>{h.suburb} · {h.price_zar ? fmtM(h.price_zar) : 'POA'} · score {h.prospect_score}</span>
+                </a>
+                <button type="button" class="mg-btn secondary sm" onclick={() => trackHot(h)} disabled={tracking === h.group_id}>
+                  {#if tracking === h.group_id}<span class="mg-spin"></span>{:else}<Icon name="plus" size={14} />{/if} Track
+                </button>
               </div>
-              <button class="btn sm" onclick={() => trackHot(h)}>+ Track</button>
-            </div>
-          {/each}
-          <a class="more" href="/prospects">All prospects →</a>
+            {/each}
+          </div>
         </section>
       {/if}
 
       {#if t.recent_wins.length}
-        <section class="panel pad">
-          <h2>Recent wins</h2>
-          {#each t.recent_wins as w (w.id)}
-            <a class="mini" href="/leads/properties/{w.group_id}">
-              <b>{w.property.street_address_raw || w.property.title}</b>
-              <span><i class="mand">{MANDATE_LABEL[w.type]}</i> {shortDate(w.signed_at || w.created_at)}{w.listing_price ? ' · ' + fmtM(w.listing_price) : ''}</span>
-            </a>
-          {/each}
+        <section class="mg-section mg-rise" style:--i={4}>
+          <div class="head"><span class="mg-dot ok"></span><h2>Recent wins</h2></div>
+          <div class="mg-list">
+            {#each t.recent_wins as w (w.id)}
+              <a class="mg-listrow" href="/leads/properties/{w.group_id}">
+                <span class="t"><b>{w.property.street_address_raw || w.property.title}</b>
+                  <span>{MANDATE_LABEL[w.type]} · {shortDate(w.signed_at || w.created_at)}{w.listing_price ? ' · ' + fmtM(w.listing_price) : ''}</span></span>
+                <Icon name="chevronRight" size={15} class="chev" />
+              </a>
+            {/each}
+          </div>
         </section>
       {/if}
 
       {#if t.engine_events.length}
-        <section class="panel pad">
-          <h2>Engine noticed</h2>
-          {#each t.engine_events as e (e.group_id + e.occurred_at)}
-            <a class="mini" href="/leads/properties/{e.group_id}">
-              <b>{e.property.street_address_raw || e.property.title}</b>
-              <span>{e.kind.replace('_', ' ')} · {ago(e.occurred_at)}</span>
-            </a>
-          {/each}
+        <section class="mg-section mg-rise" style:--i={5}>
+          <div class="head"><span class="mg-dot mgr"></span><h2>Engine noticed</h2></div>
+          <div class="mg-list">
+            {#each t.engine_events as e (e.group_id + e.occurred_at)}
+              <a class="mg-listrow" href="/leads/properties/{e.group_id}">
+                <span class="t"><b>{e.property.street_address_raw || e.property.title}</b>
+                  <span>{e.kind.replace(/_/g, ' ')} · {ago(e.occurred_at)}</span></span>
+                <Icon name="chevronRight" size={15} class="chev" />
+              </a>
+            {/each}
+          </div>
         </section>
       {/if}
     </div>
@@ -138,38 +210,28 @@
 {/if}
 
 <style>
-  .hd { display: flex; justify-content: space-between; align-items: flex-end; gap: 2rem; margin-bottom: 1.4rem; flex-wrap: wrap; }
-  h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.03em; margin: 0 0 0.2rem; }
-  .sub { color: var(--ink-2); font-size: 0.92rem; }
-  .kp { display: flex; gap: 1.4rem; }
-  .kp div { display: flex; flex-direction: column; align-items: flex-end; }
-  .kp b { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; }
-  .kp span { font-size: 0.72rem; color: var(--ink-3); }
+  .hd { align-items: flex-end; }
+  .titles { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .titles .mg-h1 { font-size: 26px; }
+  .kp { gap: 6px; }
 
-  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1.2rem; align-items: start; }
-  .col { display: flex; flex-direction: column; gap: 1.2rem; }
-  @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } }
+  .cols { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .side:empty { display: none; }
+  @media (min-width: 1240px) { .cols { grid-template-columns: minmax(0, 1fr) 340px; } }
 
-  section.panel { overflow: hidden; }
-  h2 { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-2);
-       padding: 0.8rem 1rem 0.6rem; display: flex; gap: 0.5rem; align-items: center; }
-  .pad h2 { padding: 0 0 0.6rem; }
-  h2 span { background: var(--bg-3); color: var(--ink-2); font-size: 0.7rem; padding: 0.05rem 0.45rem; border-radius: 999px; }
-  h2.bad { color: var(--bad); } h2.bad span { background: var(--red-soft); color: var(--bad); }
-  h2.warn { color: var(--warm); }
-  h2.go { color: var(--accent-2); } h2.go span { background: var(--accent-soft); color: var(--accent-2); }
-  .empty, .hint { padding: 0 1rem 0.9rem; font-size: 0.84rem; color: var(--ink-3); }
-  .pad { padding: 1rem; }
-  .pad .hint { padding: 0 0 0.6rem; }
-  .dim { color: var(--ink-3); }
+  .mg-section > .head { align-items: center; }
+  .mg-section > .head > h2.crit { color: var(--mc-crit); }
+  .note {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin: 0; padding: 10px 16px; border-bottom: 1px solid var(--mc-line);
+    font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3);
+  }
+  .mg-section > .note:last-child { border-bottom: 0; }
 
-  .mini { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.55rem 0; border-top: 1px solid var(--line); color: var(--ink); }
-  .mini:first-of-type { border-top: 0; }
-  .mini.row { flex-direction: row; justify-content: space-between; align-items: center; gap: 0.6rem; }
-  .mini.row > div { display: flex; flex-direction: column; min-width: 0; }
-  .mini b { font-size: 0.86rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mini span { font-size: 0.76rem; color: var(--ink-3); }
-  a.mini:hover b { color: var(--accent); }
-  .mand { font-style: normal; font-size: 0.66rem; font-weight: 700; padding: 0.05rem 0.4rem; border-radius: 4px; background: var(--open-soft); color: var(--open); }
-  .more { display: inline-block; margin-top: 0.6rem; font-size: 0.8rem; color: var(--accent); }
+  .mg-listrow > a.t:hover b, a.mg-listrow:hover .t b { color: var(--mc-accent); }
+  .mg-section :global(.chev) { flex: none; color: var(--mc-ink3); }
+
+  .skrow { display: flex; gap: 12px; align-items: center; padding: 12px 16px; }
+  .sk { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 </style>

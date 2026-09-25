@@ -120,17 +120,17 @@
 
 <style>
   .hd { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-  h3 { margin: 0; flex: 1; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mg-font); color: var(--mg-i); }
-  .lede { margin: 0 0 12px; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
+  h3 { margin: 0; flex: 1; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); }
+  .lede { margin: 0 0 12px; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .two { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-bottom: 10px; }
   .f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
   .mg-select { display: block; }
   .togs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .tog { min-height: 36px; padding: 0 12px; }
   .tog:disabled { opacity: 0.45; cursor: not-allowed; }
-  .why { margin: 0 0 8px; font: 400 11.5px/1.45 var(--mg-font); color: var(--mg-i3); }
+  .why { margin: 0 0 8px; font: 400 11.5px/1.45 var(--mc-font); color: var(--mc-ink3); }
   .wide { width: 100%; margin-top: 4px; }
   .job { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .st { margin: 0; font: 400 12px/1.4 var(--mg-font); color: var(--mg-i2); }
-  .err { margin: 0; font: 400 12.5px/1.45 var(--mg-font); color: var(--mg-crit); }
+  .st { margin: 0; font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink2); }
+  .err { margin: 0; font: 400 12.5px/1.45 var(--mc-font); color: var(--mc-crit); }
 </style>

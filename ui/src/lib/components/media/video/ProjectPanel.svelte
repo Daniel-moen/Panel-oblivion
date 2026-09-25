@@ -133,9 +133,9 @@
   .two { display: grid; gap: 12px 18px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
   .f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .f .mg-select > select { width: 100%; }
-  .note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--mg-i3); }
+  .note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--mc-ink3); }
   .toggles { display: flex; flex-wrap: wrap; gap: 8px 18px; }
-  .tg { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13px; color: var(--mg-i2); cursor: pointer; }
-  .tg input { width: 18px; height: 18px; accent-color: var(--mg-ok); }
-  input[type='range'] { width: 100%; accent-color: var(--mg-ok); height: 28px; }
+  .tg { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13px; color: var(--mc-ink2); cursor: pointer; }
+  .tg input { width: 18px; height: 18px; accent-color: var(--mc-accent); }
+  input[type='range'] { width: 100%; accent-color: var(--mc-accent); height: 28px; }
 </style>

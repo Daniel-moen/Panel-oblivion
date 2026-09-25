@@ -162,26 +162,26 @@
   .head { display: flex; align-items: center; justify-content: space-between; gap: 10px;
           flex-wrap: wrap; margin-bottom: 12px; }
   .sum { display: flex; align-items: baseline; gap: 10px; }
-  .sum b { font: 600 15px/1 var(--mg-font); color: var(--mg-i); }
-  .sum span { font: 400 12.5px/1 var(--mg-font); color: var(--mg-i3); }
+  .sum b { font: 600 15px/1 var(--mc-font); color: var(--mc-ink); }
+  .sum span { font: 400 12.5px/1 var(--mc-font); color: var(--mc-ink3); }
   .acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .days > select { width: 200px; }
-  .hint { font: 400 12px/1 var(--mg-font); color: var(--mg-i3); }
+  .hint { font: 400 12px/1 var(--mc-font); color: var(--mc-ink3); }
 
   .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   .row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 12px;
          align-items: center; padding: 6px 10px 6px 6px; border-radius: 14px; }
   .row.sk { display: block; padding: 0; margin-bottom: 6px; background: none; }
-  .th { width: 64px; height: 42px; border-radius: 9px; overflow: hidden; background: var(--mg-term);
-        display: grid; place-items: center; color: var(--mg-i3); }
+  .th { width: 64px; height: 42px; border-radius: 9px; overflow: hidden; background: var(--mc-inset);
+        display: grid; place-items: center; color: var(--mc-ink3); }
   .th img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.8; }
   .meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .meta b { font: 500 13px/1.35 var(--mg-font); color: var(--mg-i);
+  .meta b { font: 500 13px/1.35 var(--mc-font); color: var(--mc-ink);
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta span { font: 400 11.5px/1.4 var(--mg-font); color: var(--mg-i3);
+  .meta span { font: 400 11.5px/1.4 var(--mc-font); color: var(--mc-ink3);
                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta .path { font-family: var(--mg-mono); font-size: 10.5px; }
-  .warn { margin: 0; font: 400 13.5px/1.55 var(--mg-font); color: var(--mg-i2); }
+  .meta .path { font-family: var(--mc-mono); font-size: 10.5px; }
+  .warn { margin: 0; font: 400 13.5px/1.55 var(--mc-font); color: var(--mc-ink2); }
 
   @media (max-width: 560px) {
     .row { grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; }

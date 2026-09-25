@@ -279,10 +279,10 @@
   .two { display: grid; gap: 14px; grid-template-columns: 1fr; }
   .mg-select { display: block; }
   .segwrap { overflow-x: auto; max-width: 100%; }
-  .hint { margin: 2px 0 0; font: 400 12px/1.5 var(--mg-font); color: var(--mg-i3); }
-  .hint code { font: 11.5px/1.5 var(--mg-mono); color: var(--mg-i2); }
-  .warnline { margin: 0; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-warn); }
-  .opt { color: var(--mg-i3); font-weight: 400; }
+  .hint { margin: 2px 0 0; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
+  .hint code { font: 11.5px/1.5 var(--mc-mono); color: var(--mc-ink2); }
+  .warnline { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-warn); }
+  .opt { color: var(--mc-ink3); font-weight: 400; }
   .togs { display: flex; flex-wrap: wrap; gap: 8px; }
   .tog { min-height: 40px; padding: 0 14px; font-size: 12.5px; cursor: pointer; }
   .tog:disabled { opacity: 0.45; cursor: default; }

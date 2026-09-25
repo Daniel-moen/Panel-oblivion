@@ -82,8 +82,8 @@
   .togs { display: flex; flex-wrap: wrap; gap: 8px; }
   .tog { min-height: 40px; padding: 0 14px; font-size: 12.5px; cursor: pointer; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .lbl { font: 500 11px/1.4 var(--mg-font); color: var(--mg-i3); min-width: 70px; }
-  .val { font: 500 13px/1 var(--mg-font); color: var(--mg-i); }
+  .lbl { font: 500 11px/1.4 var(--mc-font); color: var(--mc-ink3); min-width: 70px; }
+  .val { font: 500 13px/1 var(--mc-font); color: var(--mc-ink); }
   .grow { flex: 1 1 180px; min-width: 0; display: block; }
-  .hint { margin: 0; font: 400 12px/1.5 var(--mg-font); color: var(--mg-i3); }
+  .hint { margin: 0; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
 </style>

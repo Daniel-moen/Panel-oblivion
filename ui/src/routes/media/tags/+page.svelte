@@ -119,12 +119,12 @@
 
   .tag {
     min-height: 40px; max-width: 100%; padding: 0 14px;
-    font-weight: 500; letter-spacing: -0.01em; color: var(--mg-i);
+    font-weight: 500; letter-spacing: -0.01em; color: var(--mc-ink);
   }
   .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .src { font-size: 10.5px; font-weight: 500; color: var(--mg-i3); flex: none; }
-  .n { font-size: 11px; color: var(--mg-i3); flex: none; }
-  .tag:hover .n, .tag:hover .src { color: var(--mg-i2); }
+  .src { font-size: 10.5px; font-weight: 500; color: var(--mc-ink3); flex: none; }
+  .n { font-size: 11px; color: var(--mc-ink3); flex: none; }
+  .tag:hover .n, .tag:hover .src { color: var(--mc-ink2); }
 
   @media (max-width: 560px) {
     .wall { gap: 6px; }

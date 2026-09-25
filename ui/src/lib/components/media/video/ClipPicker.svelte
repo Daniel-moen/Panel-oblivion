@@ -87,19 +87,19 @@
 
 <style>
   .srch { margin-bottom: 12px; }
-  .hint { color: var(--mg-i3); font-size: 13px; }
+  .hint { color: var(--mc-ink3); font-size: 13px; }
   .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   .it {
     display: flex; flex-direction: column; gap: 6px; padding: 6px; text-align: left;
-    border: 1px solid var(--mg-line); border-radius: 14px; background: var(--mg-glass-soft);
-    color: var(--mg-i2); cursor: pointer; min-width: 0; font: 500 12px/1.3 var(--mg-font);
+    border: 1px solid var(--mc-line); border-radius: 14px; background: var(--mc-raised);
+    color: var(--mc-ink2); cursor: pointer; min-width: 0; font: 500 12px/1.3 var(--mc-font);
   }
-  .it.on { border-color: var(--mg-ok); background: rgba(62, 207, 142, 0.1); color: var(--mg-i); }
-  .th { position: relative; aspect-ratio: 16 / 9; border-radius: 9px; overflow: hidden; background: var(--mg-term); }
+  .it.on { border-color: var(--mc-accent); background: rgba(62, 207, 142, 0.1); color: var(--mc-ink); }
+  .th { position: relative; aspect-ratio: 16 / 9; border-radius: 9px; overflow: hidden; background: var(--mc-inset); }
   .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .n {
     position: absolute; top: 6px; left: 6px; width: 24px; height: 24px; border-radius: 50%;
-    display: grid; place-items: center; background: var(--mg-ok); color: var(--mg-ok-ink); font-size: 12px;
+    display: grid; place-items: center; background: var(--mc-accent); color: var(--mc-accent-ink); font-size: 12px;
   }
   .d { position: absolute; right: 6px; bottom: 6px; font-style: normal; font-size: 11px; padding: 2px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.6); color: #fff; }
   .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

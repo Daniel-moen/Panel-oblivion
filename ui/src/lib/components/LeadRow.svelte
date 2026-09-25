@@ -1,92 +1,173 @@
 <script>
   /* A property you need to act on, with the actions right there:
-     call · WhatsApp · log · snooze · done. */
+     call · WhatsApp · log · snooze · done.
+
+     Logging opens the QuickLog in a Sheet (a bottom sheet on a phone). The
+     snooze menu is a popover moved to <body> and pinned to its button, so the
+     section's rounded clip can never cut it off on the last row. On a narrow
+     row the actions drop to their own line under the text. */
+  import { tick } from 'svelte';
   import QuickLog from './QuickLog.svelte';
+  import Photo from './Photo.svelte';
+  import Sheet from './glass/Sheet.svelte';
+  import Icon from './glass/Icon.svelte';
+  import { slide } from '$lib/motion.js';
   import { waNumber, addrOf, snooze, taskDone, loadToday } from '$lib/leads.svelte.js';
-  import { ago, shortDate, MANDATE_LABEL } from '$lib/panel.js';
+  import { ago, MANDATE_LABEL } from '$lib/panel.js';
   import { fmtM } from '$lib/format.js';
 
   let { p, task = null, reason = '', tone = '', children } = $props();
   let logging = $state(false);
+  let snoozeAt = $state(null); // {top,right} while the menu is open
+  let snoozeBtn = $state(null);
+  let busy = $state(false);
   const wa = $derived(waNumber(p?.contact_phone));
+
+  function openSnooze() {
+    if (snoozeAt) { snoozeAt = null; return; }
+    const r = snoozeBtn.getBoundingClientRect();
+    const below = window.innerHeight - r.bottom > 170;
+    snoozeAt = below
+      ? { top: r.bottom + 6, right: window.innerWidth - r.right }
+      : { bottom: window.innerHeight - r.top + 6, right: window.innerWidth - r.right };
+    tick().then(() => document.querySelector('.lr-snooze button')?.focus());
+  }
+  async function act(fn) {
+    busy = true; snoozeAt = null;
+    try { await fn(); } finally { busy = false; }
+  }
+
+  // the popover closes on Esc, an outside tap, a scroll or a resize
+  $effect(() => {
+    if (!snoozeAt) return;
+    const close = () => (snoozeAt = null);
+    const onDown = (e) => { if (!e.target.closest?.('.lr-snooze') && e.target !== snoozeBtn && !snoozeBtn?.contains(e.target)) close(); };
+    const onKey = (e) => { if (e.key === 'Escape') { close(); snoozeBtn?.focus(); } };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  });
+
+  function portal(node) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
 </script>
 
 <div class="lr {tone}">
-  <a class="ph" href="/leads/properties/{p.group_id}" style:background-image={p.photo_url ? `url(/api/photo/${encodeURIComponent(p.listing_key || '')})` : null}>
-    {#if !p.photo_url}<span>{(p.suburb || '?')[0]}</span>{/if}
-  </a>
-  <div class="main">
-    <div class="top">
-      <a class="addr" href="/leads/properties/{p.group_id}">{addrOf(p)}</a>
-      <span class="meta">{[p.suburb, p.price_zar ? fmtM(p.price_zar) : null].filter(Boolean).join(' · ')}</span>
-      {#if p.mandate_type}<span class="mand">{MANDATE_LABEL[p.mandate_type]}</span>{/if}
-    </div>
-    <div class="why">
-      {#if reason}<span class="r">{reason}</span>{/if}
-      {#if task}<span class="r">{task.title}</span>{/if}
-      {#if p.contact_name}<a class="c" href="/leads/contacts/{p.contact_id}">👤 {p.contact_name}</a>{#if p.contact_phone}<span class="dim">{p.contact_phone}</span>{/if}
-      {:else}<span class="c dim">no contact yet</span>{/if}
-      {#if p.last_contact_at}<span class="dim">last {p.last_channel} {ago(p.last_contact_at)} · {String(p.last_outcome || '').replace(/_/g, ' ')}</span>{/if}
-    </div>
-    {@render children?.()}
-    {#if logging}
-      <div class="log"><QuickLog gid={p.group_id} contacts={p.contact_id ? [{ id: p.contact_id, name: p.contact_name, phone: p.contact_phone }] : []}
-        onsaved={async () => { logging = false; if (task) await taskDone(task); else await loadToday(); }}
-        oncancel={() => (logging = false)} /></div>
-    {/if}
-  </div>
-  <div class="acts">
-    {#if p.contact_phone}
-      <a class="ib" href="tel:{p.contact_phone}" title="Call">📞</a>
-      {#if wa}<a class="ib" href="https://wa.me/{wa}" target="_blank" rel="noopener" title="WhatsApp">💬</a>{/if}
-    {/if}
-    <button class="ib" class:on={logging} onclick={() => (logging = !logging)} title="Log a contact attempt">✎</button>
-    {#if task}
-      <div class="sn">
-        <button class="ib" title="Snooze">⏰</button>
-        <div class="menu">
-          <button onclick={() => snooze(task, 1)}>Tomorrow</button>
-          <button onclick={() => snooze(task, 3)}>3 days</button>
-          <button onclick={() => snooze(task, 7)}>Next week</button>
-        </div>
+  <div class="in">
+    <a class="ph" href="/leads/properties/{p.group_id}" tabindex="-1" aria-hidden="true"><Photo r={p} /></a>
+    <div class="main">
+      <div class="top">
+        <a class="addr" href="/leads/properties/{p.group_id}">{addrOf(p)}</a>
+        {#if p.mandate_type}<span class="mg-chip {p.mandate_type === 'none_lost' ? 'crit' : 'ok'} sm">{MANDATE_LABEL[p.mandate_type]}</span>{/if}
       </div>
-      <button class="ib ok" onclick={() => taskDone(task)} title="Mark done">✓</button>
-    {/if}
+      <div class="meta">
+        {[p.suburb, p.price_zar ? fmtM(p.price_zar) : null].filter(Boolean).join(' · ')}
+      </div>
+      <div class="why">
+        {#if reason}<span class="r">{reason}</span>{/if}
+        {#if task}<span class="r">{task.title}</span>{/if}
+        {#if p.contact_name}
+          <a class="c" href="/leads/contacts/{p.contact_id}"><Icon name="user" size={12} />{p.contact_name}</a>
+          {#if p.contact_phone}<span class="dim mg-tnum">{p.contact_phone}</span>{/if}
+        {:else}<span class="dim">no contact yet</span>{/if}
+        {#if p.last_contact_at}<span class="dim">last {p.last_channel} {ago(p.last_contact_at)} · {String(p.last_outcome || '').replace(/_/g, ' ')}</span>{/if}
+      </div>
+      {@render children?.()}
+    </div>
+    <div class="acts">
+      {#if p.contact_phone}
+        <a class="mg-btn secondary icon sm" href="tel:{p.contact_phone}" title="Call" aria-label="Call {p.contact_name || ''}"><Icon name="phone" size={15} /></a>
+        {#if wa}<a class="mg-btn secondary icon sm" href="https://wa.me/{wa}" target="_blank" rel="noopener" title="WhatsApp" aria-label="WhatsApp"><Icon name="message" size={15} /></a>{/if}
+      {/if}
+      <button type="button" class="mg-btn secondary icon sm" class:on={logging} onclick={() => (logging = true)}
+              title="Log a contact attempt" aria-label="Log a contact attempt"><Icon name="pencil" size={15} /></button>
+      {#if task}
+        <button type="button" class="mg-btn secondary icon sm" class:on={!!snoozeAt} bind:this={snoozeBtn} onclick={openSnooze}
+                disabled={busy} title="Snooze" aria-label="Snooze" aria-haspopup="menu" aria-expanded={!!snoozeAt}><Icon name="clock" size={15} /></button>
+        <button type="button" class="mg-btn secondary icon sm done" onclick={() => act(() => taskDone(task))} disabled={busy}
+                title="Mark done" aria-label="Mark done"><Icon name="check" size={15} stroke={2} /></button>
+      {/if}
+    </div>
   </div>
 </div>
 
-<style>
-  .lr { display: flex; gap: 0.9rem; padding: 0.8rem 1rem; border-top: 1px solid var(--line); align-items: flex-start; }
-  .lr:first-child { border-top: 0; }
-  .lr:hover { background: var(--hover); }
-  .lr.late { box-shadow: inset 3px 0 0 var(--bad); }
-  .lr.warn { box-shadow: inset 3px 0 0 var(--warm); }
-  .ph { width: 52px; height: 52px; flex: none; border-radius: 10px; background: var(--bg-3) center/cover;
-        display: grid; place-items: center; color: var(--ink-3); font-weight: 700; }
-  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
-  .top { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
-  .addr { font-weight: 650; color: var(--ink); font-size: 0.95rem; }
-  .addr:hover { color: var(--accent); }
-  .meta { font-size: 0.8rem; color: var(--ink-3); }
-  .mand { font-size: 0.68rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 4px; background: var(--open-soft); color: var(--open); }
-  .why { display: flex; gap: 0.7rem; flex-wrap: wrap; font-size: 0.8rem; }
-  .r { color: var(--ink); font-weight: 500; }
-  .late .r { color: var(--bad); }
-  .c { color: var(--ink-2); }
-  a.c:hover { color: var(--accent); }
-  .dim { color: var(--ink-3); }
-  .log { margin-top: 0.5rem; padding: 0.8rem; background: var(--bg-3); border-radius: var(--r-sm); }
+{#if snoozeAt}
+  <div class="mg-portal" use:portal>
+    <div class="lr-snooze mg-popover" role="menu" aria-label="Snooze until"
+         style:top={snoozeAt.top != null ? snoozeAt.top + 'px' : null}
+         style:bottom={snoozeAt.bottom != null ? snoozeAt.bottom + 'px' : null}
+         style:right="{snoozeAt.right}px"
+         transition:slide={{ y: snoozeAt.top != null ? -6 : 6, duration: 180 }}>
+      <span class="hud">Snooze until</span>
+      <button type="button" role="menuitem" onclick={() => act(() => snooze(task, 1))}>Tomorrow</button>
+      <button type="button" role="menuitem" onclick={() => act(() => snooze(task, 3))}>In 3 days</button>
+      <button type="button" role="menuitem" onclick={() => act(() => snooze(task, 7))}>Next week</button>
+    </div>
+  </div>
+{/if}
 
-  .acts { display: flex; gap: 0.3rem; align-items: center; flex: none; }
-  .ib { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; border: 1px solid var(--line);
-        background: var(--bg-2); color: var(--ink-2); font-size: 0.95rem; cursor: pointer; transition: all 0.12s; text-decoration: none; }
-  .ib:hover { border-color: var(--line-3); background: var(--bg-3); transform: translateY(-1px); }
-  .ib.on { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .ib.ok:hover { background: var(--open-soft); color: var(--open); border-color: var(--open); }
-  .sn { position: relative; }
-  .sn .menu { display: none; position: absolute; right: 0; top: 100%; z-index: 10; margin-top: 0.2rem; padding: 0.25rem;
-              background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 8px; box-shadow: var(--shadow-2); min-width: 120px; }
-  .sn:hover .menu, .sn:focus-within .menu { display: flex; flex-direction: column; }
-  .menu button { background: none; border: 0; text-align: left; padding: 0.4rem 0.6rem; border-radius: 6px; font-size: 0.8rem; color: var(--ink); cursor: pointer; }
-  .menu button:hover { background: var(--bg-3); }
+<Sheet open={logging} title="Log a contact · {addrOf(p)}" onclose={() => (logging = false)}>
+  <QuickLog gid={p.group_id} contacts={p.contact_id ? [{ id: p.contact_id, name: p.contact_name, phone: p.contact_phone }] : []}
+    onsaved={async () => { logging = false; if (task) await taskDone(task); else await loadToday(); }}
+    oncancel={() => (logging = false)} />
+</Sheet>
+
+<style>
+  .lr { container-type: inline-size; transition: background var(--mc-t-fast); }
+  .lr:hover { background: rgba(255, 255, 255, 0.02); }
+  .in { display: flex; gap: 12px; padding: 12px 16px; align-items: flex-start; position: relative; }
+  .lr.late .in::before, .lr.warn .in::before {
+    content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0;
+  }
+  .lr.late .in::before { background: var(--mc-crit); }
+  .lr.warn .in::before { background: var(--mc-warn); }
+
+  .ph {
+    width: 52px; height: 52px; flex: none; border-radius: 10px; overflow: hidden;
+    background: var(--mc-inset); border: 1px solid var(--mc-line);
+  }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .top { display: flex; gap: 8px; align-items: center; min-width: 0; }
+  .addr {
+    min-width: 0; font: 600 14px/1.35 var(--mc-font); color: var(--mc-ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .addr:hover { color: var(--mc-accent); }
+  .mg-chip.sm { height: 22px; padding: 0 8px; font-size: 11px; }
+  .meta { font: 400 12.5px/1.4 var(--mc-font); color: var(--mc-ink3); font-variant-numeric: tabular-nums; }
+  .why { display: flex; gap: 4px 12px; flex-wrap: wrap; font: 400 12.5px/1.45 var(--mc-font); color: var(--mc-ink2); }
+  .r { color: var(--mc-ink); font-weight: 500; }
+  .late .r { color: var(--mc-crit); }
+  .warn .r { color: var(--mc-warn); }
+  .c { display: inline-flex; align-items: center; gap: 5px; color: var(--mc-ink2); min-width: 0; }
+  a.c:hover { color: var(--mc-accent); }
+  .dim { color: var(--mc-ink3); }
+
+  .acts { display: flex; gap: 6px; align-items: center; flex: none; }
+  .done:hover { background: var(--mc-ok-soft); border-color: var(--mc-ok-line); color: var(--mc-accent); }
+
+  /* a narrow row: the actions take their own line under the text */
+  @container (max-width: 520px) {
+    .in { flex-wrap: wrap; }
+    .acts { flex-basis: 100%; padding-left: 64px; }
+  }
+  @media (pointer: coarse) {
+    .acts .mg-btn { width: 44px; height: 44px; border-radius: 12px; }
+  }
+
+  .lr-snooze {
+    position: fixed; z-index: 95; min-width: 180px;
+    display: flex; flex-direction: column;
+  }
+  .lr-snooze .hud { padding: 6px 10px 4px; }
+  @media (pointer: coarse) { .lr-snooze > button { min-height: 44px; } }
 </style>

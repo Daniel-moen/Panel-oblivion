@@ -44,7 +44,7 @@
 
 <div class="bar">
   <div class="row">
-    <Seg options={DEAL} value={app.dealType} onchange={pickDeal} label="Listing type" />
+    <span class="deal"><Seg options={DEAL} value={app.dealType} onchange={pickDeal} label="Listing type" /></span>
 
     <label class="mg-search">
       <span class="ic"><Icon name="search" size={16} /></span>
@@ -57,10 +57,10 @@
     </label>
 
     {#if !rent}
-      <Seg options={TIER} value={filters.tier} onchange={(v) => (filters.tier = v)} label="Tier" />
+      <span class="tier"><Seg options={TIER} value={filters.tier} onchange={(v) => (filters.tier = v)} label="Tier" /></span>
     {/if}
 
-    <span class="mg-select">
+    <span class="mg-select sort">
       <select bind:value={filters.sort} title="sort order" aria-label="Sort order">
         {#if !rent}<option value="score">Sort: score</option>{/if}
         <option value="pricedesc">Sort: {rent ? 'rent' : 'price'} high → low</option>
@@ -74,7 +74,7 @@
       <span class="ic"><Icon name="chevronDown" size={14} /></span>
     </span>
 
-    <button type="button" class="mg-btn secondary" class:on={refineOpen || refineCount > 0}
+    <button type="button" class="mg-btn secondary more" class:on={refineOpen || refineCount > 0}
             onclick={() => (refineOpen = !refineOpen)} aria-expanded={refineOpen}>
       <Icon name="sliders" size={15} /> Filters{#if refineCount}<b class="cnt mg-tnum">{refineCount}</b>{/if}
     </button>
@@ -83,7 +83,7 @@
       ? `${shown} ${rent ? 'rentals' : 'properties'}`
       : `${shown} of ${total}`}</span>
 
-    <Seg options={VIEW} value={filters.view} onchange={(v) => (filters.view = v)} label="View" />
+    <span class="view"><Seg options={VIEW} value={filters.view} onchange={(v) => (filters.view = v)} label="View" /></span>
   </div>
 
   {#if refineOpen}
@@ -155,8 +155,20 @@
   .sole { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; font: 500 13px/1 var(--mc-font); color: var(--mc-ink2); cursor: pointer; }
   .sole input { width: 16px; height: 16px; margin: 0; }
 
+  .deal, .tier, .view { display: inline-flex; flex: none; max-width: 100%; }
+
+  /* a phone: search on top, then the two small segs side by side, the tier
+     seg full width, sort + filters on one row, the count last */
   @media (max-width: 640px) {
-    .mg-search { flex-basis: 100%; max-width: none; order: -1; }
-    .count { flex-basis: 100%; margin-left: 0; order: 10; }
+    .row { gap: 8px; }
+    .mg-search { flex-basis: 100%; max-width: none; order: 0; }
+    .deal { order: 1; }
+    .view { order: 2; margin-left: auto; }
+    .tier { order: 3; flex-basis: 100%; }
+    .tier :global(.seg) { display: flex; width: 100%; }
+    .tier :global(.seg > button) { flex: 1; }
+    .sort { order: 4; flex: 1 1 auto; }
+    .more { order: 5; }
+    .count { flex-basis: 100%; margin-left: 0; order: 6; }
   }
 </style>

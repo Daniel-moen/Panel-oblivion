@@ -134,20 +134,20 @@
   .f { display: flex; flex-direction: column; gap: 12px; }
   .fld { display: flex; flex-direction: column; gap: 5px; }
   .fld .mg-input { width: 100%; }
-  .ta { height: auto; min-height: 120px; padding: 10px 12px; resize: vertical; line-height: 1.5; font: 400 13px/1.5 var(--mg-font); }
+  .ta { height: auto; min-height: 120px; padding: 10px 12px; resize: vertical; line-height: 1.5; font: 400 13px/1.5 var(--mc-font); }
   .seed { max-width: 260px; }
-  .sw { display: flex; gap: 9px; align-items: flex-start; font: 500 12.5px/1.45 var(--mg-font); color: var(--mg-i2); cursor: pointer; min-height: 28px; }
-  .sw input { margin-top: 2px; accent-color: var(--mg-ok); width: 16px; height: 16px; flex: none; }
-  .sw i { font-style: normal; color: var(--mg-i3); font-weight: 400; }
-  .hint { margin: 0; font: 400 12px/1.5 var(--mg-font); color: var(--mg-i3); }
+  .sw { display: flex; gap: 9px; align-items: flex-start; font: 500 12.5px/1.45 var(--mc-font); color: var(--mc-ink2); cursor: pointer; min-height: 28px; }
+  .sw input { margin-top: 2px; accent-color: var(--mc-accent); width: 16px; height: 16px; flex: none; }
+  .sw i { font-style: normal; color: var(--mc-ink3); font-weight: 400; }
+  .hint { margin: 0; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .ex { display: flex; flex-direction: column; gap: 8px; }
   .exs { display: flex; gap: 8px; flex-wrap: wrap; }
-  figure { position: relative; margin: 0; width: 132px; aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden; background: var(--mg-term); }
+  figure { position: relative; margin: 0; width: 132px; aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden; background: var(--mc-inset); }
   figure img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .x { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0;
        background: rgba(0, 0, 0, 0.6); color: #fff; display: grid; place-items: center; cursor: pointer; }
-  .add { width: 132px; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px dashed var(--mg-line2); background: var(--mg-glass-soft);
-         color: var(--mg-i2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-         font: 500 12px/1 var(--mg-font); cursor: pointer; }
-  .add:hover { background: var(--mg-glass-hover); color: var(--mg-i); }
+  .add { width: 132px; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px dashed var(--mc-line2); background: var(--mc-raised);
+         color: var(--mc-ink2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+         font: 500 12px/1 var(--mc-font); cursor: pointer; }
+  .add:hover { background: var(--mc-line); color: var(--mc-ink); }
 </style>

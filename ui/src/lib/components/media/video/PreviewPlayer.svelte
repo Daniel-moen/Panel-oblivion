@@ -160,14 +160,14 @@
   .pv { display: flex; flex-direction: column; gap: 8px; align-items: center; min-width: 0; }
   .stage {
     position: relative; max-width: 100%;
-    background: #000; border-radius: var(--mg-r-in); overflow: hidden; display: grid; place-items: center;
+    background: #000; border-radius: var(--mc-r-md); overflow: hidden; display: grid; place-items: center;
     margin: 0 auto;
   }
   video { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center; }
   video.fit { object-fit: contain; }
-  .none { color: var(--mg-i3); font-size: 13px; padding: 20px; text-align: center; }
+  .none { color: var(--mc-ink3); font-size: 13px; padding: 20px; text-align: center; }
   .ctl { display: flex; align-items: center; gap: 6px; }
-  .t { font: 500 13px/1 var(--mg-mono); color: var(--mg-i); }
-  .t i { font-style: normal; color: var(--mg-i3); }
-  .note { margin: 0; font-size: 11.5px; color: var(--mg-i3); text-align: center; }
+  .t { font: 500 13px/1 var(--mc-mono); color: var(--mc-ink); }
+  .t i { font-style: normal; color: var(--mc-ink3); }
+  .note { margin: 0; font-size: 11.5px; color: var(--mc-ink3); text-align: center; }
 </style>

@@ -73,10 +73,10 @@
   .wrap > .mg-chip { align-self: flex-start; }
   .mg-strip { margin: 0; }
   .dl { display: flex; flex-direction: column; gap: 6px; }
-  .hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--mg-i3); }
-  .work { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--mg-i2); }
+  .hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--mc-ink3); }
+  .work { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--mc-ink2); }
   .list { display: flex; flex-direction: column; }
   .it { display: flex; align-items: center; justify-content: space-between; min-height: 40px;
-        border-bottom: 1px solid var(--mg-line); font-size: 13px; color: var(--mg-i2); }
+        border-bottom: 1px solid var(--mc-line); font-size: 13px; color: var(--mc-ink2); }
   .it:last-child { border-bottom: 0; }
 </style>

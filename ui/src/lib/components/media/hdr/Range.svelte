@@ -24,10 +24,10 @@
   .rg { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .rg.off { opacity: 0.45; }
   .top { display: flex; align-items: center; gap: 8px; }
-  label { font: 500 12.5px/1.3 var(--mg-font); color: var(--mg-i2); }
-  .v { margin-left: auto; font: 500 12px/1 var(--mg-font); color: var(--mg-i); }
-  .rs { border: 0; background: none; color: var(--mg-i3); cursor: pointer; font-size: 13px; padding: 0 2px; }
-  .rs:hover { color: var(--mg-i); }
-  input { width: 100%; height: 28px; accent-color: var(--mg-ok); margin: 0; }
-  .h { margin: 0; font: 400 11.5px/1.4 var(--mg-font); color: var(--mg-i3); }
+  label { font: 500 12.5px/1.3 var(--mc-font); color: var(--mc-ink2); }
+  .v { margin-left: auto; font: 500 12px/1 var(--mc-font); color: var(--mc-ink); }
+  .rs { border: 0; background: none; color: var(--mc-ink3); cursor: pointer; font-size: 13px; padding: 0 2px; }
+  .rs:hover { color: var(--mc-ink); }
+  input { width: 100%; height: 28px; accent-color: var(--mc-accent); margin: 0; }
+  .h { margin: 0; font: 400 11.5px/1.4 var(--mc-font); color: var(--mc-ink3); }
 </style>

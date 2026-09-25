@@ -1,17 +1,46 @@
 <script>
+  /* The map — every located prospect as a pin, on a dark basemap.
+
+     The layout hands /map a fixed, non-scrolling pane (`.edge`) under the
+     status strip. Everything here is absolute INSIDE that pane, and the whole
+     page sits in one isolated stacking context (`.stage`) so Leaflet's own
+     z-indices (panes at 400+, controls at 1000) can never climb over the
+     phone dock, the chat panel or a sheet.
+
+     Floating chrome, all solid raised planes (no blur over the map — the map
+     has to keep 60fps while it pans):
+       · the bar      search + the filters toggle + the count
+       · the panel    tier chips, mandate, price band, sole switch, and the
+                      result list (click a row → fly to the pin, open it)
+       · the legend   what a pin's fill and ring mean
+       · Leaflet's    zoom and attribution, re-dressed to the tokens
+     On a phone the panel starts folded and folds itself again when you pick a
+     row, so the popup it opens is not hidden behind it. */
   import { onMount, onDestroy } from 'svelte';
   import L from 'leaflet';
   import 'leaflet/dist/leaflet.css';
   import { api } from '$lib/api.js';
   import { fmtR, fmtM, fmtInt, mvLabel, satUrl } from '$lib/format.js';
+  import { slide } from '$lib/motion.js';
+  import Icon from '$lib/components/glass/Icon.svelte';
+  import Empty from '$lib/components/glass/Empty.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
 
   /* ——————————————————————————————————————————————————————— constants ——— */
 
-  /* modern pin palette — tier fill, white stroke, blue highlight */
-  const TIER_FILL = { hot: '#dc2626', warm: '#d97706', cold: '#9ca3af' };
-  const PIN_LINE = 'rgba(255, 255, 255, 0.9)';
-  const ACCENT = '#2563eb';                 /* hover / active highlight    */
+  /* Pin colour is state: hot red, warm amber, cold neutral — the mc.css
+     state hues (canvas needs literal colours, not variables). An open
+     mandate gets a green ring; the pin you are looking at a white one. */
+  const TIER_FILL = { hot: '#f26d64', warm: '#f0b429', cold: '#8b8b96' };
+  const PIN_LINE = 'rgba(12, 12, 14, 0.85)';
+  const OPEN_LINE = '#3ecf8e';
+  const ACTIVE_LINE = '#f3f3f4';            /* hover / active highlight    */
   const PAGE = 160;                         /* list rows rendered per page */
+  const TIERS = [
+    ['hot', 'Hot', 'crit'],
+    ['warm', 'Warm', 'warn'],
+    ['cold', 'Cold', 'cold']
+  ];
 
   /* ——————————————————————————————————————————————————————————— state ——— */
 
@@ -29,6 +58,7 @@
   let panelOpen  = $state(true);
   let limit      = $state(PAGE);
   let activeGid  = $state(null);
+  let narrow     = $state(false);           /* phone: panel folds on pick  */
 
   /* non-reactive leaflet handles — deliberately plain, not $state */
   let mapEl;
@@ -51,6 +81,7 @@
   };
 
   const hasPhoto = (p) => p.has_photo !== false && !!p.key;
+  const isOpenMandate = (p) => p.verdict === 'open';
 
   /* ————————————————————————————————————————————————————————— derived ——— */
 
@@ -95,6 +126,24 @@
   const maxScore = $derived(points.reduce((m, p) => Math.max(m, p.score || 0), 0));
   const listed = $derived(filtered.slice(0, limit));
 
+  /* how many filters differ from the defaults — the badge on the toggle */
+  const activeFilters = $derived(
+    (mandate !== 'any' ? 1 : 0) +
+    (num(minM) != null ? 1 : 0) +
+    (num(maxM) != null ? 1 : 0) +
+    (showSole ? 1 : 0) +
+    (TIERS.some(([t]) => !tiers[t]) ? 1 : 0)
+  );
+
+  function clearFilters() {
+    q = '';
+    tiers = { hot: true, warm: true, cold: true };
+    mandate = 'any';
+    minM = '';
+    maxM = '';
+    if (showSole) toggleSole();
+  }
+
   /* ——————————————————————————————————————————————————————— data load ——— */
 
   async function load() {
@@ -128,14 +177,15 @@
 
   function baseStyle(p) {
     const approx = p.loc === 'suburb';
+    const open = isOpenMandate(p);
     return {
       radius: radiusFor(p),
-      color: PIN_LINE,
-      weight: 1.5,
+      color: open ? OPEN_LINE : PIN_LINE,
+      weight: open ? 2 : 1.25,
       opacity: approx ? 0.8 : 1,
       dashArray: approx ? '2 3' : null,
       fillColor: TIER_FILL[p.tier] || TIER_FILL.cold,
-      fillOpacity: approx ? 0.35 : 0.85
+      fillOpacity: approx ? 0.4 : 0.9
     };
   }
 
@@ -143,7 +193,7 @@
     const m = markers.get(p.gid);
     if (!m) return;
     if (on) {
-      m.setStyle({ color: ACCENT, weight: 2.2, opacity: 1 });
+      m.setStyle({ color: ACTIVE_LINE, weight: 2.5, opacity: 1 });
       m.bringToFront();
     } else {
       m.setStyle(baseStyle(p));
@@ -174,12 +224,12 @@
       <div class="pop">
         ${hasPhoto(p)
           ? `<div class="pop-img"><img src="${esc(photoUrl(p.key))}" alt=""
-               onerror="this.style.display='none';this.parentNode.classList.add('empty')"></div>`
+               onerror="this.parentNode.classList.add('empty')"></div>`
           : ''}
         <div class="pop-body">
           <div class="pop-top">
             <span class="price">${esc(fmtR(p.price_zar))}</span>
-            <span class="pop-score">${esc(Math.round(p.score || 0))}</span>
+            <span class="pop-score" title="Prospect score">${esc(Math.round(p.score || 0))}</span>
           </div>
           <a class="pop-title" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title || 'Untitled listing')}</a>
           ${meta ? `<div class="pop-meta">${meta}</div>` : ''}
@@ -193,13 +243,19 @@
             ? '<div class="pop-approx">Approximate — suburb level</div>'
             : ''}
           <div class="pop-links">
-            <a href="${esc(p.url)}" target="_blank" rel="noopener">Listing ↗</a>
-            <a href="${esc(satUrl(p.lat, p.lng))}" target="_blank" rel="noopener">Satellite</a>
-            ${p.cma ? `<a href="/cma/${encodeURIComponent(p.gid)}">CMA report →</a>` : ''}
-            <a href="/leads/properties/${encodeURIComponent(p.gid)}">Lead →</a>
+            <a class="mg-btn sm primary" href="/leads/properties/${encodeURIComponent(p.gid)}">Open lead</a>
+            ${p.cma ? `<a class="mg-btn sm secondary" href="/cma/${encodeURIComponent(p.gid)}">CMA report</a>` : ''}
+            <a class="mg-btn sm ghost" href="${esc(p.url)}" target="_blank" rel="noopener">Listing ↗</a>
+            <a class="mg-btn sm ghost" href="${esc(satUrl(p.lat, p.lng))}" target="_blank" rel="noopener">Satellite ↗</a>
           </div>
         </div>
       </div>`;
+  }
+
+  /* keep a popup clear of the floating bar above and the dock below */
+  function popPad() {
+    const bottom = narrow ? 96 : 24;
+    return { tl: [16, narrow ? 150 : 24], br: [16, bottom] };
   }
 
   /* —————————————————————————————————————————————————— marker rebuild ——— */
@@ -209,18 +265,24 @@
     if (layer) layer.remove();
     markers = new Map();
 
+    const pad = popPad();
     const list = [];
     for (const p of pts) {
       const m = L.circleMarker([p.lat, p.lng], baseStyle(p));
       m.bindPopup(() => popupHtml(p), {
         className: 'ob-pop',
         maxWidth: 300,
-        minWidth: 250,
-        autoPanPadding: [24, 24],
+        minWidth: 260,
+        autoPanPaddingTopLeft: pad.tl,
+        autoPanPaddingBottomRight: pad.br,
         closeButton: true
       });
-      m.on('popupopen', () => (activeGid = p.gid));
+      m.on('popupopen', () => {
+        activeGid = p.gid;
+        paint(p, true);
+      });
       m.on('popupclose', () => {
+        paint(p, false);
         if (activeGid === p.gid) activeGid = null;
       });
       markers.set(p.gid, m);
@@ -248,32 +310,60 @@
   function focus(p) {
     if (!map) return;
     activeGid = p.gid;
+    /* on a phone the panel covers the map — fold it so the pin shows */
+    if (narrow) panelOpen = false;
     map.flyTo([p.lat, p.lng], Math.max(map.getZoom(), 16), { duration: 0.7 });
     const m = markers.get(p.gid);
     if (m) {
       m.bringToFront();
-      m.openPopup();
+      /* open once the flight lands, or the popup's auto-pan fights it */
+      map.once('moveend', () => { if (activeGid === p.gid) m.openPopup(); });
     }
   }
 
   /* ————————————————————————————————————————————————————————— effects ——— */
 
   onMount(() => {
+    const mq = matchMedia('(max-width: 719px)');
+    narrow = mq.matches;
+    panelOpen = !narrow;
+    const syncNarrow = () => (narrow = mq.matches);
+    mq.addEventListener('change', syncNarrow);
+
+    const coarse = matchMedia('(pointer: coarse)').matches;
     map = L.map(mapEl, {
       zoomControl: false,
       preferCanvas: true,
+      /* a fingertip needs a bigger hit area than a 5px pin */
+      renderer: L.canvas({ padding: 0.5, tolerance: coarse ? 10 : 4 }),
       attributionControl: true,
       center: [-33.95, 18.6],
       zoom: 10
     });
-    const dark = document.documentElement.dataset.theme === 'dark';
-    L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, {
-      attribution: '© OpenStreetMap © CARTO',
+    /* The app is always dark. Esri's keyless dark-grey canvas: a base layer
+       and a separate label layer on top (CARTO's free tiles now answer with
+       an "API key required" placeholder). Native tiles stop at z16; Leaflet
+       upscales from there. */
+    const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+    L.tileLayer(esri + 'World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Tiles © Esri — Esri, HERE, Garmin, © OpenStreetMap contributors',
+      maxNativeZoom: 16,
+      maxZoom: 19
+    }).addTo(map);
+    /* labels ride between the basemap and the pins */
+    map.createPane('labels');
+    map.getPane('labels').style.zIndex = 350;
+    map.getPane('labels').style.pointerEvents = 'none';
+    L.tileLayer(esri + 'World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+      maxNativeZoom: 16,
       maxZoom: 19,
-      subdomains: 'abcd'
+      pane: 'labels'
     }).addTo(map);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
+    map.attributionControl.setPrefix(false);
     load();
+
+    return () => mq.removeEventListener('change', syncNarrow);
   });
 
   onDestroy(() => {
@@ -292,548 +382,484 @@
     filtered.length;
     limit = PAGE;
   });
-
-  /* keep the map sized under the floating chrome */
-  $effect(() => {
-    panelOpen;
-    if (map) setTimeout(() => map && map.invalidateSize(), 220);
-  });
 </script>
 
 <svelte:head><title>Map · Oblivion</title></svelte:head>
 
-<div class="map" bind:this={mapEl}></div>
+<div class="stage">
+  <div class="map" bind:this={mapEl}></div>
 
-{#if loading}<div class="sweep"></div>{/if}
+  {#if loading}<div class="sweep" aria-hidden="true"></div>{/if}
 
-<!-- ————————————————————————————————————————————————— top-left chrome — -->
-<div class="chrome">
-  <div class="bar sheet">
-    <div class="title">Map</div>
-    <div class="count">
-      {#if loading}
-        <span class="spin"></span>
-      {:else if errMsg}
-        <span class="err">{errMsg}</span>
-      {:else}
-        {fmtInt(filtered.length)} of {fmtInt(points.length)} on the map{#if unmapped}<span class="dim"> · {fmtInt(unmapped)} without a location</span>{/if}
-      {/if}
+  <!-- ———————————————————————————————————————————————— floating chrome — -->
+  <div class="chrome" class:open={panelOpen}>
+    <div class="bar mg-raised">
+      <div class="barrow">
+        <label class="mg-search find">
+          <span class="ic"><Icon name="search" size={15} /></span>
+          <input class="mg-input" type="search" placeholder="Search title, suburb, agency…"
+                 aria-label="Search the map" value={q}
+                 oninput={(e) => (q = e.currentTarget.value)} />
+          {#if q}
+            <button type="button" class="clear" aria-label="Clear search" onclick={() => (q = '')}>
+              <Icon name="close" size={14} />
+            </button>
+          {/if}
+        </label>
+        <button type="button" class="mg-btn secondary icon toggle" class:on={panelOpen}
+                aria-expanded={panelOpen}
+                aria-label={panelOpen ? 'Hide filters' : 'Show filters'}
+                title={panelOpen ? 'Hide filters and list' : 'Filters and list'}
+                onclick={() => (panelOpen = !panelOpen)}>
+          <Icon name={panelOpen ? 'chevronUp' : 'sliders'} size={16} />
+          {#if activeFilters && !panelOpen}<i class="badge mg-tnum">{activeFilters}</i>{/if}
+        </button>
+      </div>
+      <div class="count mg-tnum" aria-live="polite">
+        {#if loading}
+          <span class="mg-spin"></span><span>Loading pins…</span>
+        {:else if errMsg}
+          <span class="err">Map data unavailable</span>
+        {:else}
+          <span><b>{fmtInt(filtered.length)}</b> of {fmtInt(points.length)} on the map</span>
+          {#if unmapped}<span class="dim">· {fmtInt(unmapped)} without a location</span>{/if}
+        {/if}
+      </div>
     </div>
-    <button
-      class="collapse"
-      aria-label={panelOpen ? 'Hide filters' : 'Show filters'}
-      onclick={() => (panelOpen = !panelOpen)}
-    >{panelOpen ? '‹' : '›'}</button>
-  </div>
 
-  {#if panelOpen}
-    <div class="panel-x sheet">
-      <div class="filters">
-        <input
-          type="search"
-          placeholder="Search title, suburb, agency…"
-          value={q}
-          oninput={(e) => (q = e.currentTarget.value)}
-        />
+    {#if panelOpen}
+      <div class="panel mg-raised" transition:slide={{ y: -10, duration: 220 }}>
+        <div class="filters">
+          <div class="tiers" role="group" aria-label="Tiers">
+            {#each TIERS as [t, label, tone] (t)}
+              <button type="button" class="mg-chip tchip {tone}" class:off={!tiers[t]}
+                      aria-pressed={tiers[t]}
+                      onclick={() => (tiers = { ...tiers, [t]: !tiers[t] })}>
+                <span class="dot"></span>{label}
+                <span class="n mg-tnum">{fmtInt(tierCounts[t])}</span>
+              </button>
+            {/each}
+          </div>
 
-        <div class="chips">
-          {#each ['hot', 'warm', 'cold'] as t}
+          <div class="row">
+            <label class="fl wide">
+              <span class="hud">Mandate</span>
+              <span class="mg-select">
+                <select value={mandate} onchange={(e) => (mandate = e.currentTarget.value)}>
+                  <option value="any">Any</option>
+                  <option value="open">Open</option>
+                  <option value="probably_open">Probably open</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+                <span class="ic"><Icon name="chevronDown" size={14} /></span>
+              </span>
+            </label>
+          </div>
+
+          <div class="row">
+            <label class="fl">
+              <span class="hud">Min (Rm)</span>
+              <input class="mg-input mg-tnum" type="number" inputmode="decimal" step="0.5" min="0"
+                     placeholder="—" value={minM} oninput={(e) => (minM = e.currentTarget.value)} />
+            </label>
+            <label class="fl">
+              <span class="hud">Max (Rm)</span>
+              <input class="mg-input mg-tnum" type="number" inputmode="decimal" step="0.5" min="0"
+                     placeholder="—" value={maxM} oninput={(e) => (maxM = e.currentTarget.value)} />
+            </label>
+          </div>
+
+          <div class="swrow">
+            <label class="sw">
+              <input type="checkbox" checked={showSole} onchange={toggleSole} />
+              <i aria-hidden="true"></i>
+              <span>Include sole mandates</span>
+            </label>
+            {#if activeFilters || q}
+              <button type="button" class="mg-btn ghost sm" onclick={clearFilters}>Clear</button>
+            {/if}
+          </div>
+        </div>
+
+        <div class="list">
+          {#if errMsg}
+            <div class="mg-strip crit">
+              <span class="ic"><Icon name="alert" size={15} /></span>
+              <div class="grow"><b>Could not load the map.</b> {errMsg}</div>
+              <button type="button" class="mg-btn secondary sm" onclick={load}>Retry</button>
+            </div>
+          {:else if loading && !points.length}
+            {#each [0, 1, 2, 3] as i (i)}
+              <div class="card skel">
+                <Skeleton h="54px" w="68px" r="8px" delay={i * 80} />
+                <div class="grow"><Skeleton lines={3} delay={i * 80} /></div>
+              </div>
+            {/each}
+          {:else if filtered.length === 0}
+            <Empty icon="mapPin"
+                   title={points.length ? 'Nothing matches' : 'Nothing on the map yet'}
+                   hint={points.length
+                     ? 'Loosen the filters or clear the search to see pins again.'
+                     : 'Prospects appear here once a crawl has placed them.'}>
+              {#if points.length}
+                <button type="button" class="mg-btn secondary sm" onclick={clearFilters}>Clear filters</button>
+              {/if}
+            </Empty>
+          {/if}
+
+          {#each listed as p (p.gid)}
             <button
-              class="tchip t-{t}"
-              class:on={tiers[t]}
-              onclick={() => (tiers = { ...tiers, [t]: !tiers[t] })}
+              type="button"
+              class="card"
+              class:active={activeGid === p.gid}
+              onmouseenter={() => paint(p, true)}
+              onmouseleave={() => paint(p, activeGid === p.gid)}
+              onfocus={() => paint(p, true)}
+              onblur={() => paint(p, activeGid === p.gid)}
+              onclick={() => focus(p)}
             >
-              {t}
-              <span class="n">{fmtInt(tierCounts[t])}</span>
+              <div class="thumb" class:approx={p.loc === 'suburb'}>
+                <Icon name="image" size={16} />
+                {#if hasPhoto(p)}
+                  <img
+                    src={photoUrl(p.key)}
+                    alt=""
+                    loading="lazy"
+                    onerror={(e) => (e.currentTarget.style.display = 'none')}
+                  />
+                {/if}
+              </div>
+              <div class="card-body">
+                <div class="card-top">
+                  <span class="price">{fmtM(p.price_zar)}</span>
+                  <span class="tier {p.tier || 'cold'}">{(p.tier || 'cold').toUpperCase()}</span>
+                </div>
+                <div class="card-title">{p.title || 'Untitled listing'}</div>
+                <div class="card-meta">
+                  <span class="sub">{p.suburb || p.region || '—'}</span>
+                  <span class="mv {p.verdict || 'unknown'}">{mvLabel(p.verdict)}</span>
+                </div>
+              </div>
             </button>
           {/each}
-        </div>
 
-        <div class="row">
-          <label class="fl">
-            <span class="label">Mandate</span>
-            <select value={mandate} onchange={(e) => (mandate = e.currentTarget.value)}>
-              <option value="any">Any</option>
-              <option value="open">Open</option>
-              <option value="probably_open">Probably open</option>
-              <option value="unknown">Unknown</option>
-            </select>
-          </label>
+          {#if filtered.length > listed.length}
+            <button type="button" class="mg-btn secondary more" onclick={() => (limit += PAGE)}>
+              Show more · <span class="mg-tnum">{fmtInt(listed.length)} of {fmtInt(filtered.length)}</span>
+            </button>
+          {/if}
         </div>
-
-        <div class="row">
-          <label class="fl">
-            <span class="label">Min (Rm)</span>
-            <input
-              type="number" step="0.5" min="0" placeholder="—"
-              value={minM} oninput={(e) => (minM = e.currentTarget.value)}
-            />
-          </label>
-          <label class="fl">
-            <span class="label">Max (Rm)</span>
-            <input
-              type="number" step="0.5" min="0" placeholder="—"
-              value={maxM} oninput={(e) => (maxM = e.currentTarget.value)}
-            />
-          </label>
-        </div>
-
-        <label class="sole">
-          <input type="checkbox" checked={showSole} onchange={toggleSole} />
-          <span>Include sole mandates</span>
-        </label>
       </div>
+    {/if}
+  </div>
 
-      <div class="list">
-        {#if !loading && filtered.length === 0}
-          <div class="empty-list">
-            {points.length ? 'Nothing matches these filters.' : 'Nothing on the map yet.'}
-          </div>
-        {/if}
-
-        {#each listed as p (p.gid)}
-          <button
-            class="card"
-            class:active={activeGid === p.gid}
-            onmouseenter={() => paint(p, true)}
-            onmouseleave={() => paint(p, activeGid === p.gid)}
-            onfocus={() => paint(p, true)}
-            onblur={() => paint(p, activeGid === p.gid)}
-            onclick={() => focus(p)}
-          >
-            <div class="thumb" class:approx={p.loc === 'suburb'}>
-              {#if hasPhoto(p)}
-                <img
-                  src={photoUrl(p.key)}
-                  alt=""
-                  loading="lazy"
-                  onerror={(e) => (e.currentTarget.style.display = 'none')}
-                />
-              {/if}
-            </div>
-            <div class="card-body">
-              <div class="card-top">
-                <span class="price">{fmtM(p.price_zar)}</span>
-                <span class="tier {p.tier}">{(p.tier || 'cold').toUpperCase()}</span>
-              </div>
-              <div class="card-title">{p.title || 'Untitled listing'}</div>
-              <div class="card-meta">
-                <span class="sub">{p.suburb || p.region || '—'}</span>
-                <span class="mv {p.verdict || 'unknown'}">{mvLabel(p.verdict)}</span>
-              </div>
-            </div>
-          </button>
-        {/each}
-
-        {#if filtered.length > listed.length}
-          <button class="btn more" onclick={() => (limit += PAGE)}>
-            Show more · {fmtInt(listed.length)} of {fmtInt(filtered.length)}
-          </button>
-        {/if}
-      </div>
-    </div>
-  {/if}
+  <!-- ——————————————————————————————————————————————————————— legend — -->
+  <div class="legend mg-raised" aria-label="Pin legend">
+    <span><i class="pin hot"></i>Hot</span>
+    <span><i class="pin warm"></i>Warm</span>
+    <span><i class="pin cold"></i>Cold</span>
+    <span><i class="pin ring"></i>Open</span>
+  </div>
 </div>
 
 <style>
-  /* The pane the app's layout hands /map is edge to edge and full height, so
-     the map and its floating chrome are absolute INSIDE it rather than fixed
-     to the viewport — otherwise they would sit under the clock and the dock. */
-  .map {
-    position: absolute;
-    inset: 0;
-    background: var(--mg-bg);
+  /* One stacking context for the whole page, so nothing Leaflet does can
+     paint over the dock, the strip or an overlay. */
+  .stage {
+    position: absolute; inset: 0; isolation: isolate; z-index: 0; overflow: hidden;
+    --gap: 12px;
+    /* the floor the floating chrome must stay above: the dock on a phone */
+    --floor: calc(var(--mc-dock-h) + var(--sab) + 12px);
   }
+  @media (min-width: 1024px) { .stage { --floor: 16px; --gap: 16px; } }
+
+  .map { position: absolute; inset: 0; background: var(--mc-bg); }
 
   /* thin accent sweep while /api/map is in flight */
   .sweep {
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    z-index: 1300;
-    overflow: hidden;
-    pointer-events: none;
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    z-index: 1200; overflow: hidden; pointer-events: none;
   }
   .sweep::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, var(--mc-accent), transparent);
     transform: translateX(-100%);
-    animation: sweep 1.15s cubic-bezier(0.4, 0, 0.3, 1) infinite;
+    animation: mg-sweep 1.15s var(--mc-ease) infinite;
   }
-  @keyframes sweep { to { transform: translateX(100%); } }
 
   /* ————————————————————————————————————————————————— floating chrome — */
   .chrome {
-    position: absolute;
-    top: 1rem;
-    left: 1rem;
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    width: 360px;
-    max-width: calc(100vw - 2rem);
+    position: absolute; z-index: 1100;
+    top: var(--gap); left: var(--gap);
+    width: 360px; max-width: calc(100% - 2 * var(--gap));
+    /* the column never runs under the dock / off the pane */
+    max-height: calc(100% - var(--gap) - var(--floor));
+    display: flex; flex-direction: column; gap: 8px;
     pointer-events: none;
   }
   .chrome > * { pointer-events: auto; }
 
-  /* a pane of glass floating over the map
-     TODO(map agent): the filters, the result cards and the popups inside are
-     still on the old vocabulary — this pass only re-homed the page. */
-  .sheet {
-    background: var(--mg-glass);
-    border: 1px solid var(--mg-line);
-    border-radius: var(--mg-r-card);
-    box-shadow: var(--mg-sh);
-    -webkit-backdrop-filter: blur(var(--mg-blur)) saturate(150%);
-    backdrop-filter: blur(var(--mg-blur)) saturate(150%);
-  }
-
-  .bar {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    grid-template-areas: 'title collapse' 'count count';
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: 0.3rem 0.7rem;
-    padding: 0.7rem 0.8rem 0.65rem;
-  }
-  .title {
-    grid-area: title;
-    font: 600 0.95rem/1.2 var(--mg-font);
-    letter-spacing: -0.01em;
-    color: var(--mg-i);
-  }
-
-  .collapse {
-    grid-area: collapse;
-    width: 30px; height: 30px;
-    display: grid; place-items: center;
-    border: 1px solid var(--line-2);
-    border-radius: 50%;
-    background: var(--bg-2);
-    color: var(--ink-2);
-    font-size: 0.9rem; line-height: 1;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-  }
-  .collapse:hover {
-    background: var(--accent-soft);
-    border-color: var(--accent-line);
-    color: var(--accent-2);
+  .bar { padding: 10px; border-radius: var(--mc-r); flex: none; }
+  .barrow { display: flex; align-items: center; gap: 8px; }
+  .find { flex: 1; }
+  .find :global(input[type='search']::-webkit-search-cancel-button) { display: none; }
+  .toggle { position: relative; }
+  .toggle.on { color: var(--mc-ink); border-color: var(--mc-line2); }
+  .badge {
+    position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px;
+    display: grid; place-items: center; border-radius: 9999px;
+    background: var(--mc-accent); color: var(--mc-accent-ink);
+    font: 700 10.5px/1 var(--mc-font); font-style: normal;
   }
 
   .count {
-    grid-area: count;
-    font: 400 0.74rem/1.3 var(--font-ui);
-    color: var(--ink-3);
-    font-variant-numeric: tabular-nums;
-    display: flex; align-items: center; gap: 0.4rem;
-    min-height: 1.1rem;
+    display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px;
+    padding: 8px 2px 0; min-height: 26px;
+    font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3);
   }
-  .count .dim { color: var(--ink-3); }
-  .count .err { color: var(--bad); }
+  .count b { color: var(--mc-ink); font-weight: 600; }
+  .count .err { color: var(--mc-crit); font-weight: 500; }
+  .count .mg-spin { width: 12px; height: 12px; color: var(--mc-ink3); }
 
-  /* ————————————————————————————————————————————————————— left panel — */
-  .panel-x {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    /* the chrome is inside the pane now: leave room for the top bar above
-       it and the floating dock below it */
-    max-height: calc(100svh - 16rem);
-    overflow: hidden;
-    animation: fadeup 0.18s ease both;
+  /* ——————————————————————————————————————————————————— filter panel — */
+  .panel {
+    flex: 0 1 auto; min-height: 0;
+    display: flex; flex-direction: column; overflow: hidden;
+    border-radius: var(--mc-r);
+    will-change: transform, opacity;
   }
-  @keyframes fadeup { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
   .filters {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-    padding: 0.85rem 0.85rem 0.9rem;
-    border-bottom: 1px solid var(--line);
-    flex: 0 0 auto;
-  }
-  .filters :global(input[type='search']) { width: 100%; }
-
-  /* tier toggles — modern segmented control */
-  .chips {
-    display: inline-flex;
-    align-self: flex-start;
-    background: var(--bg-2);
-    border: 1px solid var(--line-2);
-    border-radius: var(--r-sm);
-    padding: 2px;
-    gap: 2px;
-  }
-  .tchip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: none;
-    border: none;
-    border-radius: 6px;
-    padding: 0.36rem 0.7rem;
-    font: 600 0.78rem/1.2 var(--font-ui);
-    text-transform: capitalize;
-    color: var(--ink-2);
-    cursor: pointer;
-    transition: color 0.15s, background 0.15s;
-  }
-  .tchip:hover { color: var(--ink); background: var(--bg-3); }
-  .tchip .n {
-    font-weight: 500;
-    font-size: 0.7rem;
-    font-variant-numeric: tabular-nums;
-    color: var(--ink-3);
-  }
-  .tchip.on,
-  .tchip.on:hover {
-    background: var(--tbg);
-    color: var(--tfg);
-  }
-  .tchip.on .n { color: inherit; opacity: 0.7; }
-  .tchip.t-hot.on  { --tbg: #fee2e2; --tfg: #b91c1c; }
-  .tchip.t-warm.on { --tbg: #fef3c7; --tfg: #92400e; }
-  .tchip.t-cold.on { --tbg: #f3f4f6; --tfg: #4b5563; }
-
-  .row { display: flex; gap: 0.7rem; }
-  .fl { flex: 1; display: flex; flex-direction: column; gap: 0.28rem; min-width: 0; }
-  .fl :global(select), .fl :global(input) { width: 100%; }
-  .fl .label {
-    font: 500 0.74rem/1.2 var(--font-ui);
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--ink-2);
+    flex: none; display: flex; flex-direction: column; gap: 12px;
+    padding: 12px; border-bottom: 1px solid var(--mc-line);
   }
 
-  .sole {
-    display: flex; align-items: center; gap: 0.5rem;
-    font: 400 0.8rem/1.2 var(--font-ui);
-    color: var(--ink-2); cursor: pointer;
-    user-select: none;
+  .tiers { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tchip { height: 34px; padding: 0 12px; }
+  .tchip .n { color: inherit; opacity: 0.7; font-weight: 500; }
+  .tchip.crit { background: var(--mc-crit-soft); border-color: var(--mc-crit-line); color: var(--mc-crit); }
+  .tchip.warn { background: var(--mc-warn-soft); border-color: var(--mc-warn-line); color: var(--mc-warn); }
+  .tchip.cold { background: rgba(255, 255, 255, 0.06); border-color: var(--mc-line2); color: var(--mc-ink); }
+  .tchip.cold .dot { background: #8b8b96; }
+  .tchip.off { background: var(--mc-raised); border-color: var(--mc-line); color: var(--mc-ink3); }
+  .tchip.off .dot { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+  .tchip.off:hover { color: var(--mc-ink2); }
+
+  .row { display: flex; gap: 10px; }
+  .fl { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .fl .mg-select { display: block; width: 100%; }
+
+  .swrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
+
+  /* switch — the same one the crawl sheet uses */
+  .sw {
+    display: inline-flex; align-items: center; gap: 10px; min-height: 36px; cursor: pointer;
+    font: 500 13px/1.3 var(--mc-font); color: var(--mc-ink2); user-select: none; -webkit-user-select: none;
   }
-  .sole input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
-  .sole:hover { color: var(--ink); }
+  .sw:hover { color: var(--mc-ink); }
+  .sw input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+  .sw i {
+    position: relative; flex: none; width: 36px; height: 22px; border-radius: 9999px;
+    background: var(--mc-line2); transition: background var(--mc-t-fast);
+  }
+  .sw i::after {
+    content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--mc-ink); transition: transform var(--mc-t) var(--mc-ease);
+  }
+  .sw input:checked + i { background: var(--mc-accent); }
+  .sw input:checked + i::after { transform: translateX(14px); background: var(--mc-accent-ink); }
+  .sw input:focus-visible + i { outline: 2px solid rgba(62, 207, 142, 0.7); outline-offset: 2px; }
 
   /* ————————————————————————————————————————————— result list — rows — */
   .list {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    padding: 0.5rem 0.5rem 0.6rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    min-height: 0;
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+    padding: 6px; display: flex; flex-direction: column; gap: 2px;
   }
-  .empty-list {
-    padding: 1.8rem 0.4rem;
-    text-align: center;
-    font: 400 0.84rem/1.5 var(--font-ui);
-    color: var(--ink-3);
-  }
+  .list :global(.mg-empty) { padding: 28px 12px; }
+  .list .mg-strip { margin: 6px; align-items: center; }
+  .grow { flex: 1; min-width: 0; }
 
   .card {
-    display: flex;
-    gap: 0.65rem;
-    align-items: stretch;
-    text-align: left;
-    width: 100%;
-    padding: 0.5rem;
-    border: 1px solid transparent;
-    border-radius: var(--r-sm);
-    background: var(--bg-2);
-    transition: background 0.13s, border-color 0.13s;
+    display: flex; gap: 10px; align-items: stretch; text-align: left; width: 100%;
+    padding: 8px; border: 1px solid transparent; border-radius: var(--mc-r-md);
+    background: none; color: inherit; font: inherit; cursor: pointer;
+    transition: background var(--mc-t-fast), border-color var(--mc-t-fast);
   }
-  .card:hover { background: var(--bg-3); }
-  .card.active,
-  .card.active:hover {
-    background: var(--accent-soft);
-    border-color: var(--accent-line);
-  }
+  .card:hover { background: rgba(255, 255, 255, 0.04); }
+  .card.active, .card.active:hover { background: var(--mc-ok-soft); border-color: var(--mc-ok-line); }
+  .card.skel { cursor: default; }
 
   .thumb {
-    flex: 0 0 68px;
-    width: 68px; height: 54px;
-    border-radius: 6px;
-    overflow: hidden;
-    background: var(--bg-3);
-    border: none;
-    position: relative;
+    flex: 0 0 68px; width: 68px; height: 54px; position: relative; overflow: hidden;
+    display: grid; place-items: center;
+    border-radius: var(--mc-r-sm); background: var(--mc-inset); border: 1px solid var(--mc-line);
+    color: var(--mc-line3);
   }
-  .thumb img {
-    position: relative;
-    z-index: 1;
-    width: 100%; height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.45s ease;
-  }
-  .card:hover .thumb img,
-  .card.active .thumb img { transform: scale(1.03); }
+  .thumb.approx { border-style: dashed; }
+  .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 
-  .card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
-  .card-top { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; }
-  .card-top .price { font-size: 0.98rem; color: var(--ink); }
+  .card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .card-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .card-top .price { font-size: 14.5px; }
   .card-title {
-    font: 500 0.82rem/1.3 var(--font-ui);
-    color: var(--ink);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    font: 500 12.5px/1.35 var(--mc-font); color: var(--mc-ink2);
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
+  .card.active .card-title { color: var(--mc-ink); }
   .card-meta {
-    display: flex; align-items: center; gap: 0.55rem;
-    font: 400 0.72rem/1.3 var(--font-ui);
-    color: var(--ink-3);
-    margin-top: auto;
-    padding-top: 0.15rem;
-    min-width: 0;
+    display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: auto; padding-top: 2px;
+    font: 400 11.5px/1.3 var(--mc-font); color: var(--mc-ink3);
   }
-  .card-meta .sub {
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    max-width: 45%;
-    color: var(--ink-3);
+  .card-meta .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 50%; }
+
+  .more { margin: 6px 2px 2px; width: calc(100% - 4px); }
+
+  /* ———————————————————————————————————————————————————————— legend — */
+  .legend {
+    position: absolute; z-index: 1000;
+    left: var(--gap); bottom: var(--floor);
+    display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 12px;
+    border-radius: 9999px;
+    font: 500 11.5px/1 var(--mc-font); color: var(--mc-ink2);
+    pointer-events: none;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .pin { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(12, 12, 14, 0.85); }
+  .pin.hot { background: #f26d64; }
+  .pin.warm { background: #f0b429; }
+  .pin.cold { background: #8b8b96; }
+  .pin.ring { background: transparent; box-shadow: inset 0 0 0 2px var(--mc-accent); }
+  /* with the panel open on a desktop the legend moves out from under it */
+  @media (min-width: 720px) {
+    .chrome.open ~ .legend { left: calc(var(--gap) + 360px + 12px); }
+  }
+  /* on a phone the open panel covers the lower map anyway */
+  @media (max-width: 719px) {
+    .chrome.open ~ .legend { opacity: 0; }
+    .legend { transition: opacity var(--mc-t-fast); }
   }
 
-  .more { margin: 0.6rem 0.05rem 0.2rem; width: calc(100% - 0.1rem); }
-
-  /* ————————————————————————————————————————————————————— narrow screens — */
-  @media (max-width: 720px) {
-    .chrome { width: calc(100vw - 2rem); }
-    .panel-x { max-height: 55vh; }
+  /* ————————————————————————————————————————————————————— touch sizes — */
+  @media (pointer: coarse) {
+    .tchip { height: 44px; padding: 0 14px; }
+    .card { min-height: 72px; }
+    .sw { min-height: 44px; }
+    .find :global(.mg-input), .fl .mg-input, .fl .mg-select > select { height: 44px; }
+    .toggle { width: 44px; height: 44px; }
+    .list .mg-btn.sm, .swrow .mg-btn.sm { height: 40px; }
   }
 
   /* ———————————————————————————————————————————— leaflet theme overrides — */
-  :global(.leaflet-container) {
-    background: var(--bg-4);
-    font-family: var(--font-ui);
-    outline: none;
+  .stage :global(.leaflet-container) {
+    background: var(--mc-bg); font-family: var(--mc-font); outline: none;
   }
-  :global(.leaflet-control-attribution) {
-    background: var(--overlay) !important;
-    color: var(--ink-3) !important;
-    font-family: var(--font-ui) !important;
-    font-size: 10px !important;
-    border-radius: 8px 0 0 0 !important;
-    border: none;
-    padding: 2px 8px !important;
-  }
-  :global(.leaflet-control-attribution a) { color: var(--ink-2) !important; }
+  /* controls clear the phone dock and the rail's gutter */
+  .stage :global(.leaflet-bottom) { bottom: calc(var(--floor) - 12px); }
+  .stage :global(.leaflet-right .leaflet-control) { margin-right: var(--gap); }
+  .stage :global(.leaflet-bottom .leaflet-control) { margin-bottom: 12px; }
 
-  :global(.leaflet-bar) {
-    border: 1px solid var(--line) !important;
-    border-radius: 10px !important;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 4px 12px rgba(16, 24, 40, 0.1) !important;
+  .stage :global(.leaflet-control-attribution) {
+    background: rgba(12, 12, 14, 0.72);
+    color: var(--mc-ink3);
+    font: 400 10px/1.5 var(--mc-font);
+    border-radius: 8px;
+    padding: 1px 8px;
+    margin-bottom: 0 !important;
+  }
+  .stage :global(.leaflet-bottom .leaflet-control-attribution) { margin-bottom: 0; }
+  .stage :global(.leaflet-control-attribution a) { color: var(--mc-ink2); }
+
+  .stage :global(.leaflet-control-zoom.leaflet-bar) {
+    border: 1px solid var(--mc-line2);
+    border-radius: var(--mc-r-md);
+    background: var(--mc-raised);
+    box-shadow: var(--mc-sh-2);
     overflow: hidden;
   }
-  :global(.leaflet-bar a) {
-    background: var(--bg-2) !important;
-    color: var(--ink-2) !important;
-    border-radius: 0 !important;
-    border-bottom-color: var(--line) !important;
+  .stage :global(.leaflet-control-zoom a) {
+    width: 40px; height: 40px; line-height: 40px;
+    background: var(--mc-raised);
+    color: var(--mc-ink2);
+    font: 400 20px/40px var(--mc-font);
+    border-radius: 0;
+    border-bottom: 1px solid var(--mc-line);
+    transition: background var(--mc-t-fast), color var(--mc-t-fast);
   }
-  :global(.leaflet-bar a:hover) {
-    background: var(--bg-3) !important;
-    color: var(--ink) !important;
+  .stage :global(.leaflet-control-zoom a:last-child) { border-bottom: 0; }
+  .stage :global(.leaflet-control-zoom a:hover) { background: #26262b; color: var(--mc-ink); }
+  .stage :global(.leaflet-control-zoom a.leaflet-disabled) { background: var(--mc-raised); color: var(--mc-line3); }
+  @media (pointer: coarse) {
+    .stage :global(.leaflet-control-zoom a) { width: 44px; height: 44px; line-height: 44px; }
   }
 
-  /* ——————————————————————————————————————————————— popups — white card — */
-  :global(.ob-pop .leaflet-popup-content-wrapper) {
-    background: var(--bg-2);
-    color: var(--ink);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    box-shadow: 0 4px 10px rgba(16, 24, 40, 0.06), 0 12px 32px rgba(16, 24, 40, 0.12);
+  /* ————————————————————————————————————————————— popups — raised card — */
+  .stage :global(.ob-pop .leaflet-popup-content-wrapper) {
+    background: var(--mc-raised);
+    color: var(--mc-ink);
+    border: 1px solid var(--mc-line2);
+    border-radius: var(--mc-r);
+    box-shadow: var(--mc-sh-2);
     padding: 0;
     overflow: hidden;
   }
-  :global(.ob-pop .leaflet-popup-content) {
-    margin: 0;
-    width: auto !important;
-    font: 400 13px/1.45 var(--font-ui);
+  .stage :global(.ob-pop .leaflet-popup-content) {
+    margin: 0; width: auto !important; min-width: 260px;
+    font: 400 13px/1.45 var(--mc-font); color: var(--mc-ink);
   }
-  :global(.ob-pop .leaflet-popup-tip) {
-    background: var(--bg-2);
-    border: 1px solid var(--line);
+  .stage :global(.ob-pop .leaflet-popup-content p) { margin: 0; }
+  .stage :global(.ob-pop .leaflet-popup-tip) {
+    background: var(--mc-raised);
+    border: 1px solid var(--mc-line2);
     box-shadow: none;
   }
-  :global(.ob-pop .leaflet-popup-close-button) {
-    color: var(--ink-3) !important;
-    font-family: var(--font-ui) !important;
-    padding: 7px 8px 0 0 !important;
+  .stage :global(.ob-pop .leaflet-popup-close-button) {
+    top: 8px; right: 8px; width: 32px; height: 32px;
+    display: grid; place-items: center; z-index: 2;
+    border-radius: 9999px;
+    background: rgba(12, 12, 14, 0.72);
+    color: var(--mc-ink2);
+    font: 400 18px/1 var(--mc-font);
+    transition: background var(--mc-t-fast), color var(--mc-t-fast);
   }
-  :global(.ob-pop .leaflet-popup-close-button:hover) { color: var(--ink) !important; }
+  .stage :global(.ob-pop .leaflet-popup-close-button span) { line-height: 1; }
+  .stage :global(.ob-pop .leaflet-popup-close-button:hover) { background: var(--mc-inset); color: var(--mc-ink); }
 
-  :global(.pop-img) {
-    height: 118px;
-    background: var(--bg-3);
-    border-radius: 12px 12px 0 0;
-    overflow: hidden;
+  .stage :global(.pop-img) {
+    height: 128px; background: var(--mc-inset); border-bottom: 1px solid var(--mc-line); overflow: hidden;
   }
-  :global(.pop-img img) {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-    transition: transform 0.45s ease;
-  }
-  :global(.ob-pop:hover .pop-img img) { transform: scale(1.015); }
-  :global(.pop-img.empty) { display: none; }
+  .stage :global(.pop-img img) { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .stage :global(.pop-img.empty) { display: none; }
 
-  :global(.pop-body) { padding: 0.75rem 0.85rem 0.8rem; display: flex; flex-direction: column; gap: 0.45rem; }
-  :global(.pop-top) {
-    display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  .stage :global(.pop-body) { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+  /* without a photo the close button sits over the price row — leave it room */
+  .stage :global(.pop > .pop-body:first-child .pop-top) { padding-right: 36px; }
+  .stage :global(.pop-top) { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .stage :global(.pop-top .price) { font: 650 18px/1.2 var(--mc-font); letter-spacing: -0.015em; color: var(--mc-ink); }
+  .stage :global(.pop-score) {
+    font: 600 11px/1 var(--mc-font); font-variant-numeric: tabular-nums;
+    color: var(--mc-ink2); background: var(--mc-inset); border: 1px solid var(--mc-line);
+    border-radius: 9999px; padding: 4px 8px;
   }
-  :global(.pop-top .price) { font: 700 1.15rem/1.2 var(--font-ui); color: var(--ink); }
-  :global(.pop-score) {
-    font: 600 0.7rem/1 var(--font-ui);
-    color: var(--ink-3);
-    background: var(--bg-3);
-    border-radius: 999px;
-    padding: 0.22rem 0.5rem;
-    font-variant-numeric: tabular-nums;
+  .stage :global(a.pop-title) {
+    color: var(--mc-ink); font: 600 14px/1.35 var(--mc-font);
+    display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
-  :global(a.pop-title) {
-    color: var(--ink) !important;
-    font-family: var(--font-ui);
-    font-size: 0.9rem;
-    font-weight: 600;
-    line-height: 1.35;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+  .stage :global(a.pop-title:hover) { color: var(--mc-accent-bright); }
+  .stage :global(.pop-meta) { font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); }
+  .stage :global(.pop-badges) { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .stage :global(.pop-pitch) {
+    font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink2);
+    display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }
-  :global(a.pop-title:hover) { color: var(--accent) !important; }
-  :global(.pop-meta) {
-    font: 400 0.76rem/1.4 var(--font-ui);
-    color: var(--ink-3);
+  .stage :global(.pop-approx) { font: 400 11.5px/1.4 var(--mc-font); color: var(--mc-warn); }
+  .stage :global(.pop-links) {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-top: 2px; padding-top: 10px; border-top: 1px solid var(--mc-line);
   }
-  :global(.pop-badges) { display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; align-items: center; }
-  :global(.pop-pitch) {
-    font: 400 0.8rem/1.5 var(--font-ui);
-    color: var(--ink-2);
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+  .stage :global(.pop-links .mg-btn.primary) { color: var(--mc-bg); }
+  .stage :global(.pop-links .mg-btn.ghost) { padding: 0 8px; }
+  @media (pointer: coarse) {
+    .stage :global(.pop-links .mg-btn) { height: 40px; }
+    .stage :global(.ob-pop .leaflet-popup-close-button) { width: 40px; height: 40px; top: 6px; right: 6px; }
   }
-  :global(.pop-approx) {
-    font: 400 0.72rem/1.4 var(--font-ui);
-    color: var(--ink-3);
-  }
-  :global(.pop-links) {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.9rem;
-    padding-top: 0.55rem;
-    border-top: 1px solid var(--line);
-    font: 600 0.78rem/1.2 var(--font-ui);
-  }
-  :global(.pop-links a) { color: var(--accent); }
-  :global(.pop-links a:hover) { color: var(--accent-2); }
 </style>

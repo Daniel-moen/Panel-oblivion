@@ -186,20 +186,20 @@
 </Section>
 
 <style>
-  .hint { margin: 0 0 6px; font-size: 11.5px; line-height: 1.45; color: var(--mg-i3); }
+  .hint { margin: 0 0 6px; font-size: 11.5px; line-height: 1.45; color: var(--mc-ink3); }
   .list { display: flex; flex-direction: column; margin-bottom: 8px; }
-  .it { display: flex; align-items: center; gap: 2px; border-bottom: 1px solid var(--mg-line); border-radius: 10px; }
+  .it { display: flex; align-items: center; gap: 2px; border-bottom: 1px solid var(--mc-line); border-radius: 10px; }
   .it:last-child { border-bottom: 0; }
   .it.on { background: rgba(62, 207, 142, 0.1); }
-  .it.on .nm { color: var(--mg-ok); }
+  .it.on .nm { color: var(--mc-accent); }
   .nm {
     flex: 1; min-width: 0; min-height: 40px; padding: 0 8px; border: 0; background: none; text-align: left;
-    color: var(--mg-i); font: 500 13px/1.3 var(--mg-font); cursor: pointer;
+    color: var(--mc-ink); font: 500 13px/1.3 var(--mc-font); cursor: pointer;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center;
   }
   .nm.static { cursor: default; }
   .nm.two { flex-direction: column; align-items: flex-start; justify-content: center; }
-  small { color: var(--mg-i3); font-size: 11px; font-weight: 400; }
+  small { color: var(--mc-ink3); font-size: 11px; font-weight: 400; }
   .add { display: flex; gap: 6px; align-items: center; }
   .add .mg-input { height: 36px; flex: 1; min-width: 0; }
   .rn { flex: 1; display: flex; gap: 6px; align-items: center; padding: 4px 0; }

@@ -452,28 +452,28 @@
   .rail {
     position: sticky; top: 16px; align-self: start;
     max-height: calc(100vh - 190px); overflow-y: auto;
-    border-radius: var(--mg-r-card); padding: 10px;
+    border-radius: var(--mc-r-md); padding: 10px;
     display: flex; flex-direction: column; gap: 2px; min-width: 0;
   }
   .rl { padding: 3px 10px 5px; }
   .f {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     width: 100%; min-height: 36px; text-align: left; padding: 7px 10px;
-    border: 0; border-radius: 10px; background: none; color: var(--mg-i2);
-    font: 500 12.5px/1.35 var(--mg-font); cursor: pointer;
+    border: 0; border-radius: 10px; background: none; color: var(--mc-ink2);
+    font: 500 12.5px/1.35 var(--mc-font); cursor: pointer;
     transition: background 0.18s, color 0.18s;
   }
-  .f:hover { background: rgba(255, 255, 255, 0.06); color: var(--mg-i); }
-  .f.on { background: rgba(255, 255, 255, 0.1); color: var(--mg-i); }
+  .f:hover { background: rgba(255, 255, 255, 0.06); color: var(--mc-ink); }
+  .f.on { background: rgba(255, 255, 255, 0.1); color: var(--mc-ink); }
   .f span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .f i { font-style: normal; font-size: 11px; color: var(--mg-i3); flex: none; }
-  .f.on i { color: var(--mg-i2); }
+  .f i { font-style: normal; font-size: 11px; color: var(--mc-ink3); flex: none; }
+  .f.on i { color: var(--mc-ink2); }
   .sk { padding: 8px 10px; }
-  .sep { display: block; height: 1px; margin: 6px 8px; background: var(--mg-line); flex: none; }
+  .sep { display: block; height: 1px; margin: 6px 8px; background: var(--mc-line); flex: none; }
   .f.trash span { display: inline-flex; align-items: center; gap: 7px; }
 
   .lf { display: inline-flex; align-items: center; height: 40px; padding: 0 4px;
-        border-radius: 9999px; border: 1px solid var(--mg-line); }
+        border-radius: 9999px; border: 1px solid var(--mc-line); }
 
   /* —————————————————————————————————————————————————————— selection ——— */
   .main { min-width: 0; }
@@ -481,12 +481,12 @@
     display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
     padding: 6px 8px 6px 16px; margin-bottom: 12px; border-radius: 9999px;
   }
-  .selbar b { margin-right: 4px; font: 600 12.5px/1 var(--mg-font); color: var(--mg-i); }
+  .selbar b { margin-right: 4px; font: 600 12.5px/1 var(--mc-font); color: var(--mc-ink); }
   .selbar .gap { flex: 1; }
-  .selbar .on { border-color: rgba(62, 207, 142, 0.5); color: var(--mg-ok); }
-  .selbar .hint { font: 400 12px/1 var(--mg-font); color: var(--mg-i3); }
+  .selbar .on { border-color: rgba(62, 207, 142, 0.5); color: var(--mc-accent); }
+  .selbar .hint { font: 400 12px/1 var(--mc-font); color: var(--mc-ink3); }
   .labelrow { flex: 1 1 100%; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-              padding: 4px 0 2px; border-top: 1px solid var(--mg-line); margin-top: 2px; }
+              padding: 4px 0 2px; border-top: 1px solid var(--mc-line); margin-top: 2px; }
 
   /* ———————————————————————————————————————————————————————— the grid ——— */
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); }
@@ -506,10 +506,10 @@
     .f {
       width: auto; flex: none; min-height: 40px; border-radius: 9999px;
       padding: 0 14px !important; gap: 7px;
-      background: var(--mg-glass-soft); border: 1px solid var(--mg-line);
+      background: var(--mc-raised); border: 1px solid var(--mc-line);
     }
-    .f.on { background: rgba(62, 207, 142, 0.12); border-color: rgba(62, 207, 142, 0.4); color: var(--mg-ok); }
-    .f.on i { color: var(--mg-ok); }
+    .f.on { background: rgba(62, 207, 142, 0.12); border-color: rgba(62, 207, 142, 0.4); color: var(--mc-accent); }
+    .f.on i { color: var(--mc-accent); }
     .sk { flex: none; width: 90px; padding: 0; }
     .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
     .list { grid-template-columns: minmax(0, 1fr); }
@@ -518,7 +518,7 @@
     .sep { width: 1px; height: 24px; margin: 0 2px; }
   }
   @media (max-width: 560px) {
-    .selbar { border-radius: var(--mg-r-card); padding: 8px 10px; }
+    .selbar { border-radius: var(--mc-r-md); padding: 8px 10px; }
     .selbar b { flex: 1 1 100%; margin: 2px 0 4px; }
     .selbar .t { display: none; }
     .selbar .mg-btn { height: 40px; }

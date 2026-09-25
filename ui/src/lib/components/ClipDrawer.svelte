@@ -8,7 +8,8 @@
      reads as karaoke and, more importantly, makes every line clickable: click
      a line, the player seeks there. Finding the ten seconds where someone
      said "sea view" is the whole job. */
-  import { fade, fly } from 'svelte/transition';
+  import { tick } from 'svelte';
+  import { fade, pop, slide } from '$lib/motion.js';
   import { media, posterUrl, streamUrl, photoUrl, thumbUrl, fmtDuration, fmtBytes } from '$lib/media.js';
   import { say, can, CAP, setLabel, dropClips } from '$lib/media.svelte.js';
   import LabelDots from '$lib/components/media/library/LabelDots.svelte';
@@ -112,16 +113,64 @@
     ['Shot', clip.shoot_date ? clip.shoot_date.slice(0, 10) : null],
     ['Folder', clip.folder_name]
   ].filter(([, v]) => v) : []);
+
+  /* ——— shape: a centred dialog from 720px, a bottom sheet below ——— */
+  let wide = $state(true);
+  $effect(() => {
+    if (typeof matchMedia === 'undefined') return;
+    const mq = matchMedia('(min-width: 720px)');
+    const sync = () => (wide = mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  });
+
+  /* Lock the page behind while open and take focus so Esc and Tab land here. */
+  let box = $state(null);
+  $effect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    tick().then(() => box?.focus?.({ preventScroll: true }));
+    return () => { document.body.style.overflow = prev; };
+  });
+
+  /* ——— the phone throw: only the grab handle starts it ——— */
+  let drag = $state(0);
+  let from = 0;
+  let held = $state(null);
+  function grabStart(e) { if (wide) return; from = e.clientY; held = e.currentTarget; held.setPointerCapture?.(e.pointerId); }
+  function grabMove(e) { if (held == null) return; drag = Math.max(0, e.clientY - from); }
+  function grabEnd() { if (held == null) return; held = null; if (drag > 120) onclose?.(); drag = 0; }
+
+  /* Rendered at the end of <body> so no ancestor's stacking context (the
+     page's, the strip's) can sit on top of it or clip it. */
+  const enter = (node) => (wide ? pop(node, { duration: 260 }) : slide(node, { y: 640, duration: 340, opacity: 1 }));
+
+  function portal(node) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
 </script>
 
 
 
 <svelte:window onkeydown={onKey} />
 
-<div class="scrim" onclick={onclose} transition:fade={{ duration: 180 }} aria-hidden="true"></div>
+<div class="mg-portal" use:portal>
+<div class="scrim" onclick={onclose} transition:fade={{ duration: 200 }} aria-hidden="true"></div>
 
-<div class="box mg-glass-strong" role="dialog" aria-modal="true" aria-label={clip?.filename || 'Clip'}
-     transition:fly={{ y: 18, duration: 280, opacity: 0 }}>
+{#key wide}
+<div class="box" class:phone={!wide} role="dialog" aria-modal="true" aria-label={clip?.filename || 'Clip'}
+     tabindex="-1" bind:this={box}
+     style:transform={drag ? `translate3d(0,${drag}px,0)` : null}
+     style:transition={held == null ? 'transform 0.28s var(--mc-ease-out)' : 'none'}
+     transition:enter>
+
+  {#if !wide}
+    <div class="grab" onpointerdown={grabStart} onpointermove={grabMove}
+         onpointerup={grabEnd} onpointercancel={grabEnd} role="presentation"><i></i></div>
+  {/if}
+
 
   <button class="mg-btn secondary icon sm x" onclick={onclose} aria-label="Close (Esc)">
     <Icon name="close" size={15} />
@@ -274,7 +323,7 @@
 
         <section>
           <span class="mg-label">File</span>
-          <p class="path">{clip.filepath}</p>
+          <p class="path mg-code">{clip.filepath}</p>
         </section>
 
         {#if can(CAP.TRASH)}
@@ -288,102 +337,113 @@
     </aside>
   </div>
 </div>
+{/key}
+</div>
 
 <style>
-  .scrim {
-    position: fixed; inset: 0; z-index: 90; background: rgba(6, 6, 8, 0.6);
-    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
-  }
+  .scrim { position: fixed; inset: 0; z-index: 90; background: var(--mc-scrim); }
+
+  /* The lightbox: a raised plane, not glass. Centred from 720px up. */
   .box {
     position: fixed; inset: clamp(8px, 2.5vh, 22px) clamp(8px, 2.5vw, 22px);
-    z-index: 91; overflow: hidden; will-change: transform, opacity;
+    z-index: 91; overflow: hidden; outline: none; will-change: transform;
+    display: flex; flex-direction: column;
+    background: var(--mc-raised); border: 1px solid var(--mc-line2);
+    border-radius: var(--mc-r-lg); box-shadow: var(--mc-sh-2);
   }
+  /* Below 720px: a near-full-height sheet that rises from the bottom edge. */
+  .box.phone {
+    inset: auto 0 0 0; height: 94dvh;
+    border-left: 0; border-right: 0; border-bottom: 0;
+    border-radius: var(--mc-r-lg) var(--mc-r-lg) 0 0;
+  }
+  .grab { flex: none; display: grid; place-items: center; padding: 10px 0 6px; cursor: grab; touch-action: none; }
+  .grab > i { display: block; width: 36px; height: 4px; border-radius: 9999px; background: var(--mc-line3); }
 
-  /* Round glass buttons, the same vocabulary as the top bar. */
   .x { position: absolute; right: 12px; top: 12px; z-index: 6; }
+  .phone .x { top: 8px; right: 10px; }
   .nav {
     position: absolute; top: 50%; margin-top: -20px; z-index: 6;
-    opacity: 0; transition: opacity 0.2s, background 0.18s, border-color 0.18s;
+    opacity: 0; transition: opacity var(--mc-t-fast), background var(--mc-t-fast), border-color var(--mc-t-fast);
   }
-  .box:hover .nav { opacity: 0.8; }
+  .box:hover .nav { opacity: 0.85; }
   .nav:hover, .nav:focus-visible { opacity: 1; }
   .prev { left: 12px; }
   .next { right: 12px; }
 
-  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; height: 100%; }
+  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
   .stagecol { display: flex; flex-direction: column; min-width: 0; overflow-y: auto; }
 
-  /* Readability beats glass: the video sits on near-opaque black. */
-  .screen { background: #000; aspect-ratio: 16 / 9; flex: none; position: relative; }
+  .screen { background: var(--mc-inset); aspect-ratio: 16 / 9; flex: none; position: relative; }
   .screen video, .screen img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
   .head { padding: 16px 20px 6px; }
   .head h2 { font-size: 17px; overflow-wrap: anywhere; }
   .sub { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;
-         font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
+         font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .sub span + span::before { content: '·'; margin-right: 8px; }
 
   .tr { padding: 10px 20px 22px; min-height: 0; }
   .trh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .follow { font: 400 12px/1 var(--mg-font); color: var(--mg-i3);
+  .follow { font: 400 12px/1 var(--mc-font); color: var(--mc-ink3);
             display: flex; align-items: center; gap: 6px; cursor: pointer; }
-  .follow input { accent-color: var(--mg-ok); }
+  .follow input { accent-color: var(--mc-accent); }
 
   /* Transcript lines are ghost rows: nothing but type until one is live. */
   .lines { max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
   .line {
     display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px;
-    text-align: left; padding: 7px 9px; border-radius: 10px; border: 0; cursor: pointer;
-    background: none; color: var(--mg-i2); font: 400 13.5px/1.6 var(--mg-font);
-    transition: background 0.2s, color 0.2s;
+    text-align: left; padding: 7px 9px; border-radius: var(--mc-r-sm); border: 0; cursor: pointer;
+    background: none; color: var(--mc-ink2); font: 400 13.5px/1.6 var(--mc-font);
+    transition: background var(--mc-t-fast), color var(--mc-t-fast);
   }
-  .line:hover { background: rgba(255, 255, 255, 0.05); color: var(--mg-i); }
-  .line.on { background: rgba(255, 255, 255, 0.08); color: var(--mg-i); }
-  .line:focus-visible { outline: 2px solid var(--mg-ok); outline-offset: -2px; }
-  .tc { font: 500 11.5px/1.9 var(--mg-mono); color: var(--mg-i3); }
-  .line.on .tc { color: var(--mg-ok); }
+  .line:hover { background: var(--mc-line); color: var(--mc-ink); }
+  .line.on { background: var(--mc-ok-soft); color: var(--mc-ink); }
+  .line:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: -2px; }
+  .tc { font: 500 11.5px/1.9 var(--mc-mono); color: var(--mc-ink3); }
+  .line.on .tc { color: var(--mc-accent); }
   .tx { overflow-wrap: anywhere; }
-  .w { transition: color 0.18s; }
-  .w.said { color: #3ecf8e; font-weight: 500; }
+  .w { transition: color var(--mc-t-fast); }
+  .w.said { color: var(--mc-accent); font-weight: 500; }
 
-  .none { padding: 10px 20px 24px; color: var(--mg-i3); font-size: 13px; }
-  .link { color: var(--mg-ok); border: 0; background: none; padding: 0; cursor: pointer;
+  .none { padding: 10px 20px 24px; color: var(--mc-ink3); font-size: 13px; }
+  .link { color: var(--mc-accent); border: 0; background: none; padding: 0; cursor: pointer;
           font: inherit; text-decoration: underline; }
 
   .side {
-    border-left: 1px solid var(--mg-line); padding: 18px; overflow-y: auto;
-    background: rgba(0, 0, 0, 0.18);
+    border-left: 1px solid var(--mc-line); padding: 18px; overflow-y: auto; overscroll-behavior: contain;
+    background: var(--mc-surface);
   }
   .side section { margin-bottom: 22px; }
   .side section .mg-label { margin-bottom: 8px; }
 
   .tags { display: flex; gap: 5px; flex-wrap: wrap; }
-  .tags .mg-chip { animation: chip 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-  @keyframes chip { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: none; } }
 
   .note {
-    margin: 0 0 6px; padding: 8px 11px; border-radius: 12px;
-    font: 400 12.5px/1.55 var(--mg-font); color: var(--mg-i2); overflow-wrap: anywhere;
+    margin: 0 0 6px; padding: 8px 11px; border-radius: var(--mc-r-md);
+    font: 400 12.5px/1.55 var(--mc-font); color: var(--mc-ink2); overflow-wrap: anywhere;
   }
-  .path { margin: 0; padding: 8px 11px; border-radius: 12px; background: var(--mg-term);
-          font: 11.5px/1.55 var(--mg-mono); color: var(--mg-i3); overflow-wrap: anywhere; }
+  .path { margin: 0; overflow-wrap: anywhere; color: var(--mc-ink3); font-size: 11.5px; }
   .open { display: flex; gap: 6px; flex-wrap: wrap; }
-  .dim { display: block; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
+  .dim { display: block; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   form { margin-top: 8px; }
 
   @media (max-width: 900px) {
-    .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; overflow-y: auto; }
-    .side { border-left: 0; border-top: 1px solid var(--mg-line); }
+    .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; overflow-y: auto; overscroll-behavior: contain; }
+    .stagecol { overflow: visible; }
+    .side { overflow: visible; }
+    .side { border-left: 0; border-top: 1px solid var(--mc-line); }
     .nav { display: none; }
     .lines { max-height: none; }
-    .side { padding: 16px 14px calc(16px + var(--mg-sab, 0px)); }
+    .side { padding: 16px 16px calc(24px + var(--sab)); }
   }
   @media (pointer: coarse) {
-    .x { width: 40px; height: 40px; }
-    .open .mg-btn, section > .mg-btn { height: 40px; }
+    .x { width: 44px; height: 44px; }
+    .open .mg-btn, section > .mg-btn { height: 44px; }
+    .line { min-height: 44px; }
+    .follow { min-height: 44px; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .tags .mg-chip { animation: none; }
     .line, .w { transition: none; }
   }
 </style>

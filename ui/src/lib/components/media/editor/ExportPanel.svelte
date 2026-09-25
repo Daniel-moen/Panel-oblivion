@@ -225,33 +225,33 @@
 <style>
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
   .chips .mg-chip { min-height: 32px; }
-  .inl { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--mg-i2); margin-bottom: 8px; }
+  .inl { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--mc-ink2); margin-bottom: 8px; }
   .inl .mg-input { width: 110px; height: 36px; }
   .fld { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; }
   .fld .mg-input { height: 36px; }
-  .fld small { font-size: 11px; color: var(--mg-i3); }
-  .tg { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: var(--mg-i2); padding: 6px 0; line-height: 1.4; }
+  .fld small { font-size: 11px; color: var(--mc-ink3); }
+  .tg { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: var(--mc-ink2); padding: 6px 0; line-height: 1.4; }
   .go { align-self: stretch; margin-top: 6px; }
-  .res { margin-top: 10px; padding: 12px; border-radius: var(--mg-r-in); display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--mg-i2); }
-  .res b { color: var(--mg-i); font-weight: 600; overflow-wrap: anywhere; }
-  .res code { font: 11px/1.4 var(--mg-mono); color: var(--mg-i3); overflow-wrap: anywhere; }
+  .res { margin-top: 10px; padding: 12px; border-radius: var(--mc-r-md); display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--mc-ink2); }
+  .res b { color: var(--mc-ink); font-weight: 600; overflow-wrap: anywhere; }
+  .res code { font: 11px/1.4 var(--mc-mono); color: var(--mc-ink3); overflow-wrap: anywhere; }
   .res .mg-btn { align-self: flex-start; }
-  .err { color: var(--mg-crit); }
-  .hint { margin: 0 0 6px; font-size: 11.5px; line-height: 1.45; color: var(--mg-i3); }
+  .err { color: var(--mc-crit); }
+  .hint { margin: 0 0 6px; font-size: 11.5px; line-height: 1.45; color: var(--mc-ink3); }
   .marks { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
   .mk { position: relative; }
   .pick {
-    width: 72px; height: 48px; border-radius: 10px; border: 1px solid var(--mg-line);
+    width: 72px; height: 48px; border-radius: 10px; border: 1px solid var(--mc-line);
     background: repeating-conic-gradient(#2a2a2e 0 25%, #1c1c20 0 50%) 0 0 / 12px 12px;
-    display: grid; place-items: center; padding: 4px; cursor: pointer; overflow: hidden; color: var(--mg-i3); font-size: 10px;
+    display: grid; place-items: center; padding: 4px; cursor: pointer; overflow: hidden; color: var(--mc-ink3); font-size: 10px;
   }
   .pick img { max-width: 100%; max-height: 100%; object-fit: contain; }
-  .mk.on .pick { border-color: var(--mg-ok); box-shadow: 0 0 0 1px var(--mg-ok); }
+  .mk.on .pick { border-color: var(--mc-accent); box-shadow: 0 0 0 1px var(--mc-accent); }
   .x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: 0;
        background: #333; color: #fff; display: grid; place-items: center; cursor: pointer; padding: 0; }
   .pos { display: grid; grid-template-columns: repeat(3, 40px); gap: 4px; margin: 4px 0 8px; }
-  .pos button { height: 40px; border-radius: 10px; border: 1px solid var(--mg-line); background: var(--mg-glass-soft);
-                color: var(--mg-i2); cursor: pointer; font-size: 14px; }
-  .pos button.on { border-color: var(--mg-ok); color: var(--mg-ok); background: rgba(62, 207, 142, 0.12); }
+  .pos button { height: 40px; border-radius: 10px; border: 1px solid var(--mc-line); background: var(--mc-raised);
+                color: var(--mc-ink2); cursor: pointer; font-size: 14px; }
+  .pos button.on { border-color: var(--mc-accent); color: var(--mc-accent); background: rgba(62, 207, 142, 0.12); }
   .start { align-self: flex-start; }
 </style>

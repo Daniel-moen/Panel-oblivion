@@ -58,10 +58,10 @@
 <style>
   .caps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px 16px;
           grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
-  li { display: flex; gap: 8px; align-items: baseline; font: 400 12.5px/1.45 var(--mg-font); color: var(--mg-i); }
-  li.no { color: var(--mg-i3); }
-  .tick { flex: none; width: 14px; color: var(--mg-ok); font-weight: 700; }
-  li.no .tick { color: var(--mg-i3); }
-  a { color: var(--mg-ok); text-decoration: underline; text-underline-offset: 2px; }
-  .hint b { color: var(--mg-i2); font-weight: 500; }
+  li { display: flex; gap: 8px; align-items: baseline; font: 400 12.5px/1.45 var(--mc-font); color: var(--mc-ink); }
+  li.no { color: var(--mc-ink3); }
+  .tick { flex: none; width: 14px; color: var(--mc-accent); font-weight: 700; }
+  li.no .tick { color: var(--mc-ink3); }
+  a { color: var(--mc-accent); text-decoration: underline; text-underline-offset: 2px; }
+  .hint b { color: var(--mc-ink2); font-weight: 500; }
 </style>

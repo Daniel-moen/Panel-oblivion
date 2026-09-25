@@ -287,53 +287,53 @@
   }
   .crumb {
     flex: none; border: 0; background: none; padding: 0 10px; height: 32px;
-    border-radius: 9999px; color: var(--mg-i3);
-    font: 500 12.5px/1 var(--mg-font); white-space: nowrap; cursor: pointer;
+    border-radius: 9999px; color: var(--mc-ink3);
+    font: 500 12.5px/1 var(--mc-font); white-space: nowrap; cursor: pointer;
     transition: background 0.18s, color 0.18s;
   }
-  .crumb:hover { background: rgba(255, 255, 255, 0.08); color: var(--mg-i); }
-  .crumb.on, .crumb:last-child { color: var(--mg-i); }
-  .sep { flex: none; display: flex; color: var(--mg-i3); opacity: 0.6; }
+  .crumb:hover { background: rgba(255, 255, 255, 0.08); color: var(--mc-ink); }
+  .crumb.on, .crumb:last-child { color: var(--mc-ink); }
+  .sep { flex: none; display: flex; color: var(--mc-ink3); opacity: 0.6; }
 
   /* ———————————————————————————————————————————————————— selection ——— */
   .selbar {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-    border-radius: var(--mg-r-in); padding: 8px 10px 8px 14px; margin-bottom: 12px;
+    border-radius: var(--mc-r-md); padding: 8px 10px 8px 14px; margin-bottom: 12px;
   }
-  .selbar b { margin-right: auto; font: 600 12.5px/1 var(--mg-font); color: var(--mg-i); }
+  .selbar b { margin-right: auto; font: 600 12.5px/1 var(--mc-font); color: var(--mc-ink); }
 
   /* ——————————————————————————————————————————————————— drop target ——— */
   .dz {
     width: 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     padding: 12px 14px; margin-bottom: 12px; cursor: pointer; text-align: left;
-    border: 1px dashed var(--mg-line2); border-radius: var(--mg-r-card);
-    color: var(--mg-i2);
+    border: 1px dashed var(--mc-line2); border-radius: var(--mc-r-md);
+    color: var(--mc-ink2);
     transition: background 0.18s, border-color 0.18s, color 0.18s;
   }
-  .dz:hover:not(:disabled) { background: var(--mg-glass-hover); }
+  .dz:hover:not(:disabled) { background: var(--mc-line); }
   .dz:disabled { opacity: 0.4; cursor: default; }
-  .dz b { font: 600 13px/1 var(--mg-font); color: var(--mg-i); }
-  .dz .into { font: 400 11.5px/1 var(--mg-font); color: var(--mg-i3); margin-left: auto; }
+  .dz b { font: 600 13px/1 var(--mc-font); color: var(--mc-ink); }
+  .dz .into { font: 400 11.5px/1 var(--mc-font); color: var(--mc-ink3); margin-left: auto; }
   .dzi {
     width: 30px; height: 30px; flex: none; border-radius: 10px; display: grid;
     place-items: center; background: rgba(255, 255, 255, 0.07);
-    border: 1px solid var(--mg-line); color: inherit;
+    border: 1px solid var(--mc-line); color: inherit;
   }
   .dz.over {
     border-color: rgba(62, 207, 142, 0.7); background: rgba(62, 207, 142, 0.1);
-    color: var(--mg-ok);
+    color: var(--mc-accent);
   }
-  .dz.over b { color: var(--mg-ok); }
+  .dz.over b { color: var(--mc-accent); }
 
   /* ———————————————————————————————————————————————————— the queue ——— */
   .queue { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-  .up { border-radius: var(--mg-r-in); padding: 9px 12px; }
+  .up { border-radius: var(--mc-r-md); padding: 9px 12px; }
   .uh { display: flex; align-items: baseline; gap: 10px; margin-bottom: 7px; }
-  .un { flex: 1; min-width: 0; font: 500 12.5px/1.3 var(--mg-font); color: var(--mg-i);
+  .un { flex: 1; min-width: 0; font: 500 12.5px/1.3 var(--mc-font); color: var(--mc-ink);
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .up-pct { font: 500 11.5px/1 var(--mg-font); color: var(--mg-i3); flex: none; }
-  .up-pct.failed { color: var(--mg-crit); }
-  .mg-bar.failed > i { background: var(--mg-crit); }
+  .up-pct { font: 500 11.5px/1 var(--mc-font); color: var(--mc-ink3); flex: none; }
+  .up-pct.failed { color: var(--mc-crit); }
+  .mg-bar.failed > i { background: var(--mc-crit); }
 
   /* —————————————————————————————————————————————————————— the list ——— */
   .rows { display: flex; flex-direction: column; gap: 6px; }
@@ -343,7 +343,7 @@
   .row.sel { background: rgba(62, 207, 142, 0.1); border-color: rgba(62, 207, 142, 0.4); }
 
   .row input[type='checkbox'] {
-    flex: none; width: 17px; height: 17px; margin: 0; accent-color: var(--mg-ok); cursor: pointer;
+    flex: none; width: 17px; height: 17px; margin: 0; accent-color: var(--mc-accent); cursor: pointer;
   }
 
   .nm {
@@ -352,22 +352,22 @@
   }
   .ic {
     width: 36px; height: 36px; flex: none; border-radius: 50%; display: grid;
-    place-items: center; color: var(--mg-i2);
-    background: rgba(255, 255, 255, 0.07); border: 1px solid var(--mg-line);
+    place-items: center; color: var(--mc-ink2);
+    background: rgba(255, 255, 255, 0.07); border: 1px solid var(--mc-line);
     transition: color 0.18s, border-color 0.18s;
   }
-  .nm:hover .ic { color: var(--mg-i); border-color: var(--mg-line2); }
+  .nm:hover .ic { color: var(--mc-ink); border-color: var(--mc-line2); }
   .txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-  .t { font: 500 13.5px/1.25 var(--mg-font); letter-spacing: -0.01em; color: var(--mg-i);
+  .t { font: 500 13.5px/1.25 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink);
        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sub { font: 400 11.5px/1.25 var(--mg-font); color: var(--mg-i3);
+  .sub { font: 400 11.5px/1.25 var(--mc-font); color: var(--mc-ink3);
          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
          text-transform: lowercase; }
 
   .acts { flex: none; display: flex; align-items: center; gap: 4px; }
-  .st { color: var(--mg-i3); }
-  .st:hover { color: var(--mg-i); background: rgba(255, 255, 255, 0.08); }
-  .st.on { color: var(--mg-warn); }
+  .st { color: var(--mc-ink3); }
+  .st:hover { color: var(--mc-ink); background: rgba(255, 255, 255, 0.08); }
+  .st.on { color: var(--mc-warn); }
 
   /* A thumb is not a mouse pointer: on touch the row's round buttons grow to
      the 40px the rest of the section keeps for a tap target. */

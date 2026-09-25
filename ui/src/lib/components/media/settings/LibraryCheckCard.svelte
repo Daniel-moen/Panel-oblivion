@@ -106,12 +106,12 @@
 <style>
   .mg-bar { margin: 4px 2px 8px; }
   .hd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
-  .hd b { flex: 1; font: 600 13.5px/1.2 var(--mg-font); color: var(--mg-i); }
+  .hd b { flex: 1; font: 600 13.5px/1.2 var(--mc-font); color: var(--mc-ink); }
   .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px;
           max-height: 300px; overflow-y: auto; }
   .rows li { display: flex; align-items: center; gap: 10px; min-height: 40px; }
   .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .nm b { font: 500 12.5px/1.3 var(--mg-font); color: var(--mg-i); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .nm small { font: 11.5px/1.4 var(--mg-mono); color: var(--mg-i3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nm b { font: 500 12.5px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nm small { font: 11.5px/1.4 var(--mc-mono); color: var(--mc-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rows .mg-btn { flex: none; min-height: 36px; }
 </style>

@@ -61,7 +61,7 @@
     : [{ k: 'Hot', v: saleInfo.hot, tone: saleInfo.hot ? 'crit' : '', sub: 'call these first' },
        { k: 'Sellable', v: saleInfo.sellable, sub: 'scored and deduped' },
        { k: 'Multi-agency', v: saleInfo.multi, tone: 'ok', sub: 'proven open mandate' },
-       { k: 'Erf resolved', v: saleInfo.erf, sub: 'matched to the cadastre' }]);
+       { k: 'Erf resolved', v: saleInfo.erf, sub: 'matched to cadastre' }]);
 
   const crawling = $derived(app.status.running);
 
@@ -101,7 +101,7 @@
   {#each tiles as t, i (t.k)}
     <div class="mg-stat-tile mg-rise" style:--i={i}>
       <span class="hud">{t.k}</span>
-      <div class="v {t.tone || ''}">{#if app.loaded || t.v != null}{t.v ?? '—'}{:else}<Skeleton h="26px" w="56px" />{/if}</div>
+      <div class="v {t.tone || ''}">{#if t.v != null}{t.v}{:else if app.loaded && (app.stats || rent)}—{:else}<Skeleton h="26px" w="56px" />{/if}</div>
       <div class="sub">{t.sub}</div>
     </div>
   {/each}

@@ -150,15 +150,15 @@
   .wrap > .mg-chip { align-self: flex-start; }
   .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .row .mg-chip { min-height: 32px; }
-  .hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--mg-i3); }
-  .hint.warn { color: var(--mg-warn); }
+  .hint { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--mc-ink3); }
+  .hint.warn { color: var(--mc-warn); }
   .dl { display: flex; flex-direction: column; gap: 6px; }
-  .list { display: flex; flex-direction: column; border-top: 1px solid var(--mg-line); margin-top: 4px; }
-  .it { display: flex; align-items: center; gap: 2px; border-bottom: 1px solid var(--mg-line); border-radius: 10px; }
-  .it.on { background: var(--mg-glass-soft); }
+  .list { display: flex; flex-direction: column; border-top: 1px solid var(--mc-line); margin-top: 4px; }
+  .it { display: flex; align-items: center; gap: 2px; border-bottom: 1px solid var(--mc-line); border-radius: 10px; }
+  .it.on { background: var(--mc-raised); }
   .nm { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 8px; border: 0; background: none;
-        color: var(--mg-i2); font: 500 12.5px/1 var(--mg-font); text-align: left; cursor: pointer; }
-  .it.on .nm { color: var(--mg-i); }
+        color: var(--mc-ink2); font: 500 12.5px/1 var(--mc-font); text-align: left; cursor: pointer; }
+  .it.on .nm { color: var(--mc-ink); }
   .edit { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; }
   .sp { margin-top: 6px; }
 </style>

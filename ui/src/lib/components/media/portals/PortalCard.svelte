@@ -126,35 +126,35 @@
 <style>
   .sh { padding: 15px 16px; min-width: 0; }
   .ch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
-  .ch h3 { margin: 0; min-width: 0; font: 600 15px/1.25 var(--mg-font); letter-spacing: -0.01em;
-           color: var(--mg-i); overflow-wrap: anywhere; }
+  .ch h3 { margin: 0; min-width: 0; font: 600 15px/1.25 var(--mc-font); letter-spacing: -0.01em;
+           color: var(--mc-ink); overflow-wrap: anywhere; }
   .kind { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; flex: none;
-          background: var(--mg-glass-soft); border: 1px solid var(--mg-line); color: var(--mg-i2); }
+          background: var(--mc-raised); border: 1px solid var(--mc-line); color: var(--mc-ink2); }
 
   .meta { margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 4px 12px;
-          font: 400 12px/1.4 var(--mg-font); color: var(--mg-i3); }
+          font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); }
   .meta .w { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
 
   .done { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 12px;
-          border-radius: var(--mg-r-in); background: rgba(62, 207, 142, 0.1);
-          border: 1px solid rgba(62, 207, 142, 0.3); color: var(--mg-ok);
-          font: 400 12.5px/1.4 var(--mg-font); }
-  .done span { color: var(--mg-i2); }
-  .done b { color: var(--mg-ok); font-weight: 600; }
+          border-radius: var(--mc-r-md); background: rgba(62, 207, 142, 0.1);
+          border: 1px solid rgba(62, 207, 142, 0.3); color: var(--mc-accent);
+          font: 400 12.5px/1.4 var(--mc-font); }
+  .done span { color: var(--mc-ink2); }
+  .done b { color: var(--mc-accent); font-weight: 600; }
 
   .urlrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   code { flex: 1 1 200px; min-width: 0; height: 32px; display: flex; align-items: center;
-         padding: 0 12px; border-radius: 9999px; background: var(--mg-term);
-         font: 11.5px/1 var(--mg-mono); color: var(--mg-i2);
+         padding: 0 12px; border-radius: 9999px; background: var(--mc-inset);
+         font: 11.5px/1 var(--mc-mono); color: var(--mc-ink2);
          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .urlrow .mg-btn { min-height: 40px; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-  .chips b { color: var(--mg-i); font-weight: 600; }
+  .chips b { color: var(--mc-ink); font-weight: 600; }
 
   .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .tabs { overflow-x: auto; max-width: 100%; }
   .drop { margin-left: auto; min-height: 40px; }
 
-  .panel { margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--mg-line); min-width: 0; }
+  .panel { margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--mc-line); min-width: 0; }
 </style>

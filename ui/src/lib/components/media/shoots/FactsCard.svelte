@@ -82,7 +82,7 @@
 
 <style>
   .hd { margin-bottom: 10px; }
-  h3 { margin: 0; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mg-font); color: var(--mg-i); }
+  h3 { margin: 0; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); }
   .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   .f { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
   .full { grid-column: 1 / -1; }

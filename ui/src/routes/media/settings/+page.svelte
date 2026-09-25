@@ -310,35 +310,35 @@
   .set {
     display: flex; align-items: center; gap: 12px;
     min-height: 56px; padding: 11px 14px; margin-bottom: 6px;
-    border-radius: var(--mg-r-in);
+    border-radius: var(--mc-r-md);
   }
   .set:last-child { margin-bottom: 0; }
   .l { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-  .l b { font: 500 13.5px/1.25 var(--mg-font); letter-spacing: -0.01em; color: var(--mg-i); }
-  .hint { font: 400 12px/1.45 var(--mg-font); color: var(--mg-i3); overflow-wrap: anywhere; }
-  .mono { font: 12px/1.45 var(--mg-mono); }
-  .val { flex: none; font: 500 13px/1 var(--mg-font); color: var(--mg-i); }
-  .val.mono { font: 12px/1 var(--mg-mono); color: var(--mg-i2); }
+  .l b { font: 500 13.5px/1.25 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
+  .hint { font: 400 12px/1.45 var(--mc-font); color: var(--mc-ink3); overflow-wrap: anywhere; }
+  .mono { font: 12px/1.45 var(--mc-mono); }
+  .val { flex: none; font: 500 13px/1 var(--mc-font); color: var(--mc-ink); }
+  .val.mono { font: 12px/1 var(--mc-mono); color: var(--mc-ink2); }
 
-  .note { margin: 10px 2px 0; font: 400 12.5px/1.6 var(--mg-font); color: var(--mg-i3); }
-  .note code { font: 11.5px/1.5 var(--mg-mono); color: var(--mg-i2); }
+  .note { margin: 10px 2px 0; font: 400 12.5px/1.6 var(--mc-font); color: var(--mc-ink3); }
+  .note code { font: 11.5px/1.5 var(--mc-mono); color: var(--mc-ink2); }
 
   /* ———————————————————————————————————————————————————— a live job ——— */
-  .job { border-radius: var(--mg-r-in); padding: 12px 14px; margin-bottom: 6px; }
+  .job { border-radius: var(--mc-r-md); padding: 12px 14px; margin-bottom: 6px; }
   .jh { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
-  .jh b { flex: none; font: 600 13px/1 var(--mg-font); color: var(--mg-i); }
+  .jh b { flex: none; font: 600 13px/1 var(--mc-font); color: var(--mc-ink); }
   .cap { text-transform: capitalize; }
-  .jh .dim { flex: 1; min-width: 0; font: 400 12px/1 var(--mg-font); color: var(--mg-i3);
+  .jh .dim { flex: 1; min-width: 0; font: 400 12px/1 var(--mc-font); color: var(--mc-ink3);
              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pct { flex: none; font: 600 12.5px/1 var(--mg-font); color: var(--mg-ok); }
+  .pct { flex: none; font: 600 12.5px/1 var(--mc-font); color: var(--mc-accent); }
   .pulse { position: relative; display: flex; width: 8px; height: 8px; flex: none; }
-  .core, .ring { position: absolute; inset: 0; border-radius: 50%; background: var(--mg-ok); }
+  .core, .ring { position: absolute; inset: 0; border-radius: 50%; background: var(--mc-accent); }
   .ring { opacity: 0.6; }
 
   /* —————————————————————————————————————————————— what already ran ——— */
   .past { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 3px 2px; }
   .past .mg-chip { flex: none; text-transform: capitalize; }
-  .pn { min-width: 0; font: 400 12.5px/1.3 var(--mg-font); color: var(--mg-i2);
+  .pn { min-width: 0; font: 400 12.5px/1.3 var(--mc-font); color: var(--mc-ink2);
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .after { margin-top: 8px; }
 

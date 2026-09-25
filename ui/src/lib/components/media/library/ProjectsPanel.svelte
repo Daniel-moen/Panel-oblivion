@@ -125,20 +125,20 @@
   .rh { margin-bottom: 10px; }
   .mg-h2.sm { font-size: 15px; }
   .list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
-  .card { border-radius: var(--mg-r-in); padding: 12px 14px; min-width: 0; }
+  .card { border-radius: var(--mc-r-md); padding: 12px 14px; min-width: 0; }
   .top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
-  .top b { font: 600 14px/1.3 var(--mg-font); color: var(--mg-i); min-width: 0;
+  .top b { font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); min-width: 0;
            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .top span { font: 400 12px/1 var(--mg-font); color: var(--mg-i3); flex: none; }
+  .top span { font: 400 12px/1 var(--mc-font); color: var(--mc-ink3); flex: none; }
   .stages { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px; }
-  .st { flex: none; gap: 6px; text-decoration: none; color: var(--mg-i3); min-height: 32px; }
-  .st.has { color: var(--mg-i2); }
-  a.st:hover { color: var(--mg-i); border-color: var(--mg-line2); }
-  .st i { font-style: normal; font-size: 11px; color: var(--mg-i3); }
-  .st.has i { color: var(--mg-ok); }
-  .none { margin: 0; font-size: 13px; line-height: 1.55; color: var(--mg-i3); max-width: 680px; }
+  .st { flex: none; gap: 6px; text-decoration: none; color: var(--mc-ink3); min-height: 32px; }
+  .st.has { color: var(--mc-ink2); }
+  a.st:hover { color: var(--mc-ink); border-color: var(--mc-line2); }
+  .st i { font-style: normal; font-size: 11px; color: var(--mc-ink3); }
+  .st.has i { color: var(--mc-accent); }
+  .none { margin: 0; font-size: 13px; line-height: 1.55; color: var(--mc-ink3); max-width: 680px; }
   .more { margin-top: 8px; }
   .fld { display: flex; flex-direction: column; gap: 6px; }
-  .hint { margin: 12px 0 0; font: 400 12px/1.5 var(--mg-font); color: var(--mg-i3); }
+  .hint { margin: 12px 0 0; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
   @media (pointer: coarse) { .st { min-height: 40px; } }
 </style>

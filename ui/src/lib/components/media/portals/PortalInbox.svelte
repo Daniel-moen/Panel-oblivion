@@ -104,21 +104,21 @@
 {/if}
 
 <style>
-  .none { margin: 0; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
-  .lead { margin: 0 0 8px; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i2); }
-  .lead b { color: var(--mg-i); font-weight: 500; }
+  .none { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
+  .lead { margin: 0 0 8px; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink2); }
+  .lead b { color: var(--mc-ink); font-weight: 500; }
   .items { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px;
            max-height: 320px; overflow-y: auto; }
   li { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 6px;
-       border-radius: 10px; background: var(--mg-glass-soft); }
+       border-radius: 10px; background: var(--mc-raised); }
   .ck { display: grid; place-items: center; width: 32px; height: 36px; flex: none; cursor: pointer; }
-  .ck input { width: 17px; height: 17px; accent-color: var(--mg-ok); }
-  .th { flex: none; width: 54px; height: 34px; border-radius: 6px; overflow: hidden; background: var(--mg-term);
-        display: grid; place-items: center; color: var(--mg-i3); }
+  .ck input { width: 17px; height: 17px; accent-color: var(--mc-accent); }
+  .th { flex: none; width: 54px; height: 34px; border-radius: 6px; overflow: hidden; background: var(--mc-inset);
+        display: grid; place-items: center; color: var(--mc-ink3); }
   .th img { width: 100%; height: 100%; object-fit: cover; }
   .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .nm b { font: 500 12.5px/1.3 var(--mg-font); color: var(--mg-i); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .nm small { font: 400 11px/1.4 var(--mg-font); color: var(--mg-i3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nm b { font: 500 12.5px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nm small { font: 400 11px/1.4 var(--mc-font); color: var(--mc-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fileto { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .grow { flex: 1 1 180px; min-width: 0; }
   .mg-select.grow { display: block; }

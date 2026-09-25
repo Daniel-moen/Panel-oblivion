@@ -147,8 +147,8 @@
 </Section>
 
 <style>
-  .auto { display: flex; align-items: center; gap: 10px; padding: 4px 0 10px; border-bottom: 1px solid var(--mg-line); }
-  .hint { font-size: 11.5px; line-height: 1.4; color: var(--mg-i3); }
+  .auto { display: flex; align-items: center; gap: 10px; padding: 4px 0 10px; border-bottom: 1px solid var(--mc-line); }
+  .hint { font-size: 11.5px; line-height: 1.4; color: var(--mc-ink3); }
   .curves { padding-top: 6px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .chips .mg-chip { min-height: 32px; }

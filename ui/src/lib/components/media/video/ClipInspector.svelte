@@ -157,16 +157,16 @@
 <style>
   .insp { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .hd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .hd b { font: 600 14px/1.2 var(--mg-font); color: var(--mg-i); }
-  .hd .fn { color: var(--mg-i3); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 40ch; }
+  .hd b { font: 600 14px/1.2 var(--mc-font); color: var(--mc-ink); }
+  .hd .fn { color: var(--mc-ink3); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 40ch; }
   .hd .sp { flex: 1; }
   .grid { display: grid; gap: 14px 18px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
   .f { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .f em { font-style: normal; color: var(--mg-i3); }
-  .f small { color: var(--mg-i3); font-size: 11.5px; }
+  .f em { font-style: normal; color: var(--mc-ink3); }
+  .f small { color: var(--mc-ink3); font-size: 11.5px; }
   .f .mg-select > select { width: 100%; }
   .row { display: flex; align-items: center; gap: 10px; }
   .row input { flex: 1; min-width: 0; }
-  .v { font-size: 12px; color: var(--mg-i2); width: 40px; text-align: right; }
-  input[type='range'] { width: 100%; accent-color: var(--mg-ok); height: 28px; }
+  .v { font-size: 12px; color: var(--mc-ink2); width: 40px; text-align: right; }
+  input[type='range'] { width: 100%; accent-color: var(--mc-accent); height: 28px; }
 </style>

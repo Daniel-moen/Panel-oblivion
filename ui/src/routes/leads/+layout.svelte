@@ -1,18 +1,18 @@
 <script>
   /* Lead management — the header row of the pane, and nothing else.
 
-     The sidebar is gone: the dock is the navigation now, and the app's one
-     pane holds the page. What survives is what was actually Leads' own —
-     the jump-to search (properties and people, one box) and the four
-     sub-sections as a segmented row.
+     What is Leads' own: the jump-to search (properties and people, one box)
+     and the four sub-sections as a segmented row. The dock / rail is the
+     app's navigation; this row is only the section's insides.
 
-     TODO(leads agent): this is the foundation pass — the search results
-     dropdown, the badge on Today and the page headers underneath still want
-     the full glass treatment. */
+     The search results are a real popover: a solid raised plane under the
+     field, keyboard-driven (↑ ↓ Enter Esc), grouped People / Properties, and
+     it says so when nothing matches rather than silently showing nothing. */
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
+  import { slide } from '$lib/motion.js';
   import { api } from '$lib/api.js';
   import { leads, loadToday } from '$lib/leads.svelte.js';
   import Icon from '$lib/components/glass/Icon.svelte';
@@ -21,25 +21,57 @@
   let { children } = $props();
   const path = $derived(page.url.pathname);
   let q = $state('');
-  let results = $state([]);
   let all = $state([]);
   let people = $state([]);
+  let focused = $state(false);
+  let cursor = $state(0);
+  let box = $state(null);
 
-  onMount(() => { loadToday(); api.tracked().then((r) => (all = r)).catch(() => {});
-                api.contacts().then((r) => (people = r)).catch(() => {}); });
-
-  $effect(() => {
-    const n = q.trim().toLowerCase();
-    if (!n) { results = []; return; }
-    const props = all.filter((r) => [r.street_address_raw, r.title, r.suburb, r.contact_name, r.contact_phone]
-      .some((v) => v && String(v).toLowerCase().includes(n))).slice(0, 6)
-      .map((r) => ({ key: 'p' + r.group_id, href: '/leads/properties/' + r.group_id, b: r.street_address_raw || r.title,
-                     s: [r.suburb, r.contact_name].filter(Boolean).join(' · '), ico: 'building' }));
-    const ppl = people.filter((c) => [c.name, c.phone, c.email, c.company].some((v) => v && String(v).toLowerCase().includes(n))).slice(0, 5)
-      .map((c) => ({ key: 'c' + c.id, href: '/leads/contacts/' + c.id, b: c.name || c.phone,
-                     s: [c.phone, c.properties.length + ' propert' + (c.properties.length === 1 ? 'y' : 'ies')].filter(Boolean).join(' · '), ico: 'user' }));
-    results = [...ppl, ...props];
+  onMount(() => {
+    loadToday();
+    api.tracked().then((r) => (all = r)).catch(() => {});
+    api.contacts().then((r) => (people = r)).catch(() => {});
   });
+
+  const needle = $derived(q.trim().toLowerCase());
+  const has = (vals) => vals.some((v) => v && String(v).toLowerCase().includes(needle));
+
+  const hitsPeople = $derived(
+    !needle ? [] : people.filter((c) => has([c.name, c.phone, c.email, c.company])).slice(0, 5)
+      .map((c) => ({
+        key: 'c' + c.id, href: '/leads/contacts/' + c.id, b: c.name || c.phone || '—', ico: 'user',
+        s: [c.phone, c.properties.length + ' propert' + (c.properties.length === 1 ? 'y' : 'ies')].filter(Boolean).join(' · ')
+      }))
+  );
+  const hitsProps = $derived(
+    !needle ? [] : all.filter((r) => has([r.street_address_raw, r.title, r.suburb, r.contact_name, r.contact_phone])).slice(0, 6)
+      .map((r) => ({
+        key: 'p' + r.group_id, href: '/leads/properties/' + r.group_id, b: r.street_address_raw || r.title || r.group_id, ico: 'building',
+        s: [r.suburb, r.contact_name].filter(Boolean).join(' · ')
+      }))
+  );
+  const results = $derived([...hitsPeople, ...hitsProps]);
+  const open = $derived(focused && !!needle);
+
+  // a new query puts the cursor back on the first hit
+  $effect(() => { needle; cursor = 0; });
+
+  function go(r) {
+    q = '';
+    focused = false;
+    goto(r.href);
+  }
+  function onkey(e) {
+    if (e.key === 'Escape') { if (q) q = ''; else e.currentTarget.blur(); return; }
+    if (!results.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); cursor = (cursor + 1) % results.length; }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); cursor = (cursor - 1 + results.length) % results.length; }
+    else if (e.key === 'Enter') { e.preventDefault(); go(results[cursor]); }
+  }
+  // close when focus leaves the field AND its popover
+  function onout(e) {
+    if (!box?.contains(e.relatedTarget)) focused = false;
+  }
 
   const due = $derived(leads.today ? leads.today.overdue.length + leads.today.due_today.length : 0);
   const nav = $derived([
@@ -56,28 +88,43 @@
   );
 </script>
 
-<div class="mg-controls">
-  <label class="mg-search">
-    <span class="ic"><Icon name="search" size={16} /></span>
-    <input class="mg-input" type="search" placeholder="Find a property or person…" bind:value={q} />
-    {#if q}
-      <button class="clear" onclick={() => (q = '')} aria-label="Clear the search">
-        <Icon name="close" size={14} />
-      </button>
-    {/if}
-    {#if results.length}
-      <ul class="hits mg-glass-strong">
-        {#each results as r (r.key)}
-          <li><button onclick={() => { q = ''; goto(r.href); }}>
-            <Icon name={r.ico} size={15} />
-            <span class="t"><b>{r.b}</b><span>{r.s}</span></span>
-          </button></li>
-        {/each}
-      </ul>
-    {/if}
-  </label>
+<div class="bar">
+  <div class="find" bind:this={box} onfocusin={() => (focused = true)} onfocusout={onout}>
+    <div class="mg-search">
+      <span class="ic"><Icon name="search" size={16} /></span>
+      <input class="mg-input" type="search" placeholder="Find a property or person…" bind:value={q}
+             onkeydown={onkey} aria-label="Find a property or person" autocomplete="off"
+             role="combobox" aria-expanded={open} aria-controls="lead-hits" />
+      {#if q}
+        <button type="button" class="clear" onclick={() => (q = '')} aria-label="Clear the search">
+          <Icon name="close" size={14} />
+        </button>
+      {/if}
+    </div>
 
-  <Seg options={nav} value={here} onchange={(v) => goto(v)} label="Lead sections" />
+    {#if open}
+      <div class="hits mg-popover" id="lead-hits" role="listbox" transition:slide={{ y: -6, duration: 180 }}>
+        {#if !results.length}
+          <p class="none">No property or person matches “{q.trim()}”.</p>
+        {:else}
+          {#each results as r, i (r.key)}
+            {#if i === 0 && hitsPeople.length}<span class="hud grp">People</span>{/if}
+            {#if i === hitsPeople.length && hitsProps.length}<span class="hud grp">Properties</span>{/if}
+            <button type="button" role="option" aria-selected={i === cursor} class:cur={i === cursor}
+                    onmouseenter={() => (cursor = i)} onclick={() => go(r)}>
+              <span class="hic"><Icon name={r.ico} size={15} /></span>
+              <span class="t"><b>{r.b}</b>{#if r.s}<span>{r.s}</span>{/if}</span>
+              <Icon name="chevronRight" size={14} class="chev" />
+            </button>
+          {/each}
+        {/if}
+      </div>
+    {/if}
+  </div>
+
+  <div class="sections mg-noscroll">
+    <Seg options={nav} value={here} onchange={(v) => goto(v)} label="Lead sections" />
+  </div>
 </div>
 
 {#key path}
@@ -85,22 +132,33 @@
 {/key}
 
 <style>
-  .mg-controls { position: relative; z-index: 20; }
+  .bar {
+    position: relative; z-index: 30;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+  }
+  .find { position: relative; flex: 1 1 260px; max-width: 26rem; min-width: 0; }
+  .sections { display: flex; overflow-x: auto; min-width: 0; max-width: 100%; padding: 1px 0; }
+  @media (max-width: 639px) {
+    .find { flex-basis: 100%; max-width: none; }
+    .sections { flex-basis: 100%; }
+  }
 
   .hits {
-    position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30;
-    list-style: none; margin: 0; padding: 6px;
-    max-height: 60vh; overflow-y: auto;
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 40;
+    display: flex; flex-direction: column; gap: 1px;
+    max-height: min(60vh, 440px); overflow-y: auto; overscroll-behavior: contain;
   }
-  .hits button {
-    width: 100%; display: flex; align-items: center; gap: 10px;
-    background: none; border: 0; border-radius: 12px; padding: 8px 10px;
-    text-align: left; color: var(--mg-i2); cursor: pointer;
-    transition: background 0.15s;
+  @media (min-width: 640px) { .hits { min-width: 360px; } }
+  .grp { padding: 8px 10px 4px; }
+  .hits > button.cur { background: rgba(255, 255, 255, 0.06); color: var(--mc-ink); }
+  .hic {
+    flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--mc-inset); border: 1px solid var(--mc-line); color: var(--mc-ink3);
   }
-  .hits button:hover { background: var(--mg-glass-soft); color: var(--mg-i); }
-  .t { min-width: 0; display: flex; flex-direction: column; }
-  .t b { font: 500 13px/1.4 var(--mg-font); color: var(--mg-i);
-         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .t span { font: 400 11.5px/1.4 var(--mg-font); color: var(--mg-i3); }
+  .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .t b { font: 500 13px/1.35 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .t span { font: 400 12px/1.35 var(--mc-font); color: var(--mc-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hits :global(.chev) { flex: none; color: var(--mc-ink3); }
+  .none { margin: 0; padding: 12px 10px; font: 400 13px/1.45 var(--mc-font); color: var(--mc-ink3); }
+  @media (pointer: coarse) { .hits > button { min-height: 48px; } }
 </style>

@@ -229,6 +229,7 @@
   .home { display: flex; flex-direction: column; gap: 14px; }
 
   .hello { margin: 4px 0 2px; align-items: flex-end; }
+  @media (max-width: 640px) { .hello .mg-actions { flex-basis: 100%; margin-left: 0; } .hello .mg-actions :global(.mg-btn) { flex: 1; } }
   .titles { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
   .titles .mg-h1 { font-size: 26px; }
   .titles .mg-sub { font-size: 14px; }

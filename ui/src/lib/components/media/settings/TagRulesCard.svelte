@@ -132,18 +132,18 @@
 </SettingsCard>
 
 <style>
-  .dim { color: var(--mg-i3); font-weight: 400; }
+  .dim { color: var(--mc-ink3); font-weight: 400; }
   .field.sm { flex: 1 1 140px; }
   .field.xs { flex: 0 1 100px; }
-  .ex { display: block; font-size: 12px; color: var(--mg-i3); overflow-wrap: anywhere; }
-  mark { background: rgba(62, 207, 142, 0.22); color: var(--mg-i); border-radius: 3px; padding: 0 2px; }
+  .ex { display: block; font-size: 12px; color: var(--mc-ink3); overflow-wrap: anywhere; }
+  mark { background: rgba(62, 207, 142, 0.22); color: var(--mc-ink); border-radius: 3px; padding: 0 2px; }
   .rules { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-  .rules li { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: var(--mg-r-in); min-height: 48px; }
-  .rules li.off .nm b { color: var(--mg-i3); }
+  .rules li { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: var(--mc-r-md); min-height: 48px; }
+  .rules li.off .nm b { color: var(--mc-ink3); }
   .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .nm b { font: 500 13px/1.3 var(--mg-font); color: var(--mg-i); }
-  .nm small { font: 400 11.5px/1.4 var(--mg-font); color: var(--mg-i3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .nm small.mono { font-family: var(--mg-mono); }
+  .nm b { font: 500 13px/1.3 var(--mc-font); color: var(--mc-ink); }
+  .nm small { font: 400 11.5px/1.4 var(--mc-font); color: var(--mc-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nm small.mono { font-family: var(--mc-mono); }
   .tog { min-height: 36px; min-width: 52px; justify-content: center; cursor: pointer; }
   .more { margin-top: 4px; min-height: 40px; }
 </style>

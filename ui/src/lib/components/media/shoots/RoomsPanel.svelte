@@ -126,18 +126,18 @@
 
 <style>
   .hd { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  h3 { margin: 0; flex: 1; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mg-font); color: var(--mg-i); }
-  .none { margin: 0 0 8px; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
+  h3 { margin: 0; flex: 1; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); }
+  .none { margin: 0 0 8px; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .rooms { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
   .rooms:empty { display: none; }
-  .rooms b { color: var(--mg-i); font-weight: 600; }
-  .x { border: 0; background: none; color: var(--mg-i3); padding: 4px; margin: -4px -6px -4px 0; cursor: pointer; display: grid; place-items: center; }
-  .x:hover { color: var(--mg-crit); }
+  .rooms b { color: var(--mc-ink); font-weight: 600; }
+  .x { border: 0; background: none; color: var(--mc-ink3); padding: 4px; margin: -4px -6px -4px 0; cursor: pointer; display: grid; place-items: center; }
+  .x:hover { color: var(--mc-crit); }
   .add { display: flex; gap: 8px; }
   .add .mg-input { flex: 1; min-width: 0; }
   .photos { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); margin-top: 12px; }
   figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
-  .im { display: block; aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden; background: var(--mg-term); }
+  .im { display: block; aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden; background: var(--mc-inset); }
   .im img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .mg-select { display: block; }
   .mg-select select { height: 36px; font-size: 12.5px; }

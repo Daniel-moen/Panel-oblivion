@@ -131,28 +131,28 @@
   .badge {
     position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px;
     padding: 0 5px; border-radius: 9999px; display: grid; place-items: center;
-    background: var(--mg-crit); color: #fff; font: 700 10.5px/1 var(--mg-font);
-    box-shadow: 0 0 0 2px var(--mg-bg);
+    background: var(--mc-crit); color: #fff; font: 700 10.5px/1 var(--mc-font);
+    box-shadow: 0 0 0 2px var(--mc-bg);
   }
   @media (pointer: coarse) {
     .bell.icon { width: 40px; height: 40px; }
   }
 
   .sk { display: grid; gap: 6px; padding: 10px 2px; }
-  .none { margin: 0; padding: 14px 2px; font-size: 13px; color: var(--mg-i3); }
+  .none { margin: 0; padding: 14px 2px; font-size: 13px; color: var(--mc-ink3); }
 
   .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start;
        padding: 8px 6px; border-radius: 12px; position: relative; }
   li.unread { background: rgba(62, 207, 142, 0.07); }
   li.unread::after { content: ''; position: absolute; right: 10px; top: 14px; width: 7px; height: 7px;
-                     border-radius: 50%; background: var(--mg-ok); }
+                     border-radius: 50%; background: var(--mc-accent); }
   .ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center;
-        background: rgba(255, 255, 255, 0.07); border: 1px solid var(--mg-line); color: var(--mg-i2); }
+        background: rgba(255, 255, 255, 0.07); border: 1px solid var(--mc-line); color: var(--mc-ink2); }
   .body { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-right: 14px;
           color: inherit; text-decoration: none; }
-  a.body:hover b { color: var(--mg-ok); }
-  .body b { font: 500 13px/1.4 var(--mg-font); color: var(--mg-i); overflow-wrap: anywhere; }
-  .body q { font: 400 12.5px/1.45 var(--mg-font); color: var(--mg-i2); overflow-wrap: anywhere; }
-  .body time { font: 400 11.5px/1.3 var(--mg-font); color: var(--mg-i3); }
+  a.body:hover b { color: var(--mc-accent); }
+  .body b { font: 500 13px/1.4 var(--mc-font); color: var(--mc-ink); overflow-wrap: anywhere; }
+  .body q { font: 400 12.5px/1.45 var(--mc-font); color: var(--mc-ink2); overflow-wrap: anywhere; }
+  .body time { font: 400 11.5px/1.3 var(--mc-font); color: var(--mc-ink3); }
 </style>

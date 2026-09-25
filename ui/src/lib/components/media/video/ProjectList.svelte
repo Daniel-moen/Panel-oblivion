@@ -152,19 +152,19 @@
   .gh { aspect-ratio: 16 / 12; }
   .card { display: flex; flex-direction: column; padding: 0; overflow: hidden; min-width: 0; }
   .cov {
-    position: relative; aspect-ratio: 16 / 9; background: var(--mg-term); display: grid; place-items: center;
-    color: var(--mg-i3);
+    position: relative; aspect-ratio: 16 / 9; background: var(--mc-inset); display: grid; place-items: center;
+    color: var(--mc-ink3);
   }
   .cov img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .asp {
     position: absolute; top: 8px; left: 8px; padding: 3px 8px; border-radius: 9999px;
-    background: rgba(0, 0, 0, 0.6); color: #fff; font: 600 11px/1 var(--mg-font);
+    background: rgba(0, 0, 0, 0.6); color: #fff; font: 600 11px/1 var(--mc-font);
   }
   .meta { padding: 12px 14px 4px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .nm { font: 600 14px/1.3 var(--mg-font); color: var(--mg-i); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sub { font-size: 12px; color: var(--mg-i3); }
+  .nm { font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub { font-size: 12px; color: var(--mc-ink3); }
   .acts { display: flex; gap: 2px; padding: 4px 8px 8px; }
   .frm { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; }
   .f { display: flex; flex-direction: column; gap: 5px; }
-  .why { margin: 0; font-size: 13px; line-height: 1.55; color: var(--mg-i2); }
+  .why { margin: 0; font-size: 13px; line-height: 1.55; color: var(--mc-ink2); }
 </style>
