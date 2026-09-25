@@ -1495,153 +1495,143 @@ def api_me_patch():
 # behind the auth gate, so a login page built from it could never load for
 # someone who is not yet signed in. Inline CSS and JS, one file, no imports.
 
-_SCENE_CSS = """  /* "Studio Glass", hand-inlined. This page cannot import ui/src/lib/glass.css
-     — the bundle lives behind the auth gate — so the subset it needs (the
-     --mg-* tokens, .mg-glass-strong, .mg-btn, .mg-input, .mg-strip, .mg-label)
-     is copied here verbatim. If the vocabulary changes there, change it here.
-     Always dark: no theme attribute, no stored preference, no light
-     variant — a light pane over a photograph is unreadable. */
+_SCENE_CSS = """  /* The Mission Control language, hand-inlined. This page cannot import
+     ui/src/lib/mc.css — the bundle lives behind the auth gate — so the subset
+     it needs (the --mc-* tokens, the card, .mg-btn, .mg-input, .mg-strip,
+     .mg-label) is copied here. If the vocabulary changes there, change it
+     here. Always dark, no photograph, no frosted glass: one solid card on the
+     app's graphite. (Scene of the hour, kept for the renderer: __HERO__.) */
   :root {
-    --mg-bg: #111113;
-    --mg-glass-strong: rgba(14, 14, 18, 0.74);
-    --mg-glass-soft: rgba(255, 255, 255, 0.06);
-    --mg-glass-hover: rgba(255, 255, 255, 0.1);
-    --mg-line: rgba(255, 255, 255, 0.12);
-    --mg-line2: rgba(255, 255, 255, 0.22);
-    --mg-i: #f3f3f4;
-    --mg-i2: #a7a7b0;
-    --mg-i3: #6d6d78;
-    --mg-ok: #3ecf8e;
-    --mg-crit: #f26d64;
-    --mg-font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
-    --mg-r: 22px;
-    --mg-r-in: 14px;
-    --mg-blur: 28px;
-    --mg-sh: 0 24px 64px -16px rgba(0, 0, 0, 0.65);
-    --mg-lit: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    --mc-bg: #111113;
+    --mc-surface: #18181b;
+    --mc-raised: #202024;
+    --mc-inset: #0c0c0e;
+    --mc-line: #26262b;
+    --mc-line2: #37373e;
+    --mc-ink: #f3f3f4;
+    --mc-ink2: #a7a7b0;
+    --mc-ink3: #6d6d78;
+    --mc-accent: #3ecf8e;
+    --mc-crit: #f26d64;
+    --mc-font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif;
+    --mc-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --mc-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html { min-height: 100%; }
-  /* Deep graphite under the photo, so a slow image never flashes white. */
+  html { min-height: 100%; background: var(--mc-bg); }
   body, .mg-scene {
     margin: 0; min-height: 100vh; min-height: 100svh; position: relative;
-    color-scheme: dark; color: var(--mg-i);
-    font-family: var(--mg-font); font-size: 14px;
+    color-scheme: dark; color: var(--mc-ink);
+    font-family: var(--mc-font); font-size: 14px; line-height: 1.5;
     -webkit-font-smoothing: antialiased;
-    background: var(--mg-bg);
-    background-image: radial-gradient(120% 90% at 50% 0%, #17171b 0%, #111113 55%, #0c0c0e 100%);
+    background: var(--mc-bg);
     display: grid; place-items: center;
     padding: 32px 16px calc(32px + env(safe-area-inset-bottom, 0px));
   }
-  :focus-visible { outline: 2px solid rgba(62, 207, 142, 0.75); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid rgba(62, 207, 142, 0.7); outline-offset: 2px; }
+  a { color: var(--mc-ink2); text-decoration: underline; text-decoration-color: var(--mc-line2);
+      text-underline-offset: 3px; }
+  a:hover { color: var(--mc-ink); }
 
-  /* The scene's photograph, the same one the app shows: picked by the hour
-     server-side, drifting 1.0 → 1.06 over 90s, a dim veil and two scrims. */
-  .backdrop { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-  .backdrop .shot {
-    position: absolute; inset: 0; background-size: cover; background-position: center;
-    background-image: url(/hero-__HERO__.jpg);
-    animation: mg-drift 90s ease-in-out infinite alternate; will-change: transform;
-  }
-  .backdrop .dim { position: absolute; inset: 0; background: rgba(6, 6, 8, 0.2); }
-  .backdrop .top { position: absolute; left: 0; right: 0; top: 0; height: 32%;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent); }
-  .backdrop .bot { position: absolute; left: 0; right: 0; bottom: 0; height: 42%;
-    background: linear-gradient(0deg, rgba(0, 0, 0, 0.7), transparent); }
-  @keyframes mg-drift { from { transform: scale(1); } to { transform: scale(1.06); } }
-  @keyframes mg-fadeup { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  /* the old photograph's markup is still in the page; it simply is not drawn */
+  .backdrop { display: none; }
+  @keyframes mg-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
-  /* .mg-glass-strong — the one card, floating on the photograph. */
+  /* the card: one solid surface, a hairline, 16px corners */
   .mg-glass-strong {
-    background: var(--mg-glass-strong);
-    border: 1px solid var(--mg-line);
-    border-radius: var(--mg-r);
-    box-shadow: var(--mg-sh), var(--mg-lit);
-    -webkit-backdrop-filter: blur(var(--mg-blur)) saturate(150%);
-    backdrop-filter: blur(var(--mg-blur)) saturate(150%);
+    background: var(--mc-surface);
+    border: 1px solid var(--mc-line);
+    border-radius: 16px;
+    box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.75);
   }
   .card {
-    position: relative; z-index: 1; width: 100%; max-width: 380px;
-    padding: 26px 24px 22px;
-    animation: mg-fadeup 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    position: relative; z-index: 1; width: 100%; max-width: 400px;
+    padding: 28px 28px 24px;
+    animation: mg-rise 0.32s var(--mc-ease) both;
   }
 
-  /* wordmark */
-  .logo { display: flex; align-items: baseline; gap: 8px; margin-bottom: 22px; }
-  .mark { width: 10px; height: 10px; border-radius: 3px; background: var(--mg-ok);
-          align-self: center; flex: none; }
-  .name { font: 600 15px/1 var(--mg-font); letter-spacing: -0.01em; color: var(--mg-i); }
-  .sub { font: 500 11px/1 var(--mg-font); color: var(--mg-i3); }
+  /* wordmark: a green dot and the name */
+  .logo { display: flex; align-items: center; gap: 8px; margin-bottom: 28px; }
+  .mark { width: 8px; height: 8px; border-radius: 50%; background: var(--mc-accent); flex: none;
+          box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.16); }
+  .name { font: 600 14px/1 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
+  .sub { margin-left: 2px; font: 500 11px/1 var(--mc-font); letter-spacing: 0.05em;
+         text-transform: uppercase; color: var(--mc-ink3); }
 
-  h1 { margin: 0 0 4px; font: 600 20px/1.2 var(--mg-font); letter-spacing: -0.01em;
-       color: var(--mg-i); }
-  .who { margin: 0 0 18px; font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i3); }
+  h1 { margin: 0 0 4px; font: 650 22px/1.2 var(--mc-font); letter-spacing: -0.015em;
+       color: var(--mc-ink); }
+  .who { margin: 0 0 20px; font: 400 13px/1.5 var(--mc-font); color: var(--mc-ink2); }
   button, input { font: inherit; }
 
-  /* .mg-strip.crit — the error, a slim notice and never a boxed alert. */
+  /* .mg-strip.crit — the error: a slim red-tinted notice */
   .mg-strip {
     display: flex; align-items: flex-start; gap: 10px;
-    padding: 10px 14px; margin-bottom: 14px; border-radius: var(--mg-r-in);
-    background: var(--mg-glass-soft); border: 1px solid var(--mg-line);
-    font: 400 12.5px/1.5 var(--mg-font); color: var(--mg-i2);
+    padding: 10px 14px; margin-bottom: 16px; border-radius: 12px;
+    background: var(--mc-raised); border: 1px solid var(--mc-line);
+    font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink2);
   }
-  .mg-strip.crit { background: rgba(242, 109, 100, 0.1); border-color: rgba(242, 109, 100, 0.28);
-                   color: var(--mg-crit); }
+  .mg-strip.crit { background: rgba(242, 109, 100, 0.13); border-color: rgba(242, 109, 100, 0.32);
+                   color: var(--mc-crit); }
 
-  /* .mg-btn — pills. The passkey button is the ONE white primary on the page;
-     the password submit below it is secondary glass. */
+  /* .mg-btn — 44px, 12px corners. `.primary` is the white one. */
   .mg-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    flex: none; height: 40px; padding: 0 18px;
-    border: 1px solid transparent; border-radius: 9999px; background: none;
-    color: var(--mg-i); font: 500 13.5px/1 var(--mg-font); letter-spacing: -0.01em;
-    white-space: nowrap; cursor: pointer; user-select: none;
-    transition: background 0.18s, border-color 0.18s, color 0.18s, transform 0.12s;
+    flex: none; height: 44px; padding: 0 18px;
+    border: 1px solid transparent; border-radius: 12px; background: none;
+    color: var(--mc-ink); font: 500 14px/1 var(--mc-font); letter-spacing: -0.005em;
+    white-space: nowrap; cursor: pointer; user-select: none; -webkit-user-select: none;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.12s var(--mc-ease);
   }
   .mg-btn:active:not(:disabled) { transform: scale(0.97); }
   .mg-btn:disabled { opacity: 0.4; pointer-events: none; }
-  .mg-btn.primary { background: var(--mg-i); color: #111113; font-weight: 600; }
+  .mg-btn.primary { background: var(--mc-ink); color: var(--mc-bg); font-weight: 600; }
   .mg-btn.primary:hover { background: #ffffff; }
-  .mg-btn.secondary { background: var(--mg-glass-soft); border-color: var(--mg-line); }
-  .mg-btn.secondary:hover { background: var(--mg-glass-hover); border-color: var(--mg-line2); }
-  .mg-btn.lg { height: 48px; padding: 0 24px; font-size: 15px; gap: 10px; }
-  /* The hint rides inside the pill as a second line, so the button and its
-     explanation appear and disappear together (the script toggles one node). */
-  #pk { width: 100%; flex-direction: column; gap: 3px; height: auto;
-        min-height: 52px; padding: 9px 20px; line-height: 1.25; white-space: normal;
-        text-align: center; }
-  #pk small { font: 400 11.5px/1.35 var(--mg-font); letter-spacing: 0;
-              color: rgba(17, 17, 19, 0.58); }
+  .mg-btn.secondary { background: var(--mc-raised); border-color: var(--mc-line); color: var(--mc-ink); }
+  .mg-btn.secondary:hover { border-color: var(--mc-line2); }
+  .mg-btn.lg { min-height: 44px; font-size: 14px; }
 
-  /* the divider: two hairlines and a quiet word, sentence case */
-  .or { display: flex; align-items: center; gap: 12px; margin: 16px 0 14px;
-        color: var(--mg-i3); font: 500 11px/1 var(--mg-font); }
-  .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--mg-line); }
+  /* The passkey sign-in is the secondary: raised, hairline, its hint as a
+     second line inside it (the script toggles the one node). The password
+     submit under it is the white primary. */
+  #pk { width: 100%; flex-direction: column; gap: 4px; height: auto; min-height: 56px;
+        padding: 10px 20px; line-height: 1.25; white-space: normal; text-align: center;
+        background: var(--mc-raised); border-color: var(--mc-line); color: var(--mc-ink);
+        font-weight: 600; }
+  #pk:hover { background: var(--mc-raised); border-color: var(--mc-line2); }
+  #pk small { font: 400 12px/1.35 var(--mc-font); letter-spacing: 0; color: var(--mc-ink3); }
 
-  /* .mg-label + .mg-input */
-  .mg-label { display: block; font: 500 11px/1.4 var(--mg-font); letter-spacing: 0.01em;
-              color: var(--mg-i3); margin-bottom: 6px; }
+  /* the divider: two hairlines and a quiet word */
+  .or { display: flex; align-items: center; gap: 12px; margin: 18px 0 16px;
+        color: var(--mc-ink3); font: 600 11px/1 var(--mc-font); letter-spacing: 0.05em; text-transform: uppercase; }
+  .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--mc-line); }
+
+  /* .mg-label + .mg-input — an inset well with a green focus ring */
+  .mg-label { display: block; font: 600 11px/1.4 var(--mc-font); letter-spacing: 0.05em;
+              text-transform: uppercase; color: var(--mc-ink3); margin-bottom: 8px; }
   .mg-input {
-    width: 100%; height: 40px; padding: 0 14px;
-    background: var(--mg-glass-soft); border: 1px solid var(--mg-line);
-    border-radius: var(--mg-r-in); color: var(--mg-i);
-    font: 400 14px/1 var(--mg-font); outline: none;
-    transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+    width: 100%; height: 44px; padding: 0 14px;
+    background: var(--mc-inset); border: 1px solid var(--mc-line);
+    border-radius: 12px; color: var(--mc-ink);
+    font: 400 15px/1 var(--mc-font); outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .mg-input::placeholder { color: var(--mg-i3); }
-  .mg-input:hover { border-color: var(--mg-line2); }
+  .mg-input::placeholder { color: var(--mc-ink3); }
+  .mg-input:hover { border-color: var(--mc-line2); }
   .mg-input:focus { border-color: rgba(62, 207, 142, 0.6);
-                    box-shadow: 0 0 0 1px rgba(62, 207, 142, 0.4); }
-  .go { width: 100%; margin-top: 12px; }
+                    box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.18); }
+  .mg-btn.go { width: 100%; margin-top: 12px; background: var(--mc-ink); color: var(--mc-bg);
+        border-color: transparent; font-weight: 600; }
+  .mg-btn.go:hover { background: #ffffff; border-color: transparent; }
 
-  .foot { margin: 20px 0 0; font: 400 12px/1.5 var(--mg-font); color: var(--mg-i3); }
+  .foot { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--mc-line);
+          font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
+  .foot + .foot { margin-top: 8px; padding-top: 0; border-top: 0; }
 
-  @media (max-width: 420px) {
+  @media (max-width: 440px) {
     body { padding: 20px 16px calc(20px + env(safe-area-inset-bottom, 0px)); }
-    .card { max-width: none; padding: 22px 18px 18px; }
+    .card { padding: 24px 20px 20px; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .backdrop .shot { animation: none; }
     .card { animation: none; opacity: 1; transform: none; }
     .mg-btn:active:not(:disabled) { transform: none; }
   }
@@ -1658,7 +1648,7 @@ _LOGIN_HTML = """<!doctype html>
 <link rel="icon" href="/favicon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
 <style>
 __CSS__</style>
 </head>
@@ -1849,22 +1839,23 @@ def login_submit():
 
 _SIGNUP_CSS = """
   /* the invite's terms, read once and never interacted with */
-  .terms { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
+  .terms { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 20px; }
   .term {
-    display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
-    border-radius: 9999px; background: var(--mg-glass-soft);
-    border: 1px solid var(--mg-line); color: var(--mg-i2);
-    font: 500 11.5px/1 var(--mg-font);
+    display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px;
+    border-radius: 9999px; background: var(--mc-raised);
+    border: 1px solid var(--mc-line); color: var(--mc-ink2);
+    font: 500 12px/1 var(--mc-font); text-transform: capitalize;
   }
   .term.ok { background: rgba(62, 207, 142, 0.12);
-             border-color: rgba(62, 207, 142, 0.28); color: var(--mg-ok); }
-  .field { margin-bottom: 12px; }
-  .hint { margin: 6px 0 0; font: 400 11.5px/1.5 var(--mg-font); color: var(--mg-i3); }
-  #go { width: 100%; margin-top: 4px; flex-direction: column; gap: 3px;
-        height: auto; min-height: 52px; padding: 9px 20px; line-height: 1.25;
+             border-color: rgba(62, 207, 142, 0.32); color: var(--mc-accent); }
+  .field { margin-bottom: 16px; }
+  .hint { margin: 6px 0 0; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
+  #username { font-family: var(--mc-mono); font-size: 14px; }
+  #go { width: 100%; margin-top: 4px; flex-direction: column; gap: 4px;
+        height: auto; min-height: 56px; padding: 10px 20px; line-height: 1.25;
         white-space: normal; text-align: center; }
-  #go small { font: 400 11.5px/1.35 var(--mg-font); letter-spacing: 0;
-              color: rgba(17, 17, 19, 0.58); }
+  #go small { font: 400 12px/1.35 var(--mc-font); letter-spacing: 0;
+              color: rgba(17, 17, 19, 0.6); }
   #done { display: none; }
 """
 
@@ -1878,7 +1869,7 @@ _SIGNUP_HTML = """<!doctype html>
 <link rel="icon" href="/favicon.svg" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
 <style>
 __CSS____SIGNUP_CSS__</style>
 </head>

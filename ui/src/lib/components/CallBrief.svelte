@@ -5,6 +5,8 @@
   import { api } from '$lib/api.js';
   import { app, toast } from '$lib/state.svelte.js';
   import { fmtR, fmtM, fmtArea } from '$lib/format.js';
+  import Icon from './glass/Icon.svelte';
+  import Skeleton from './Skeleton.svelte';
 
   let { gid } = $props();
 
@@ -85,136 +87,149 @@
 
 <div class="cb">
   <div class="top">
-    <h3>Call brief</h3>
+    <span class="hud">Call brief</span>
     {#if b}
-      <span class="chip" title={ai ? 'Written by ' + ai.backend + ' from the facts below' : 'Built from the database — no model involved'}>
-        {ai ? 'AI-written · ' + String(ai.backend).split(':')[0] : 'From the data'}
+      <span class="mg-chip {ai ? 'mgr' : ''}" title={ai ? 'Written by ' + ai.backend + ' from the facts below' : 'Built from the database — no model involved'}>
+        {#if ai}<Icon name="sparkles" size={12} />{/if}{ai ? 'AI-written · ' + String(ai.backend).split(':')[0] : 'From the data'}
       </span>
-    {/if}
-    <span class="grow"></span>
-    {#if b}
-      {#if writing}
-        <span class="act busy"><span class="spin"></span>&nbsp;Writing…</span>
-      {:else}
-        <button class="act" class:primary={!ai} onclick={writeAi} disabled={aiOff}
-          title={aiOff ? app.status.ai_reason || 'No AI provider configured' : 'Rewrite the brief in spoken language'}>
-          {ai ? '↻ Rewrite' : '✦ Write with AI'}
-        </button>
-      {/if}
-      <button class="act" onclick={copy} title="Copy the whole brief as text">Copy</button>
-      <a class="act" href="/brief/{encodeURIComponent(gid)}" target="_blank" rel="noopener"
-         title="Open the printable page — the one to keep on your phone">Open as page ↗</a>
     {/if}
   </div>
 
+  {#if b}
+    <div class="acts">
+      {#if writing}
+        <span class="mg-btn sm ghost busy"><span class="mg-spin"></span> Writing…</span>
+      {:else}
+        <button type="button" class="mg-btn sm secondary ai" onclick={writeAi} disabled={aiOff}
+          title={aiOff ? app.status.ai_reason || 'No AI provider configured' : 'Rewrite the brief in spoken language'}>
+          <Icon name={ai ? 'refresh' : 'sparkles'} size={14} /> {ai ? 'Rewrite' : 'Write with AI'}
+        </button>
+      {/if}
+      <button type="button" class="mg-btn sm secondary" onclick={copy} title="Copy the whole brief as text"><Icon name="copy" size={14} /> Copy</button>
+      <a class="mg-btn sm ghost" href="/brief/{encodeURIComponent(gid)}" target="_blank" rel="noopener"
+         title="Open the printable page — the one to keep on your phone"><Icon name="external" size={14} /> Open as page</a>
+    </div>
+    {#if aiOff}<p class="mg-hint off">AI is off — {app.status.ai_reason || 'no AI provider configured'}. The brief below is built from the data.</p>{/if}
+  {/if}
+
   {#if err}
-    <p class="err">{err} <button class="act" onclick={load}>Retry</button></p>
+    <div class="mg-strip crit state">
+      <span class="ic"><Icon name="alert" size={14} /></span>
+      <span class="grow">{err}</span>
+      <button type="button" class="mg-btn sm secondary" onclick={load}><Icon name="refresh" size={13} /> Retry</button>
+    </div>
   {:else if !b}
-    <p class="load"><span class="spin"></span>&nbsp;Building the brief…</p>
+    <div class="loading" aria-label="Building the brief">
+      <Skeleton h="64px" r="12px" />
+      <Skeleton lines={4} h="14px" delay={80} />
+    </div>
   {:else}
     {#if tracked}
       <div class="dial">
-        <b>Before you dial</b>
-        <span>Stage {String(tracked.stage).replace(/_/g, ' ')}</span>
-        {#if tracked.contact?.phone}
-          <a href="tel:{tracked.contact.phone}">📞 {tracked.contact.name || tracked.contact.phone}</a>
-        {:else if tracked.contact?.name}
-          <span>{tracked.contact.name} — no number yet</span>
+        <span class="hud">Before you dial</span>
+        <div class="dline">
+          <span class="mg-chip">Stage {String(tracked.stage).replace(/_/g, ' ')}</span>
+          {#if tracked.contact?.phone}
+            <a class="mg-btn sm accent" href="tel:{tracked.contact.phone}"><Icon name="phone" size={14} /> {tracked.contact.name || tracked.contact.phone}</a>
+          {:else if tracked.contact?.name}
+            <span class="dim">{tracked.contact.name} — no number yet</span>
+          {/if}
+        </div>
+        {#if lastContact || tracked.open_tasks}
+          <p class="dim small">
+            {#if lastContact}Last: <span class="mg-mono">{String(lastContact.occurred_at).slice(0, 10)}</span> {lastContact.channel}
+              {(lastContact.outcome || '').replace(/_/g, ' ')}{/if}{#if lastContact && tracked.open_tasks} · {/if}{#if tracked.open_tasks}{tracked.open_tasks} open task(s){/if}
+          </p>
         {/if}
-        {#if lastContact}
-          <span class="dim">last: {String(lastContact.occurred_at).slice(0, 10)} {lastContact.channel}
-            {(lastContact.outcome || '').replace(/_/g, ' ')}</span>
-        {/if}
-        {#if tracked.open_tasks}<span class="dim">{tracked.open_tasks} open task(s)</span>{/if}
       </div>
     {/if}
 
     {#if opener}
-      <h4>Opener</h4>
-      <div class="pitch">{opener}</div>
+      <h4 class="hud">Opener</h4>
+      <div class="mg-strip ok pitch"><span class="ic"><Icon name="chat" size={14} /></span><span>{opener}</span></div>
     {/if}
 
-    <h4>Key numbers</h4>
-    <div class="facts">
+    <h4 class="hud">Key numbers</h4>
+    <dl class="mg-kv">
       {#each facts as [k, v] (k)}
-        <div class="fact"><span>{k}</span><b>{v}</b></div>
+        <div><dt>{k}</dt><dd class="mg-tnum">{v}</dd></div>
       {/each}
-    </div>
+    </dl>
 
     {#if points.length}
-      <h4>Talking points</h4>
+      <h4 class="hud">Talking points</h4>
       <ul>{#each points as p, i (i)}<li>{p}</li>{/each}</ul>
     {/if}
 
     {#if cool.length}
-      <h4>Cool facts</h4>
+      <h4 class="hud">Cool facts</h4>
       <ul>{#each cool as c, i (i)}
-        <li>{c.text}{#if c.source === 'area'}&nbsp;<span class="tag">area</span>{/if}</li>
+        <li>{c.text}{#if c.source === 'area'}&nbsp;<span class="mg-chip tag">area</span>{/if}</li>
       {/each}</ul>
     {/if}
 
     {#if questions.length}
-      <h4>Ask</h4>
+      <h4 class="hud">Ask</h4>
       <ul>{#each questions as q, i (i)}<li>{q}</li>{/each}</ul>
     {/if}
 
     {#if objections.length}
-      <h4>If they say…</h4>
-      {#each objections as o, i (i)}
-        <div class="obj"><b>{o.objection}</b><span>{o.response}</span></div>
-      {/each}
+      <h4 class="hud">If they say…</h4>
+      <div class="mg-list objs">
+        {#each objections as o, i (i)}
+          <div class="obj"><b>{o.objection}</b><span>{o.response}</span></div>
+        {/each}
+      </div>
     {/if}
 
     {#if avoid.length}
-      <h4>Avoid</h4>
-      <div class="flags"><ul>{#each avoid as a, i (i)}<li>{a}</li>{/each}</ul></div>
+      <h4 class="hud">Avoid</h4>
+      <div class="mg-strip crit flags">
+        <span class="ic"><Icon name="alert" size={14} /></span>
+        <ul>{#each avoid as a, i (i)}<li>{a}</li>{/each}</ul>
+      </div>
     {/if}
   {/if}
 </div>
 
 <style>
-  .cb { font-size: 0.84rem; }
-  .top { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }
-  .grow { flex: 1; }
-  h3 { margin: 0; font-size: 0.82rem; font-weight: 700; color: var(--ink); }
-  h4 { margin: 1rem 0 0.5rem; padding-top: 0.8rem; border-top: 1px solid var(--line);
-       font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em;
-       text-transform: uppercase; color: var(--ink-3); }
-  .act.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
-  .act.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
-  .act.busy { color: var(--accent-2); border-color: transparent; background: none; }
-  .load, .err { margin: 1rem 0; color: var(--ink-3); display: flex;
-                align-items: center; gap: 0.5rem; }
-  .err { color: var(--bad); }
+  .cb { font: 400 13px/1.55 var(--mc-font); color: var(--mc-ink2); }
+  .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .top .mg-chip { height: 24px; padding: 0 9px; font-size: 11.5px; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .ai :global(svg) { color: var(--mc-mgr); }
+  .busy { color: var(--mc-mgr); }
+  .off { margin-top: 8px; }
 
-  .dial { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;
-          margin-top: 0.8rem; padding: 0.5rem 0.7rem; border-radius: var(--r-sm);
-          background: var(--bg-3); font-size: 0.78rem; }
-  .dial b { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
-            color: var(--ink-3); }
-  .dim { color: var(--ink-3); }
+  h4.hud { margin: 20px 0 8px; }
 
-  .pitch { background: var(--accent-soft); border: 1px solid var(--accent-line);
-           border-radius: var(--r); padding: 0.75rem 0.9rem;
-           font-size: 0.9rem; line-height: 1.6; color: var(--accent-ink); }
+  .state { margin: 14px 0 0; align-items: center; }
+  .grow { flex: 1; min-width: 0; }
+  .loading { display: flex; flex-direction: column; gap: 14px; margin-top: 16px; }
+  /* the drawer is itself the raised plane, so a raised skeleton would vanish on it */
+  .loading :global(.mg-skel) { background: var(--mc-line); }
 
-  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem 1.2rem; }
-  .fact span { display: block; font-size: 0.72rem; color: var(--ink-3); }
-  .fact b { font-weight: 600; font-size: 0.86rem; }
+  .dial { margin-top: 14px; padding: 12px 14px; background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-r-md); }
+  .dline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .dim { color: var(--mc-ink3); }
+  .small { margin: 8px 0 0; font-size: 12px; }
 
-  ul { margin: 0; padding-left: 1.05rem; }
-  li { line-height: 1.55; margin-bottom: 0.35rem; }
-  .tag { font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
-         letter-spacing: 0.06em; padding: 0.05rem 0.35rem; border-radius: 4px;
-         background: var(--bg-3); color: var(--ink-3); vertical-align: 1px; }
+  .pitch { margin: 0; font-size: 14px; line-height: 1.6; color: var(--mc-ink); }
 
-  .obj { padding: 0.4rem 0; border-top: 1px solid var(--line); }
-  .obj:first-of-type { border-top: 0; padding-top: 0; }
-  .obj b { display: block; }
-  .obj span { color: var(--ink-2); }
+  ul { margin: 0; padding-left: 18px; }
+  li { margin-bottom: 6px; color: var(--mc-ink2); }
+  li::marker { color: var(--mc-ink3); }
+  .tag { height: 18px; padding: 0 6px; font-size: 10px; vertical-align: 1px; }
 
-  .flags { background: var(--red-soft); border: 1px solid var(--red-line);
-           border-radius: var(--r); padding: 0.7rem 0.9rem 0.7rem 0.5rem;
-           color: var(--bad-ink); }
-  .flags li { margin-bottom: 0.3rem; }
+  .objs { background: var(--mc-surface); border: 1px solid var(--mc-line); border-radius: var(--mc-r-md); }
+  .obj { display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; }
+  .obj b { font: 600 13px/1.4 var(--mc-font); color: var(--mc-ink); }
+  .obj span { color: var(--mc-ink2); }
+
+  .flags { margin: 0; }
+  .flags ul { padding-left: 16px; }
+  .flags li { color: var(--mc-ink); margin-bottom: 4px; }
+  .flags li:last-child { margin-bottom: 0; }
+
+  @media (pointer: coarse) { .acts :global(.mg-btn.sm) { height: 40px; } }
 </style>

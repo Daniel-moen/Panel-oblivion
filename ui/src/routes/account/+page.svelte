@@ -24,6 +24,7 @@
   import Sheet from '$lib/components/glass/Sheet.svelte';
   import Seg from '$lib/components/glass/Seg.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
 
   const PRIVS = [
     { flag: 'crawl', label: 'Crawls', hint: 'Start crawls, re-score, resolve erven' },
@@ -77,9 +78,12 @@
     invites = i.invites;
   }
 
-  onMount(async () => {
-    try { await load(); } catch (e) { toast(e.message, 'error'); }
-  });
+  let loadErr = $state(null);
+  async function reload() {
+    loadErr = null;
+    try { await load(); } catch (e) { loadErr = e.message || String(e); toast(e.message, 'error'); }
+  }
+  onMount(reload);
 
   /* ——— you ——— */
   async function saveName() {
@@ -252,143 +256,175 @@
 <svelte:head><title>Account — Oblivion</title></svelte:head>
 
 <div class="mg-row">
-  <h1 class="mg-h2">Account</h1>
-  {#if me}<span class="mg-count">signed in as {me.username}</span>{/if}
+  <div class="titles">
+    <h1 class="mg-h2">Account</h1>
+    {#if me}<p class="mg-hint">Signed in as <span class="mg-mono">@{me.username}</span></p>{/if}
+  </div>
 </div>
 
 {#if welcome && !keys.length}
-  <div class="mg-strip">
-    <span class="ic"><Icon name="sparkles" size={16} /></span>
+  <div class="mg-strip ok">
+    <span class="ic"><Icon name="passkey" size={16} /></span>
     <span><b>Add this device</b> so next time is just Touch ID.</span>
   </div>
 {/if}
 
-<!-- ————————————————————————————————————————————————————————— you ——— -->
-<section class="mg-card">
-  <header>
-    <div>
-      <h2>You</h2>
-      <p class="sub">Your name is yours to change. What you may do is set by
-        the owner — the server checks it on every write.</p>
-    </div>
-  </header>
+{#if loadErr}
+  <div class="mg-strip crit">
+    <span class="ic"><Icon name="alert" size={16} /></span>
+    <span class="grow"><b>Could not load your account.</b> {loadErr}</span>
+    <button type="button" class="mg-btn secondary sm" onclick={reload}><Icon name="refresh" size={13} /> Retry</button>
+  </div>
+{/if}
 
-  {#if me}
-    <div class="you">
-      <div class="namer">
-        <input class="mg-input" bind:value={displayName} maxlength="60"
-               aria-label="Your name" onblur={saveName}
-               onkeydown={(e) => e.key === 'Enter' && saveName()} />
-        <button class="mg-btn secondary sm" onclick={saveName} disabled={savingName}>
-          {#if savingName}<span class="mg-spin"></span>{/if}Save
-        </button>
+<div class="stack">
+<!-- ————————————————————————————————————————————————————————— you ——— -->
+<section class="mg-section mg-rise" style:--i={0}>
+  <div class="head"><span class="hud">You</span></div>
+  <p class="mg-hint lede">Your name is yours to change. What you may do is set by
+    the owner — the server checks it on every write.</p>
+
+  {#if !me}
+    <div class="pad"><Skeleton lines={3} h="14px" /></div>
+  {:else}
+    <div class="rows">
+      <div class="row wrap">
+        <label class="k" for="me-name">Name</label>
+        <div class="v namer">
+          <input id="me-name" class="mg-input" bind:value={displayName} maxlength="60"
+                 aria-label="Your name" onblur={saveName}
+                 onkeydown={(e) => e.key === 'Enter' && saveName()} />
+          <button type="button" class="mg-btn secondary sm" onclick={saveName} disabled={savingName}>
+            {#if savingName}<span class="mg-spin"></span>{/if}Save
+          </button>
+        </div>
       </div>
-      <div class="chips">
-        <span class="mg-chip" class:ok={me.is_owner} class:mgr={me.role === 'admin'}>
-          <Icon name={me.is_owner ? 'shield' : me.role === 'admin' ? 'shield' : 'user'} size={13} />
-          {me.role}
+      <div class="row">
+        <span class="k">Username</span>
+        <span class="v mg-mono val">@{me.username}</span>
+      </div>
+      <div class="row">
+        <span class="k">Role</span>
+        <span class="v">
+          <span class="mg-chip" class:ok={me.is_owner} class:mgr={me.role === 'admin'}>
+            <Icon name={me.is_owner || me.role === 'admin' ? 'shield' : 'user'} size={13} />
+            {me.role}
+          </span>
         </span>
-        <span class="mg-chip">@{me.username}</span>
-        {#each me.privileges as p (p)}
-          <span class="mg-chip on">{privLabel(p)}</span>
-        {/each}
-        {#if !me.privileges.length}
-          <span class="mg-chip">read only</span>
-        {/if}
+      </div>
+      <div class="row wrap">
+        <span class="k">Can do</span>
+        <span class="v chips">
+          {#each me.privileges as p (p)}
+            <span class="mg-chip on">{privLabel(p)}</span>
+          {/each}
+          {#if !me.privileges.length}
+            <span class="mg-chip">Read only</span>
+          {/if}
+        </span>
       </div>
     </div>
   {/if}
 </section>
 
 <!-- ———————————————————————————————————————————————————— passkeys ——— -->
-<section class="mg-card">
-  <header>
-    <div>
-      <h2>Passkeys</h2>
-      <p class="sub">The passkey stays on this device (or in iCloud Keychain /
-        Windows Hello). Nothing biometric is sent to the server.</p>
-    </div>
+<section class="mg-section mg-rise" style:--i={1}>
+  <div class="head">
+    <span class="hud">Passkeys</span>
+    {#if loaded}<span class="mg-count">{keys.length}</span>{/if}
     {#if canPasskey && !naming}
-      <button class="mg-btn primary sm" onclick={startAdd} disabled={busy}>
-        <Icon name="plus" size={16} /> Add this device
-      </button>
+      <div class="mg-actions">
+        <button type="button" class="mg-btn primary sm" onclick={startAdd} disabled={busy}>
+          <Icon name="plus" size={15} /> Add this device
+        </button>
+      </div>
     {/if}
-  </header>
+  </div>
+  <p class="mg-hint lede">The passkey stays on this device (or in iCloud Keychain /
+    Windows Hello). Nothing biometric is sent to the server.</p>
 
-  {#if naming}
-    <div class="namer">
-      <input class="mg-input" bind:value={name} placeholder="Name this device"
-             onkeydown={(e) => e.key === 'Enter' && add()} />
-      <button class="mg-btn primary sm" onclick={add} disabled={busy}>
-        {#if busy}<span class="mg-spin"></span>{/if}Add
-      </button>
-      <button class="mg-btn ghost sm" onclick={() => (naming = false)}>Cancel</button>
-    </div>
-  {/if}
+  <div class="rows">
+    {#if naming}
+      <div class="row wrap adding">
+        <label class="k" for="pk-name">Name this device</label>
+        <div class="v namer">
+          <input id="pk-name" class="mg-input" bind:value={name} placeholder="Name this device"
+                 onkeydown={(e) => e.key === 'Enter' && add()} />
+          <button type="button" class="mg-btn primary sm" onclick={add} disabled={busy}>
+            {#if busy}<span class="mg-spin"></span>{:else}<Icon name="passkey" size={14} />{/if}Add
+          </button>
+          <button type="button" class="mg-btn ghost sm" onclick={() => (naming = false)}>Cancel</button>
+        </div>
+      </div>
+    {/if}
 
-  {#if !canPasskey}
-    <p class="none">This browser has no passkey support, so sign-in here has to
-      happen on another device.</p>
-  {:else if loaded && !keys.length}
-    <p class="none">No passkeys on this account yet.</p>
-  {/if}
+    {#if !canPasskey}
+      <div class="row"><span class="k none">This browser has no passkey support, so sign-in here has to
+        happen on another device.</span></div>
+    {:else if !loaded}
+      <div class="pad"><Skeleton lines={2} h="14px" /></div>
+    {:else if !keys.length}
+      <div class="row"><span class="k none">No passkeys on this account yet.</span></div>
+    {/if}
 
-  <ul class="rows">
     {#each keys as k (k.id)}
-      <li>
+      <div class="row item">
         <span class="ic"><Icon name="key" size={16} /></span>
         <div class="who">
           <b>{k.name}</b>
           <i>added {day(k.created_at)} · last used {ago(k.last_used_at)}</i>
         </div>
-        <button class="mg-btn danger sm" onclick={() => remove(k)}>Remove</button>
-      </li>
+        <button type="button" class="mg-btn danger sm" onclick={() => remove(k)}>Remove</button>
+      </div>
     {/each}
-  </ul>
+  </div>
 </section>
 
 <!-- ———————————————————————————————————————————————————— sessions ——— -->
-<section class="mg-card">
-  <header>
-    <div>
-      <h2>Sessions</h2>
-      <p class="sub">Every browser currently holding a sign-in cookie. Signing
-        one out takes effect immediately.</p>
-    </div>
-  </header>
+<section class="mg-section mg-rise" style:--i={2}>
+  <div class="head">
+    <span class="hud">Signed-in devices</span>
+    {#if loaded}<span class="mg-count">{sessions.length}</span>{/if}
+  </div>
+  <p class="mg-hint lede">Every browser currently holding a sign-in cookie. Signing
+    one out takes effect immediately.</p>
 
-  <ul class="rows">
+  <div class="rows">
+    {#if !loaded}
+      <div class="pad"><Skeleton lines={2} h="14px" /></div>
+    {:else if !sessions.length}
+      <div class="row"><span class="k none">No other sign-ins.</span></div>
+    {/if}
     {#each sessions as s (s.id)}
-      <li>
-        <span class="ic"><Icon name="user" size={16} /></span>
+      <div class="row item">
+        <span class="ic" class:live={s.current}><Icon name={s.current ? 'check' : 'user'} size={16} /></span>
         <div class="who">
-          <b>{s.label}{#if s.current}<span class="here">this browser</span>{/if}</b>
+          <b>{s.label}{#if s.current}<span class="mg-chip ok here">This browser</span>{/if}</b>
           <i>signed in {day(s.created_at)} · active {ago(s.last_seen_at)}</i>
         </div>
-        <button class="mg-btn sm" class:danger={!s.current} class:secondary={s.current}
-                onclick={() => signOut(s)}>Sign out</button>
-      </li>
+        <button type="button" class="mg-btn sm" class:danger={!s.current} class:secondary={s.current}
+                onclick={() => signOut(s)}>{#if s.current}<Icon name="power" size={13} />{/if}Sign out</button>
+      </div>
     {/each}
-  </ul>
+  </div>
 </section>
 
 {#if isAdmin}
   <!-- ———————————————————————————————————————————————————— people ——— -->
-  <section class="mg-card">
-    <header>
-      <div>
-        <h2>People <span class="mg-count">{people.length}</span></h2>
-        <p class="sub">Everyone who can sign in. Accounts are passkey-only —
-          nobody here has a password.</p>
-      </div>
-    </header>
+  <section class="mg-section mg-rise" style:--i={3}>
+    <div class="head">
+      <span class="hud">People</span>
+      <span class="mg-count">{people.length}</span>
+    </div>
+    <p class="mg-hint lede">Everyone who can sign in. Accounts are passkey-only —
+      nobody here has a password.</p>
 
-    <div class="tablewrap">
+    <div class="mg-tablewrap">
       <table class="mg-table">
         <thead>
           <tr>
             <th>Person</th><th>Role</th><th>Can</th>
-            <th>Devices</th><th>Last seen</th><th></th>
+            <th class="r">Devices</th><th>Last seen</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -396,25 +432,25 @@
             <tr class:off={u.disabled}>
               <td class="b">
                 {u.display_name}
-                <i class="at">@{u.username}</i>
+                <i class="at mg-mono">@{u.username}</i>
               </td>
               <td>
-                <span class="mg-chip" class:ok={u.is_owner} class:mgr={u.role === 'admin'}>
-                  {u.role}
+                <span class="tags">
+                  <span class="mg-chip" class:ok={u.is_owner} class:mgr={u.role === 'admin'}>{u.role}</span>
+                  {#if u.disabled}<span class="mg-chip crit">off</span>{/if}
                 </span>
-                {#if u.disabled}<span class="mg-chip crit">off</span>{/if}
               </td>
               <td>
-                <span class="privs">
+                <span class="tags">
                   {#each u.privileges as p (p)}<span class="mg-chip">{privLabel(p)}</span>{/each}
                   {#if !u.privileges.length}<i class="dim">read only</i>{/if}
                 </span>
               </td>
-              <td class="num">{u.passkeys}</td>
-              <td>{ago(u.last_seen_at)}</td>
-              <td>
+              <td class="r mg-mono">{u.passkeys}</td>
+              <td class="nowrap">{ago(u.last_seen_at)}</td>
+              <td class="r">
                 {#if !u.is_owner}
-                  <button class="mg-btn ghost sm" onclick={() => openEdit(u)}>
+                  <button type="button" class="mg-btn secondary sm" onclick={() => openEdit(u)}>
                     <Icon name="edit" size={14} /> Edit
                   </button>
                 {/if}
@@ -427,27 +463,28 @@
   </section>
 
   <!-- ——————————————————————————————————————————————————— invites ——— -->
-  <section class="mg-card">
-    <header>
-      <div>
-        <h2>Invites</h2>
-        <p class="sub">A sign-up link creates one account, once. The link is
-          shown a single time — copy it before you close the panel.</p>
+  <section class="mg-section mg-rise" style:--i={4}>
+    <div class="head">
+      <span class="hud">Invites</span>
+      {#if invites.length}<span class="mg-count">{invites.length}</span>{/if}
+      <div class="mg-actions">
+        <button type="button" class="mg-btn primary sm" onclick={newInvite}>
+          <Icon name="plus" size={15} /> New invite
+        </button>
       </div>
-      <button class="mg-btn primary sm" onclick={newInvite}>
-        <Icon name="plus" size={16} /> New invite
-      </button>
-    </header>
+    </div>
+    <p class="mg-hint lede">A sign-up link creates one account, once. The link is
+      shown a single time — copy it before you close the panel.</p>
 
     {#if !invites.length}
       <Empty icon="ticket" title="No invites yet"
              hint="Create a link, send it to the person, and they register a passkey on their own device.">
-        <button class="mg-btn primary sm" onclick={newInvite}>New invite</button>
+        <button type="button" class="mg-btn secondary sm" onclick={newInvite}>New invite</button>
       </Empty>
     {:else}
-      <ul class="rows">
+      <div class="rows">
         {#each invites as inv (inv.id)}
-          <li class:spent={inv.state !== 'ok'}>
+          <div class="row item" class:spent={inv.state !== 'ok'}>
             <span class="ic"><Icon name="ticket" size={16} /></span>
             <div class="who">
               <b>
@@ -464,20 +501,21 @@
               </i>
             </div>
             {#if inv.state === 'ok'}
-              <button class="mg-btn ghost sm" onclick={() => revokeInvite(inv)}>Withdraw</button>
+              <button type="button" class="mg-btn danger sm" onclick={() => revokeInvite(inv)}>Withdraw</button>
             {/if}
-          </li>
+          </div>
         {/each}
-      </ul>
+      </div>
     {/if}
   </section>
 {/if}
+</div>
 
 <!-- ——————————————————————————————————————————————————— edit sheet ——— -->
 <Sheet open={!!edit} title={edit ? edit.display_name : ''} size="sm"
        onclose={() => (edit = null)}>
   {#if edit}
-    <p class="sub">@{edit.username} · signs in with {edit.passkeys}
+    <p class="mg-sub">@{edit.username} · signs in with {edit.passkeys}
       {edit.passkeys === 1 ? 'passkey' : 'passkeys'}.</p>
 
     <label class="mg-label" for="ed-name">Name</label>
@@ -488,7 +526,7 @@
       <Seg options={[{ value: 'member', label: 'Member' }, { value: 'admin', label: 'Admin' }]}
            value={edit.role} label="Role"
            onchange={(v) => (edit.role = v)} />
-      <p class="hint">An admin can invite people and adjust anyone but the
+      <p class="mg-hint hint">An admin can invite people and adjust anyone but the
         owner and other admins.</p>
     {/if}
 
@@ -504,10 +542,10 @@
           </button>
         {/each}
       </div>
-      <p class="hint">Everyone signed in can read everything. These are the
+      <p class="mg-hint hint">Everyone signed in can read everything. These are the
         things that change data.</p>
     {:else}
-      <p class="hint spaced">An admin has every privilege, including people
+      <p class="mg-hint hint spaced">An admin has every privilege, including people
         and invites.</p>
     {/if}
 
@@ -517,21 +555,21 @@
     </label>
 
     <div class="danger-row">
-      <button class="mg-btn secondary sm" onclick={() => reinvite(edit)}>
+      <button type="button" class="mg-btn secondary sm" onclick={() => reinvite(edit)}>
         <Icon name="key" size={14} /> New sign-up link
       </button>
-      <button class="mg-btn danger sm" onclick={() => removeUser(edit)}>
+      <button type="button" class="mg-btn danger sm" onclick={() => removeUser(edit)}>
         <Icon name="trash" size={14} /> Remove
       </button>
     </div>
-    <p class="hint">Lost every device? A new sign-up link is the recovery —
+    <p class="mg-hint hint">Lost every device? A new sign-up link is the recovery —
       there is no password to reset.</p>
   {/if}
 
   {#snippet footer()}
-    <button class="mg-btn ghost" onclick={() => (edit = null)}>Cancel</button>
+    <button type="button" class="mg-btn ghost" onclick={() => (edit = null)}>Cancel</button>
     <div class="right">
-      <button class="mg-btn primary" onclick={saveUser} disabled={saving}>
+      <button type="button" class="mg-btn primary" onclick={saveUser} disabled={saving}>
         {#if saving}<span class="mg-spin"></span>{/if}Save
       </button>
     </div>
@@ -542,16 +580,16 @@
 <Sheet open={inviteOpen} title={minted ? 'Send this link' : 'New invite'} size="sm"
        onclose={() => (inviteOpen = false)}>
   {#if minted}
-    <p class="sub">This is the only time the link is shown. The server keeps
+    <p class="mg-sub">This is the only time the link is shown. The server keeps
       just a hash of it.</p>
     <div class="namer">
       <input class="mg-input" readonly value={minted.url}
              onfocus={(e) => e.currentTarget.select()} aria-label="Sign-up link" />
-      <button class="mg-btn primary sm" onclick={() => copy(minted.url)}>
+      <button type="button" class="mg-btn primary sm" onclick={() => copy(minted.url)}>
         <Icon name="copy" size={14} /> Copy
       </button>
     </div>
-    <p class="hint">Send it however you normally talk to them. They open it,
+    <p class="mg-hint hint">Send it however you normally talk to them. They open it,
       pick a name and register a passkey — that is the whole sign-up.</p>
   {:else}
     <span class="mg-label">Role</span>
@@ -571,7 +609,7 @@
         {/each}
       </div>
     {:else}
-      <p class="hint spaced">An admin gets everything, including people and
+      <p class="mg-hint hint spaced">An admin gets everything, including people and
         invites.</p>
     {/if}
 
@@ -583,19 +621,19 @@
     <div class="days">
       <input id="inv-days" class="mg-input" type="number" min="1" max="90"
              bind:value={draft.days} />
-      <span class="dim">days</span>
+      <span class="mg-hint">days</span>
     </div>
   {/if}
 
   {#snippet footer()}
     {#if minted}
       <div class="right">
-        <button class="mg-btn primary" onclick={() => (inviteOpen = false)}>Done</button>
+        <button type="button" class="mg-btn primary" onclick={() => (inviteOpen = false)}>Done</button>
       </div>
     {:else}
-      <button class="mg-btn ghost" onclick={() => (inviteOpen = false)}>Cancel</button>
+      <button type="button" class="mg-btn ghost" onclick={() => (inviteOpen = false)}>Cancel</button>
       <div class="right">
-        <button class="mg-btn primary" onclick={createInvite} disabled={saving}>
+        <button type="button" class="mg-btn primary" onclick={createInvite} disabled={saving}>
           {#if saving}<span class="mg-spin"></span>{/if}Create link
         </button>
       </div>
@@ -604,57 +642,82 @@
 </Sheet>
 
 <style>
-  .mg-card { margin-bottom: 14px; }
-  header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
-  header > div { min-width: 0; }
-  header button { margin-left: auto; flex: none; }
-  h2 { margin: 0; font: 600 15px/1.2 var(--mg-font); color: var(--mg-i); }
-  .sub { margin: 4px 0 0; max-width: 58ch; font: 400 12.5px/1.6 var(--mg-font); color: var(--mg-i3); }
+  .titles { min-width: 0; }
+  .titles .mg-hint { margin-top: 3px; }
+  .mg-strip.crit { align-items: center; }
+  .grow { flex: 1; min-width: 0; }
+  .stack { display: flex; flex-direction: column; gap: 14px; max-width: 880px; }
 
-  .namer { display: flex; gap: 8px; margin-bottom: 12px; }
-  .namer .mg-input { flex: 1 1 200px; max-width: 26rem; }
+  /* the Settings-sheet shape: a quiet uppercase title, a line of context,
+     then 44px rows — label left, value or action right, hairline between */
+  .mg-section > .head { align-items: center; min-height: 48px; padding: 8px 16px; border-bottom: 0; }
+  .mg-section > .head .hud { color: var(--mc-ink3); }
+  .lede { padding: 0 16px 12px; max-width: 64ch; }
+  .pad { padding: 12px 16px 16px; border-top: 1px solid var(--mc-line); }
 
-  .none { margin: 0; font: 400 13px/1.5 var(--mg-font); color: var(--mg-i3); }
-
-  .you .chips { margin-top: 2px; }
+  .rows { display: flex; flex-direction: column; }
+  .row {
+    display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 16px;
+    border-top: 1px solid var(--mc-line);
+  }
+  .row .k { flex: none; min-width: 7rem; font: 400 13px/1.4 var(--mc-font); color: var(--mc-ink3); }
+  .row .k.none { flex: 1; min-width: 0; }
+  .row .v { margin-left: auto; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+  .val { font-size: 12.5px; color: var(--mc-ink); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .row .mg-chip { height: 26px; padding: 0 10px; }
 
-  .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-  .rows li { display: flex; align-items: center; gap: 12px; padding: 11px 0;
-             border-top: 1px solid var(--mg-line); }
-  .rows li:first-child { border-top: 0; }
-  .rows li.spent { opacity: 0.55; }
-  .rows .ic { flex: none; display: flex; color: var(--mg-i3); }
-  .who { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .namer { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .namer .mg-btn { flex: none; }
+  .namer .mg-input { flex: 1 1 200px; max-width: 22rem; }
+  .adding { background: var(--mc-inset); }
+
+  .item .ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
+              background: var(--mc-raised); border: 1px solid var(--mc-line); color: var(--mc-ink3); }
+  .item .ic.live { color: var(--mc-accent); border-color: var(--mc-ok-line); background: var(--mc-ok-soft); }
+  .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .who b { display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
-           font: 500 13.5px/1.3 var(--mg-font); color: var(--mg-i); }
-  .who i { font: 400 12px/1.4 var(--mg-font); font-style: normal; color: var(--mg-i3); }
-  .rows li button { margin-left: auto; flex: none; }
+           font: 500 13.5px/1.3 var(--mc-font); color: var(--mc-ink); }
+  .who i { font: 400 12px/1.4 var(--mc-font); font-style: normal; color: var(--mc-ink3); }
+  .item > .mg-btn { flex: none; }
+  .spent { opacity: 0.55; }
+  .who b .mg-chip { height: 20px; padding: 0 8px; font-size: 11px; }
 
-  .here { margin-left: 8px; padding: 1px 7px; border-radius: 9999px;
-          background: rgba(62, 207, 142, 0.14); color: var(--mg-ok);
-          font: 500 11px/1.6 var(--mg-font); }
-
-  /* people table: a row list, so it scrolls sideways on a phone rather than
-     wrapping into an unreadable stack */
-  .tablewrap { overflow-x: auto; }
-  .mg-table td.b .at { display: block; font-style: normal; font-weight: 400;
-                       font-size: 12px; color: var(--mg-i3); }
+  /* people table */
+  .mg-tablewrap { border-top: 1px solid var(--mc-line); }
+  .mg-table th:first-child, .mg-table td:first-child { padding-left: 16px; }
+  .mg-table th:last-child, .mg-table td:last-child { padding-right: 16px; }
+  .mg-table td.b .at { display: block; font-style: normal; font-weight: 400; font-size: 11.5px; color: var(--mc-ink3); }
   .mg-table tr.off { opacity: 0.55; }
-  .privs { display: inline-flex; flex-wrap: wrap; gap: 4px; }
-  .privs .mg-chip { padding: 3px 9px; font-size: 11px; }
-  .dim { font-style: normal; color: var(--mg-i3); }
-  .sm-chip { padding: 2px 8px; font-size: 11px; }
+  .mg-table td.r.mg-mono { color: var(--mc-ink); }
+  /* chips stay on one line: the table scrolls sideways rather than growing tall */
+  .tags { display: inline-flex; flex-wrap: nowrap; gap: 4px; }
+  .tags .mg-chip { height: 22px; padding: 0 8px; font-size: 11px; }
+  .nowrap { white-space: nowrap; }
+  .dim { font-style: normal; color: var(--mc-ink3); }
 
   /* sheet innards */
+  .mg-sub { margin-bottom: 16px; }
   .mg-input.full { width: 100%; }
+  .mg-label { margin-bottom: 6px; }
   .spaced { margin-top: 16px; }
-  .hint { margin: 8px 0 0; font: 400 12px/1.6 var(--mg-font); color: var(--mg-i3); }
+  .hint { margin-top: 8px; }
   .days { display: flex; align-items: center; gap: 8px; }
-  .days .mg-input { width: 6rem; }
-  .switch { display: flex; align-items: center; gap: 9px; margin-top: 18px;
-            font: 400 13px/1.4 var(--mg-font); color: var(--mg-i2); cursor: pointer; }
-  .switch input { width: 16px; height: 16px; accent-color: var(--mg-crit); }
-  .danger-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px;
-                padding-top: 16px; border-top: 1px solid var(--mg-line); }
+  .days .mg-input { width: 6rem; font-family: var(--mc-mono); }
+  .switch { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 12px;
+            font: 400 13px/1.4 var(--mc-font); color: var(--mc-ink2); cursor: pointer; }
+  .switch input { width: 18px; height: 18px; accent-color: var(--mc-crit); }
+  .danger-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;
+                padding-top: 16px; border-top: 1px solid var(--mc-line); }
+
+  @media (max-width: 639px) {
+    /* a row holding a field puts the label above it */
+    .row.wrap { flex-wrap: wrap; gap: 8px; }
+    .row.wrap .v { margin-left: 0; flex: 1 1 100%; justify-content: flex-start; }
+    .namer .mg-input { max-width: none; }
+  }
+  @media (pointer: coarse) {
+    .row .mg-btn.sm, .item > .mg-btn { height: 40px; }
+    .namer .mg-input { height: 44px; }
+  }
 </style>
