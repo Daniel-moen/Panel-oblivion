@@ -23,6 +23,7 @@
   import Signals from './Signals.svelte';
   import ErfPanel from './ErfPanel.svelte';
   import Icon from './glass/Icon.svelte';
+  import Skeleton from './Skeleton.svelte';
   import { fade, slide } from '$lib/motion.js';
   import { api } from '$lib/api.js';
   import { app, selected, actions, gidOf, trackProspect } from '$lib/state.svelte.js';
@@ -121,13 +122,19 @@
      property, and take focus so Esc and Tab land here. */
   let scroller = $state(null);
   let box = $state(null);
+  /* The sections below the fold (score bars, facts, listings, the erf panel)
+     are the expensive part of the mount. They come in two frames after the
+     panel starts sliding, so the slide itself never waits on them. */
+  let ready = $state(false);
   $effect(() => {
     const key = app.selectedKey;
     if (!key) return;
+    ready = false;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     tick().then(() => { if (scroller) scroller.scrollTop = 0; box?.focus?.({ preventScroll: true }); });
-    return () => { document.body.style.overflow = prev; };
+    let raf = requestAnimationFrame(() => { raf = requestAnimationFrame(() => (ready = true)); });
+    return () => { cancelAnimationFrame(raf); document.body.style.overflow = prev; };
   });
 
   /* ——— the phone throw: only the grab handle starts it ——— */
@@ -229,7 +236,12 @@
             </div>
           {/if}
 
-          {#if brief}
+          {#if !ready}
+            <section class="sec" aria-busy="true">
+              <Skeleton h="11px" w="30%" />
+              <div class="skl"><Skeleton h="14px" lines={4} delay={40} /></div>
+            </section>
+          {:else if brief}
             <section class="sec"><CallBrief gid={gidOf(r)} /></section>
           {:else}
             {#if bars.length}
@@ -354,6 +366,7 @@
   .sec { padding: 18px 16px 0; }
   .sec > .hud { margin-bottom: 10px; }
   .sec > .mg-hint { margin-top: 8px; }
+  .skl { margin-top: 12px; }
 
   .bars { display: flex; flex-direction: column; gap: 10px; }
   .bar { display: grid; grid-template-columns: 104px 1fr 34px; gap: 12px; align-items: center; }
