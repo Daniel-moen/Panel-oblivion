@@ -64,6 +64,17 @@ export const api = {
     const q = p.toString();
     return get('/api/prospects' + (q ? '?' + q : ''));
   },
+  /* The list above is slim — the drawer-only detail (reasoning, listings,
+     erf candidates, coordinates …) is left off every row to keep it small.
+     This fetches the full row for one prospect, from the same book the list
+     came from, so the drawer can fill itself in. */
+  prospect: (key, sole, type) => {
+    const p = new URLSearchParams();
+    if (sole) p.set('sole', '1');
+    if (type === 'rent') p.set('type', 'rent');
+    const q = p.toString();
+    return get('/api/prospect/' + encodeURIComponent(key) + (q ? '?' + q : ''));
+  },
   stats: () => get('/api/stats'),
   status: () => get('/api/status'),
   erfBusy: () => get('/api/erf/busy'),

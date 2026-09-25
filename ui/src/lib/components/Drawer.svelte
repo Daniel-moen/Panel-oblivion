@@ -10,11 +10,40 @@
   import CallBrief from './CallBrief.svelte';
   import Signals from './Signals.svelte';
   import ErfPanel from './ErfPanel.svelte';
+  import { api } from '$lib/api.js';
   import { app, selected, actions, gidOf, trackProspect } from '$lib/state.svelte.js';
   import { fmtR, fmtM, fmtInt, fmtArea, addrOf, mvLabel,
            isRent, priceTxt, furnishedTxt } from '$lib/format.js';
 
-  const r = $derived(selected());
+  /* The list rows are slim: everything only this drawer reads (reasoning,
+     listings, evidence, erf candidates, coordinates …) is left off them. The
+     drawer paints at once from the slim row and the full one is fetched and
+     laid over it a moment later. */
+  let detail = $state(null);
+  let detailKey = null;
+  let seq = 0;
+  $effect(() => {
+    const key = app.selectedKey;
+    /* Also re-run when the list is replaced: that is how an erf confirm,
+       re-evaluate or crawl reaches the UI, and the detail laid over the row
+       would otherwise be older than the row under it. The old detail stays
+       up until the new one lands, so the drawer doesn't blink. */
+    app.prospects;
+    const sole = app.showSole;
+    const type = app.dealType;
+    if (key !== detailKey) { detailKey = key; detail = null; }
+    if (!key) return;
+    const mine = ++seq;
+    api.prospect(key, sole, type)
+      .then((d) => { if (mine === seq && app.selectedKey === key) detail = d; })
+      .catch(() => { /* the slim row stays up; nothing worth a toast */ });
+  });
+
+  const r = $derived.by(() => {
+    const base = selected();
+    if (!base) return null;
+    return detail && detail.listing_key === base.listing_key ? { ...base, ...detail } : base;
+  });
 
   /* A rental is stored and nothing more: no dedupe group, no erf, no GV, no
      score. The drawer drops every widget built on that work and shows the

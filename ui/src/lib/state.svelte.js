@@ -1,6 +1,7 @@
 /* Global app state + polling. One status poll drives everything: while a job
    or background task runs, prospects/stats refresh on a slower cadence
-   (the /api/prospects payload is heavy — see webapp.py's caching notes). */
+   (the /api/prospects payload is heavy — see webapp.py's caching notes), and
+   the prospect list itself is only fetched once a page asks for it. */
 
 import { api } from './api.js';
 
@@ -96,15 +97,37 @@ export async function setDealType(v) {
   await loadProspects();
 }
 
+/* The list is the heaviest thing the app fetches, and most pages (media,
+   leads, account) never look at it — so nothing loads it on boot any more.
+   A page that shows it asks for it here; a second ask while the first is
+   still on the wire rides the same request instead of starting another. */
+let prospectsPending = null;
+export function ensureProspects() {
+  if (app.loaded) return Promise.resolve();
+  if (!prospectsPending) {
+    prospectsPending = loadProspects().finally(() => (prospectsPending = null));
+  }
+  return prospectsPending;
+}
+
 /* ------------------------------------------------------------- polling --- */
 const anyBusy = () =>
   app.busy.resolving || app.busy.locating.length > 0 || app.busy.reevaluating.length > 0;
 
+/* Fast while something is actually happening, so progress feels live; slow
+   when idle, where the poll only exists to notice a job started elsewhere. */
+const FAST_MS = 2500;
+const IDLE_MS = 8000;
+
+let live = false;
 let timer = null;
+let ticking = false;
 let lastHeavy = 0;
 let wasActive = false;
 
-async function tick() {
+/* One status read. Callers go through tick(), which keeps these from
+   overlapping. */
+async function pollOnce() {
   let active = false;
   try {
     app.status = await api.status();
@@ -116,32 +139,90 @@ async function tick() {
   } catch { /* ditto */ }
   active = active || anyBusy();
 
+  /* Only refresh the list if something already wanted it: re-downloading
+     the whole book behind /media or /leads is exactly the cost we avoid by
+     not loading it on boot. Stats are small, so they refresh regardless. */
   const now = Date.now();
   if (active && now - lastHeavy > 5000) {
     lastHeavy = now;
-    loadProspects();
+    if (app.loaded) loadProspects();
     loadStats();
   } else if (!active && wasActive) {
     // job just finished — one final refresh so the list settles
-    loadProspects();
+    if (app.loaded) loadProspects();
     loadStats();
   }
   wasActive = active;
 }
 
+/* A slow status call must not let the next tick (or a visibility catch-up)
+   stack a second request pair on top of it. But an ask that arrives mid-read
+   — typically an action that just started a job — is not dropped either: the
+   read that is on the wire may predate the action, so one more follows it. */
+let rerun = false;
+async function tick() {
+  if (ticking) { rerun = true; return; }
+  ticking = true;
+  try {
+    do { rerun = false; await pollOnce(); } while (rerun);
+  } finally {
+    ticking = false;
+  }
+}
+
+/* Self-scheduling like the chat loop (chat.svelte.js): each tick books the
+   next one when it lands, at a pace set by what it just saw, and nothing is
+   booked while the tab is hidden — a background tab has no one to show a
+   progress bar to. */
+function loop() {
+  timer = null;
+  /* A read is already on the wire: have it go once more and let ITS loop
+     book the next slot, from fresh status, rather than booking one here
+     off the stale status it is about to replace. */
+  if (ticking) { rerun = true; return; }
+  tick().finally(schedule);
+}
+function schedule() {
+  if (!live || timer || typeof document === 'undefined' || document.hidden) return;
+  timer = setTimeout(loop, app.status.running || anyBusy() ? FAST_MS : IDLE_MS);
+}
+function halt() {
+  if (timer) clearTimeout(timer);
+  timer = null;
+}
+/* Poll right now and re-book from what it sees — after an action, so a job
+   that just started gets the fast cadence instead of waiting out an idle slot. */
+function kick() {
+  if (!live) return tick();
+  halt();
+  loop();
+}
+function onVisibility() {
+  if (document.hidden) halt();
+  else {
+    halt();       // back in view: catch up now rather than wait out a slot
+    loop();
+  }
+}
+
 export function startPolling() {
-  if (timer) return;
+  if (live) return;
+  live = true;
   loadConfig();
-  loadProspects();
   loadStats();
   loadTracked();
-  tick();
-  timer = setInterval(tick, 2500);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibility);
+  }
+  loop();
 }
 
 export function stopPolling() {
-  clearInterval(timer);
-  timer = null;
+  live = false;
+  halt();
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', onVisibility);
+  }
 }
 
 /* ------------------------------------------------------------- actions --- */
@@ -149,7 +230,7 @@ async function guard(fn, okMsg) {
   try {
     await fn();
     if (okMsg) toast(okMsg);
-    tick();
+    kick();
     return true;
   } catch (e) {
     toast(e.message || String(e), 'error');

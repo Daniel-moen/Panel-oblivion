@@ -15,7 +15,7 @@
   import { goto } from '$app/navigation';
   import { fly } from 'svelte/transition';
   import { api } from '$lib/api.js';
-  import { app, toast } from '$lib/state.svelte.js';
+  import { app, toast, ensureProspects } from '$lib/state.svelte.js';
   import { ago, shortDate, MANDATE_LABEL } from '$lib/panel.js';
   import Icon from '$lib/components/glass/Icon.svelte';
 
@@ -33,7 +33,11 @@
     const t = setInterval(() => (now = new Date()), 1000 * 15);
     loadToday();
     api.panelStats().then((d) => (stats = d)).catch(() => {});
-    return () => clearInterval(t);
+    /* The hot count reads the prospect list, but the home screen must not
+       wait on the heaviest fetch in the app. The list is also the most likely
+       next tap, so it is warmed once the greeting is up. */
+    const t2 = setTimeout(ensureProspects, 600);
+    return () => { clearInterval(t); clearTimeout(t2); };
   });
 
   const hour = $derived(now.getHours());

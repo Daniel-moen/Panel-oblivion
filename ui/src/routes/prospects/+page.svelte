@@ -1,5 +1,6 @@
 <script>
-  import { app } from '$lib/state.svelte.js';
+  import { onMount } from 'svelte';
+  import { app, ensureProspects } from '$lib/state.svelte.js';
   import { page } from '$app/state';
   import { filters, applyFilters, sortRows, isFiltering, clearFilters } from '$lib/filters.svelte.js';
   import FilterBar from '$lib/components/FilterBar.svelte';
@@ -12,6 +13,10 @@
 
   const rows = $derived(sortRows(applyFilters(app.prospects)));
   const rent = $derived(app.dealType === 'rent');
+
+  /* The list is no longer fetched on boot (state.svelte.js), so this page
+     asks for it — a no-op when it is already in memory or on the way. */
+  onMount(() => { ensureProspects(); });
 
   /* Deep link from lead management: /prospects?open=<listing_key> */
   let opened = false;
