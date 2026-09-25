@@ -361,13 +361,15 @@ property from scratch (~15–20 min on Kimi's 3-request concurrency cap);
 
 ### Checks
 
-Plain scripts, no test runner. Each refuses to run unless `DATA_DIR` points
+Plain scripts (plus one pytest file for the chat). Each script refuses to run unless `DATA_DIR` points
 at a scratch directory, so none can touch the real `prospects.db`:
 
 ```bash
 DATA_DIR=$(mktemp -d) .venv/bin/python tests/team_check.py            # tasks + presence
 DATA_DIR=$(mktemp -d) .venv/bin/python tests/media_mount_check.py     # /zerko mount
 DATA_DIR=$(mktemp -d) .venv/bin/python tests/dashboard_latency_check.py  # dashboard p95 during a crawl
+.venv/bin/python -m pytest tests/test_chat.py -q                      # team chat (own temp DATA_DIR)
+(cd ui && npm run build) && .venv/bin/python tests/chat_e2e.py   # chat end-to-end: Playwright, phone + iPad, two users
 ```
 
 The latency check crawls a fake portal (`tests/fake_source.py`, loaded via
