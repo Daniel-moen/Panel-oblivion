@@ -304,11 +304,24 @@
     }
     if (!didFit && list.length) {
       didFit = true;
-      map.fitBounds(L.latLngBounds(pts.map((p) => [p.lat, p.lng])), {
+      map.fitBounds(L.latLngBounds(coreBounds(pts)), {
         padding: [60, 60],
         maxZoom: 14
       });
     }
+  }
+
+  /* The first fit frames where the book actually is: a handful of pins in
+     Johannesburg or Durban must not zoom the Cape out to the whole country,
+     so the 4th–96th percentile of latitude and longitude sets the frame. */
+  function coreBounds(all) {
+    if (all.length < 20) return all.map((p) => [p.lat, p.lng]);
+    const q = (arr, f) => arr[Math.min(arr.length - 1, Math.max(0, Math.floor(arr.length * f)))];
+    const lats = all.map((p) => p.lat).sort((a, b) => a - b);
+    const lngs = all.map((p) => p.lng).sort((a, b) => a - b);
+    const lat0 = q(lats, 0.04), lat1 = q(lats, 0.96), lng0 = q(lngs, 0.04), lng1 = q(lngs, 0.96);
+    const core = all.filter((p) => p.lat >= lat0 && p.lat <= lat1 && p.lng >= lng0 && p.lng <= lng1);
+    return (core.length ? core : all).map((p) => [p.lat, p.lng]);
   }
 
   /* ——————————————————————————————————————————————————— list actions ——— */
