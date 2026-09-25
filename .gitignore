@@ -6,6 +6,10 @@ __pycache__/
 .httpcache/
 .dashboard-password.txt
 .ratestate.json
+# crawler.py job spec + progress snapshot (webapp writes them to DATA_DIR)
+crawl_job.json
+crawl_progress.json
+crawl_progress.json.tmp
 .bak-perf/
 prospects.db-shm
 prospects.db-wal

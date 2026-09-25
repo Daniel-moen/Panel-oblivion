@@ -485,6 +485,13 @@ AUTO_SWEEP_HOURS = float(os.environ.get("AUTO_SWEEP_HOURS", "6"))  # 0 = off
 # AUTO_CRAWL_RENTALS=0 turns the nightly rental crawl off.
 AUTO_CRAWL_RENTALS = os.environ.get("AUTO_CRAWL_RENTALS", "1") != "0"
 
+# Crawl jobs run in a separate OS process (crawler.py) so HTML parsing,
+# dedupe, scoring and erf/GV resolution never share the web process's GIL
+# with dashboard requests; progress comes back through a JSON file and the
+# log through the child's stdout. CRAWL_IN_PROCESS=1 falls back to the old
+# mode, a background thread inside the web process.
+CRAWL_IN_PROCESS = os.environ.get("CRAWL_IN_PROCESS") == "1"
+
 # While a crawl runs, the dashboard's prospect list is rebuilt (in the
 # background, never on the request path) at most this often. A crawl commits
 # every listing, so without a floor the cache would be stale on every 2 s

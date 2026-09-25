@@ -14,7 +14,10 @@ import hashlib
 import json
 import os
 import re
+import signal
 import sqlite3
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timezone
@@ -165,7 +168,29 @@ def log(msg: str) -> None:
     print(line, flush=True)
 
 
+def _crawl_phase(listing_types) -> str:
+    return ("crawling portals" if tuple(listing_types) == ("sale",)
+            else f"crawling portals ({'+'.join(listing_types)})")
+
+
+def _job_finished(phase: str) -> None:
+    """Called once when a crawl job ends, in both crawler modes."""
+
+
 def _run(suburbs, source_names, pages, use_ai, listing_types=("sale",)):
+    # only_stale: after a crawl, score what actually changed. A reasoning
+    # model spends real time per property, so re-judging the whole database
+    # to absorb a handful of new listings turned a 1-minute crawl into a
+    # 15-minute job. The "Re-score existing data" button still does a full
+    # pass when you want one (e.g. after editing the prompt).
+    if config.CRAWL_IN_PROCESS:
+        _run_in_thread(suburbs, source_names, pages, use_ai, listing_types)
+    else:
+        _run_in_process(suburbs, source_names, pages, use_ai, listing_types)
+
+
+def _run_in_thread(suburbs, source_names, pages, use_ai, listing_types):
+    """CRAWL_IN_PROCESS=1: the old mode, the pipeline on this thread."""
     progress = pipeline.Progress()
 
     def poll_progress():
@@ -178,17 +203,11 @@ def _run(suburbs, source_names, pages, use_ai, listing_types=("sale",)):
 
     threading.Thread(target=poll_progress, daemon=True).start()
     try:
-        job["phase"] = ("crawling portals" if listing_types == ("sale",)
-                        else f"crawling portals ({'+'.join(listing_types)})")
-        # only_stale: after a crawl, score what actually changed. A reasoning
-        # model spends real time per property, so re-judging the whole database
-        # to absorb a handful of new listings turned a 1-minute crawl into a
-        # 15-minute job. The "Re-score existing data" button still does a full
-        # pass when you want one (e.g. after editing the prompt).
+        job["phase"] = _crawl_phase(listing_types)
         pipeline.run(suburbs, source_names, pages=pages, use_ai=use_ai,
                      log=log, progress=progress, stop=_stop, only_stale=True,
                      listing_types=listing_types)
-        job["phase"] = "done"
+        job["phase"] = "stopped" if _stop.is_set() else "done"
     except Exception as e:
         job["phase"] = "error"
         log(f"ERROR: {type(e).__name__}: {e}")
@@ -197,6 +216,100 @@ def _run(suburbs, source_names, pages, use_ai, listing_types=("sale",)):
         with job_lock:
             job.update(done=snap["done"], total=snap["total"],
                        per_source=snap["per_source"], running=False)
+        _job_finished(job["phase"])
+
+
+# How long a stopped crawler gets to finish its in-flight requests before it
+# is killed outright.
+_CRAWLER_KILL_AFTER_S = 90.0
+
+
+def _read_progress(path: str) -> dict | None:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _run_in_process(suburbs, source_names, pages, use_ai, listing_types):
+    """Run the crawl as crawler.py in its own process (see crawler.py).
+
+    The child's stdout is piped into log() line by line; its progress file is
+    polled into the job dict every second; a Stop is forwarded as SIGTERM
+    (and a kill 90 s later if it is still running).
+    """
+    spec_path = os.path.join(config.DATA_DIR, "crawl_job.json")
+    progress_path = os.path.join(config.DATA_DIR, "crawl_progress.json")
+    phase = "error"
+    try:
+        try:
+            os.remove(progress_path)
+        except OSError:
+            pass
+        with open(spec_path, "w", encoding="utf-8") as f:
+            json.dump({"suburbs": list(suburbs), "sources": list(source_names),
+                       "pages": pages, "use_ai": use_ai,
+                       "listing_types": list(listing_types),
+                       "only_stale": True, "progress_path": progress_path},
+                      f)
+        job["phase"] = _crawl_phase(listing_types)
+        proc = subprocess.Popen(
+            [sys.executable, os.path.join(config.ROOT, "crawler.py"),
+             spec_path],
+            cwd=config.ROOT, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, text=True,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"})
+    except Exception as e:                              # noqa: BLE001
+        log(f"ERROR: could not start the crawler: {type(e).__name__}: {e}")
+        with job_lock:
+            job.update(phase="error", running=False)
+        _job_finished("error")
+        return
+    log(f"crawler: started pid {proc.pid}")
+
+    def pump_log():
+        for line in proc.stdout:
+            log(line.rstrip("\n"))
+
+    def apply(snap):
+        if snap:
+            with job_lock:
+                job.update(done=snap.get("done", 0),
+                           total=snap.get("total", 0),
+                           per_source=snap.get("per_source") or {})
+
+    def poll():
+        term_at = None
+        while proc.poll() is None:
+            apply(_read_progress(progress_path))
+            if _stop.is_set():
+                if term_at is None:
+                    term_at = time.monotonic()
+                    try:
+                        proc.send_signal(signal.SIGTERM)
+                    except OSError:
+                        pass
+                elif time.monotonic() - term_at > _CRAWLER_KILL_AFTER_S:
+                    log(f"crawler: pid {proc.pid} ignored the stop for "
+                        f"{_CRAWLER_KILL_AFTER_S:.0f}s — killing it")
+                    proc.kill()
+                    term_at = float("inf")
+            time.sleep(1.0)
+
+    reader = threading.Thread(target=pump_log, daemon=True)
+    reader.start()
+    threading.Thread(target=poll, daemon=True).start()
+    try:
+        rc = proc.wait()
+        reader.join(timeout=10)
+        apply(_read_progress(progress_path))
+        phase = {0: "done", 2: "stopped"}.get(rc, "error")
+        log(f"crawler: pid {proc.pid} exited rc={rc} ({phase})")
+    finally:
+        with job_lock:
+            job.update(phase=phase, running=False)
+        _job_finished(phase)
 
 
 def _start_job(suburbs, srcs, pages, use_ai=True,
@@ -400,6 +513,7 @@ def api_status():
     ok, reason = scorer.ai_status()
     out["ai_ok"] = ok
     out["ai_reason"] = reason
+    out["crawler"] = "thread" if config.CRAWL_IN_PROCESS else "process"
     out["auto_crawl"] = config.AUTO_CRAWL
     if config.AUTO_CRAWL:
         out["auto_last_full"] = (str(_auto["last_full"])
