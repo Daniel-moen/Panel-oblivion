@@ -143,7 +143,13 @@ def ensure_schema(conn) -> None:
             "INSERT OR IGNORE INTO chat_channels (slug, name, kind, created_at,"
             " updated_at) VALUES ('general', 'general', 'general', ?, ?)", (now, now))
         conn.commit()
-        _migrate_legacy(conn)
+        copied, marker = _migrate_legacy(conn)
+        gen, msgs = conn.execute(
+            "SELECT c.id, (SELECT COUNT(*) FROM chat_messages m WHERE m.channel_id = c.id)"
+            " FROM chat_channels c WHERE c.slug='general'").fetchone()
+        # One boot line, so a deploy's logs show the schema and the migration.
+        print(f"chat.ensure_schema: #general id {gen} ({msgs} messages); legacy team_chat:"
+              f" {copied} row(s) copied this boot, marker {marker}", flush=True)
         _schema_done = True
 
 
@@ -160,8 +166,9 @@ def _ensure_name_index(conn) -> None:
         conn.rollback()
 
 
-def _migrate_legacy(conn) -> None:
+def _migrate_legacy(conn) -> tuple[int, int | None]:
     """Copy team_chat into #general, once, then only what is new.
+    Returns (rows copied now, the marker afterwards; None without team_chat).
 
     The first copy keeps team_chat's ids and sets rev = id (so a cached old
     client's ``?after=<id>`` still lines up). It is recorded by a marker in
@@ -174,7 +181,8 @@ def _migrate_legacy(conn) -> None:
     has_legacy = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='team_chat'").fetchone()
     if not has_legacy:
-        return
+        return 0, None
+    copied = 0
     _begin_write(conn)
     try:
         gen = conn.execute("SELECT id FROM chat_channels WHERE slug='general'").fetchone()[0]
@@ -189,6 +197,7 @@ def _migrate_legacy(conn) -> None:
                     " body, attachments, mentions, client_id, rev, created_at)"
                     " SELECT id, ?, NULL, sender, body, '[]', '[]', NULL, id, created_at"
                     " FROM team_chat WHERE id <= ? ORDER BY id", (gen, top))
+                copied = conn.execute("SELECT changes()").fetchone()[0]
                 pending = []
             else:
                 # chat_messages already has rows (a build from before the
@@ -210,12 +219,14 @@ def _migrate_legacy(conn) -> None:
                 " (?, NULL, ?, ?, '[]', '[]', NULL,"
                 " (SELECT COALESCE(MAX(rev), 0) + 1 FROM chat_messages), ?)",
                 (gen, r["sender"], r["body"], r["created_at"]))
+        copied += len(pending)
         new_marker = max(top, upto or 0)
         if new_marker != upto:
             conn.execute(
                 "INSERT OR REPLACE INTO app_state (key, value, updated_at)"
                 " VALUES (?, ?, datetime('now'))", (_LEGACY_KEY, str(new_marker)))
         conn.commit()
+        return copied, new_marker
     except BaseException:
         conn.rollback()
         raise
