@@ -14,6 +14,7 @@
   onMount(() => watchRoster(30));
 
   const here = $derived(roster.users.filter((u) => u.status !== 'offline'));
+  const away = $derived(here.length - roster.online);
   const title = (u) =>
     `${u.display_name} · ${u.status}` + (u.busy?.length ? ` · busy with ${u.busy[0].title}` : '');
 </script>
@@ -32,7 +33,7 @@
         {#if !here.length}<span class="av"><span class="ini"><Icon name="user" size={14} /></span></span>{/if}
       </span>
       <span class="t">
-        <b>{roster.online} online</b>
+        <b>{roster.online} online{away ? ` · ${away} away` : ''}</b>
         {#if here.length}
           <span>{here.slice(0, 2).map((u) => u.display_name.split(' ')[0] + (u.busy?.length ? ' · ' + u.busy[0].title : '')).join(' — ')}</span>
         {:else}

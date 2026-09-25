@@ -46,15 +46,16 @@
     }
   }
 
-  function line(u) {
+  /* The rest of the sentence after the status word. */
+  function rest(u) {
     if (u.status === 'online') {
       const bits = [u.page_title || 'Home'];
       if (u.device) bits.push(u.device);
-      return `Online · ${bits.join(' · ')}`;
+      return ' · ' + bits.join(' · ');
     }
-    if (u.status === 'away') return `Away · last active ${agoShort(u.seconds_ago)}`;
-    if (u.disabled) return 'Account disabled';
-    return u.seconds_ago == null ? 'Never signed in' : `Last seen ${agoShort(u.seconds_ago)}`;
+    if (u.status === 'away') return ` · last active ${agoShort(u.seconds_ago)}`;
+    if (u.disabled) return ' · account disabled';
+    return u.seconds_ago == null ? ' · never signed in' : ` · last seen ${agoShort(u.seconds_ago)}`;
   }
 
   const day = (iso) => (iso ? String(iso).slice(0, 10) : '');
@@ -81,7 +82,7 @@
                 {#if u.is_me}<span class="tag you">you</span>{/if}
                 <span class="tag">{ROLE[u.role] || u.role}</span>
               </div>
-              <div class="ln"><span class="st">{STATUS_LABEL[u.status]}</span>{line(u).slice(STATUS_LABEL[u.status].length)}</div>
+              <div class="ln"><span class="st">{STATUS_LABEL[u.status]}</span>{rest(u)}</div>
               {#if u.busy.length}
                 {#each u.busy as b (b.id)}
                   <div class="busy">

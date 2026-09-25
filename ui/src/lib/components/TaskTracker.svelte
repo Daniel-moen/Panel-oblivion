@@ -385,7 +385,7 @@
   .tt > .head { flex-wrap: wrap; align-items: center; }
   .badges { display: inline-flex; gap: 6px; flex-wrap: wrap; }
   .badge { height: 22px; padding: 0 8px; font: 500 11px/1 var(--mc-mono); font-variant-numeric: tabular-nums; }
-  .sw select { height: 32px; max-width: 200px; font-size: 12.5px; padding-right: 30px; }
+  .sw select { height: 32px; width: 168px; text-overflow: ellipsis; font-size: 12.5px; padding-right: 30px; }
   .sel { display: inline-block; width: 100%; }
 
   /* ——— add ——— */
@@ -465,6 +465,6 @@
 
   @media (max-width: 480px) {
     .extra, .editor { grid-template-columns: 1fr; }
-    .sw select { max-width: 150px; }
+    .sw select { width: 140px; }
   }
 </style>
