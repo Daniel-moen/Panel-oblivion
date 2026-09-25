@@ -256,6 +256,38 @@ def check_quicklog(page, btn_sel: str, tag: str) -> None:
     step(f"{tag}: Quick log opens and Escape closes it", run)
 
 
+def check_chat(page, btn_sel: str, tag: str, shot=None, frost=True) -> None:
+    """Task 0047: the header's round chat button is the one chat entry point
+    (no floating launcher). It opens the sheet over a page that still has its
+    Frost pane, and closing it logs no console errors."""
+    sheet = '[data-testid="chat-sheet"]'
+
+    def run():
+        before = len(errors)
+        n = page.locator('[data-testid="chat-launcher"]').locator("visible=true").count()
+        check(f"{tag}: exactly one visible chat button (no floating launcher)", n == 1, f"{n} visible")
+        check(f"{tag}: no .launcher element in the DOM", page.locator("button.launcher").count() == 0)
+        page.click(btn_sel, timeout=T)
+        page.wait_for_selector(sheet, state="visible", timeout=T)
+        check(f"{tag}: the header chat button opens [chat-sheet]", True)
+        if frost:                           # /map has no pane by design
+            bg = page.evaluate(
+                "() => { const f = document.querySelector('.mg-frostclip .mg-frost');"
+                " return f ? getComputedStyle(f).backgroundImage : null; }")
+            check(f"{tag}: the Frost pane is present under the open sheet",
+                  bool(bg) and bg != "none", bg)
+        if shot:
+            shot("-chat")
+        page.wait_for_timeout(800)          # first sync lands while open
+        page.click('[data-testid="chat-close"]', timeout=T)
+        page.wait_for_selector(sheet, state="hidden", timeout=T)
+        page.wait_for_timeout(500)
+        check(f"{tag}: closing the sheet leaves no console errors", len(errors) == before,
+              errors[before:])
+
+    step(f"{tag}: chat opens from the header", run)
+
+
 def check_home(page, base: str, vp: str, shot) -> None:
     tag = f"{vp} /"
     page.goto(base + "/", wait_until="domcontentloaded")
@@ -339,6 +371,8 @@ def check_home(page, base: str, vp: str, shot) -> None:
     step(f"{tag}: Search round button", search)
 
     check_quicklog(page, '[data-home-scene] button[aria-label="Quick log"]', tag)
+    check_chat(page, '[data-home-scene] [data-testid="chat-launcher"]', tag,
+               lambda suffix: shot(vp, "/", suffix=suffix))
 
     # reveal → the overview pane, then back to the top
     def reveal():
@@ -404,6 +438,9 @@ def check_route(page, base: str, vp: str, path: str, shot) -> None:
 
     step(f"{tag}: header Search", search)
     check_quicklog(page, 'header.strip button[aria-label="Quick log"]', tag)
+    check_chat(page, 'header.strip [data-testid="chat-launcher"]', tag,
+               (lambda suffix: shot(vp, path, suffix=suffix)) if path == "/prospects" else None,
+               frost=path != "/map")
 
 
 def main() -> int:

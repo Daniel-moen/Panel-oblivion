@@ -1,6 +1,7 @@
 # Team chat — channels, attachments, @mentions
 
-The floating chat on every page: the team talking to each other (Agent Z is
+The team chat on every page, opened from the round chat button in the header
+(the strip on every route, the top-right row on Home): the team talking to each other (Agent Z is
 `/api/agent`, a different thing). Polling, not sockets — the Procfile runs one
 gunicorn worker with several threads, and a held-open socket per browser
 would eat a thread each. Server: `chat.py` (a blueprint, registered like
@@ -202,7 +203,7 @@ One timer, self-scheduling, never overlapping requests.
 ## Selectors (data-testid) the Playwright harness relies on
 
 ```
-chat-launcher            the floating button          chat-badge  (data-kind="mention"|"plain")
+chat-launcher            the header chat button       chat-badge  (data-kind="mention"|"plain")
 chat-sheet               the open sheet               chat-close
 chat-channel             a channel row, data-slug, data-id; inside it chat-channel-unread
 chat-new-channel         "+" (admins)                 chat-mentions-tab

@@ -1,4 +1,4 @@
-/* The team chat behind the floating launcher on every page — channels,
+/* The team chat behind the header's chat button on every page — channels,
    attachments, @mentions. (Agent Z lives in agent.svelte.js and on /agent;
    the two share nothing.) docs/CHAT.md is the contract with the server and
    with the Playwright harness.
@@ -38,7 +38,7 @@ export const chat = $state({
   channels: [],            // /api/chat/channels rows, patched by sync
   byChannel: {},           // id -> {messages, pending, hasMore, loaded, loading, loadingOlder}
   unread: 0,               // total unread across channels (the strip's badge reads this)
-  mentions: 0,             // unread mentions — the launcher goes green for these
+  mentions: 0,             // unread mentions — the header badge goes accent for these
   cursor: null,            // sync rev
   me: null,                // {id, username, display_name, is_admin}
   people: [],              // /api/chat/people
@@ -734,4 +734,15 @@ export function closeChat() {
 export function toggleChat() {
   if (chat.open) closeChat();
   else openChat();
+}
+
+/* The header chat button's badge (strip + Home): unread mentions win and
+   show in the accent colour; otherwise the plain unread count. */
+export function chatBadge() {
+  const kind = chat.mentions > 0 ? 'mention' : 'plain';
+  const n = kind === 'mention' ? chat.mentions : chat.unread;
+  const label = chat.open ? 'Close team chat'
+    : chat.mentions ? `Open team chat, ${chat.mentions} mention${chat.mentions === 1 ? '' : 's'}`
+    : chat.unread ? `Open team chat, ${chat.unread} unread` : 'Open team chat';
+  return { kind, n, txt: n > 9 ? '9+' : String(n), label, show: n > 0 && !chat.open };
 }

@@ -22,7 +22,7 @@
   import { api } from '$lib/api.js';
   import { app, toast, ensureProspects } from '$lib/state.svelte.js';
   import { slots, chrome, shell, openQuickLog, stripWanted } from '$lib/shell.svelte.js';
-  import { chat, toggleChat } from '$lib/chat.svelte.js';
+  import { chat, toggleChat, chatBadge } from '$lib/chat.svelte.js';
   import { me } from '$lib/me.svelte.js';
   import { filters } from '$lib/filters.svelte.js';
   import { openSearch, searchKey } from '$lib/search.js';
@@ -205,6 +205,7 @@
   const series = $derived(home?.series ?? null);
 
   const share = (a, b) => (a != null && b ? (100 * a) / b : null);
+  const badge = $derived(chatBadge());
   const tracked = $derived(home?.tracked ?? panelStats?.tracked ?? today?.counts?.tracked ?? null);
   const trackedActive = $derived(home?.tracked_active ?? null);
   const tilesLoading = $derived(!home && !(homeFailed && (app.stats || app.loaded)));
@@ -318,10 +319,10 @@
         <button type="button" class="mg-round" aria-label="Quick log" title="Quick log" onclick={() => openQuickLog()}><Icon name="pencil" size={17} /></button>
         <!-- the strip carries team chat everywhere else; the scene has no strip -->
         <button type="button" class="mg-round chat" class:on={chat.open} onclick={toggleChat} aria-expanded={chat.open}
-                aria-label={chat.open ? 'Close team chat' : `Open team chat${chat.unread ? ` (${chat.unread} unread)` : ''}`}
-                title="Team chat">
+                data-testid="chat-launcher" aria-label={badge.label} title="Team chat">
           <Icon name="message" size={18} />
-          {#if chat.unread && !chat.open}<i class="count" aria-hidden="true">{chat.unread > 9 ? '9+' : chat.unread}</i>{/if}
+          {#if badge.show}<i class="count" class:mention={badge.kind === 'mention'} data-testid="chat-badge"
+                              data-kind={badge.kind} aria-hidden="true">{badge.txt}</i>{/if}
         </button>
       </div>
     </div>
@@ -499,9 +500,10 @@
   .count {
     position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px; padding: 0 4px;
     display: inline-flex; align-items: center; justify-content: center; border-radius: 9999px;
-    background: var(--mc-crit); color: #fff; border: 2px solid rgba(0, 0, 0, 0.5);
+    background: #3a3a42; color: var(--mc-ink); border: 2px solid rgba(0, 0, 0, 0.5);
     font: 700 9.5px/1 var(--mc-font); font-style: normal; font-variant-numeric: tabular-nums;
   }
+  .count.mention { background: var(--mc-accent); color: var(--mc-accent-ink); }
   .view { position: relative; display: inline-flex; align-items: center; height: 32px; margin-right: 4px; }
   .view .vis {
     display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 11px;

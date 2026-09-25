@@ -1,7 +1,7 @@
 <script>
-  /* Team chat, everywhere: the floating launcher (bottom-right, clear of the
-     dock on a phone / upright iPad and of the rail on a desktop) and the
-     sheet it opens. The strip's chat button toggles the same sheet.
+  /* Team chat, everywhere: the sheet. It is opened by the round chat button
+     in the header (glass/StatusStrip.svelte, and Home's own top-right row),
+     which also carries the unread / mention badge (chatBadge()).
 
      The sheet is ONE blurred rectangle — nothing inside it carries a
      backdrop-filter of its own. From 720px it is a panel: channels on the
@@ -19,7 +19,7 @@
   import { tick } from 'svelte';
   import { slide } from '$lib/motion.js';
   import { app } from '$lib/state.svelte.js';
-  import { chat, openChat, closeChat, channelById, resumeChat } from '$lib/chat.svelte.js';
+  import { chat, closeChat, channelById, resumeChat } from '$lib/chat.svelte.js';
   import Icon from '$lib/components/glass/Icon.svelte';
   import ChannelList from './chat/ChannelList.svelte';
   import Thread from './chat/Thread.svelte';
@@ -29,9 +29,6 @@
   const blocked = $derived(!!app.selectedKey || app.runOpen);
   const show = $derived(!blocked);
 
-  const badgeKind = $derived(chat.mentions > 0 ? 'mention' : 'plain');
-  const badgeN = $derived(chat.mentions > 0 ? chat.mentions : chat.unread);
-  const badgeTxt = $derived(badgeN > 99 ? '99+' : String(badgeN));
 
   const active = $derived(chat.active != null ? channelById(chat.active) : null);
   const title = $derived(chat.view === 'mentions' ? 'Mentions'
@@ -124,18 +121,6 @@
 
 <svelte:window onkeydown={onWindowKey} onclick={onWindowClick} />
 
-{#if show && !chat.open}
-  <button type="button" class="launcher" data-testid="chat-launcher" onclick={openChat}
-          aria-label={`Open team chat${chat.mentions ? `, ${chat.mentions} mention${chat.mentions === 1 ? '' : 's'}` : chat.unread ? `, ${chat.unread} unread` : ''}`}
-          title="Team chat">
-    <Icon name="chat" size={22} stroke={1.9} />
-    {#if badgeN > 0}
-      <i class="badge" class:mention={badgeKind === 'mention'} data-testid="chat-badge" data-kind={badgeKind}
-         aria-hidden="true">{badgeTxt}</i>
-    {/if}
-  </button>
-{/if}
-
 {#if show && chat.open}
   <div class="sheet" class:wide class:kb={kb > 0} data-testid="chat-sheet" role="dialog" aria-label="Team chat"
            style:--kb="{kb}px" style:--vvt="{vvt}px" style:--vvh="{vvh}px"
@@ -196,31 +181,6 @@
 {/if}
 
 <style>
-  /* ——— the launcher ——— */
-  .launcher {
-    position: fixed; z-index: 55;
-    right: calc(16px + var(--sar)); bottom: calc(var(--mc-dock-h) + var(--sab) + 16px);
-    width: 56px; height: 56px; border-radius: 50%;
-    display: grid; place-items: center; cursor: pointer;
-    background: var(--mc-glass-strong); color: var(--mc-ink);
-    border: 1px solid var(--mc-glass-line2);
-    box-shadow: var(--mc-sh-3), var(--mc-lit);
-    -webkit-backdrop-filter: blur(var(--mc-blur)) saturate(150%); backdrop-filter: blur(var(--mc-blur)) saturate(150%);
-    transition: transform 120ms var(--mc-ease), background var(--mc-t-fast), border-color var(--mc-t-fast);
-  }
-  .launcher:hover { background: rgba(30, 30, 36, 0.86); border-color: var(--mc-line3); }
-  .launcher:active { transform: scale(0.95); }
-  @media (min-width: 1024px) {
-    .launcher { right: calc(24px + var(--sar)); bottom: calc(24px + var(--sab)); }
-  }
-  .badge {
-    position: absolute; top: -3px; right: -3px; min-width: 22px; height: 22px; padding: 0 6px;
-    border-radius: 9999px; display: grid; place-items: center;
-    font: 700 11.5px/1 var(--mc-font); font-style: normal; font-variant-numeric: tabular-nums;
-    background: #3a3a42; color: var(--mc-ink); border: 2px solid var(--mc-bg);
-  }
-  .badge.mention { background: var(--mc-accent); color: var(--mc-accent-ink); }
-
   /* ——— the sheet: a phone first ——— */
   .sheet {
     position: fixed; z-index: 75;
@@ -293,8 +253,5 @@
   @media (pointer: coarse) {
     .close { width: 44px; height: 44px; }
     .err .x { width: 36px; height: 36px; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .launcher, .launcher:active { transition: none; transform: none; }
   }
 </style>

@@ -24,7 +24,7 @@
   import { page } from '$app/state';
   import { app } from '$lib/state.svelte.js';
   import { shell, chrome, engineStatus, openQuickLog } from '$lib/shell.svelte.js';
-  import { chat, toggleChat } from '$lib/chat.svelte.js';
+  import { chat, toggleChat, chatBadge } from '$lib/chat.svelte.js';
   import { openSearch, searchKey } from '$lib/search.js';
   import Icon from './Icon.svelte';
   import PrimaryButton from './PrimaryButton.svelte';
@@ -38,7 +38,7 @@
   const status = $derived(shell.status || engineStatus(app.status));
   const crawling = $derived(!!app.status.running);
   const hot = $derived(app.prospects.reduce((n, r) => n + (r.tier === 'hot' ? 1 : 0), 0));
-  const unread = $derived(chat.unread > 9 ? '9+' : String(chat.unread));
+  const badge = $derived(chatBadge());
 
   /* ——— the clock: browser locale, 24-hour, refreshed on the minute ——— */
   const LOCALE = (typeof navigator !== 'undefined' && navigator.language) || 'en-ZA';
@@ -129,10 +129,10 @@
         </button>
 
         <button type="button" class="mg-round" class:on={chat.open} onclick={toggleChat} aria-expanded={chat.open}
-                aria-label={chat.open ? 'Close team chat' : `Open team chat${chat.unread ? ` (${chat.unread} unread)` : ''}`}
-                title="Team chat">
+                data-testid="chat-launcher" aria-label={badge.label} title="Team chat">
           <Icon name="message" size={18} />
-          {#if chat.unread && !chat.open}<i class="count" aria-hidden="true">{unread}</i>{/if}
+          {#if badge.show}<i class="count" class:mention={badge.kind === 'mention'} data-testid="chat-badge"
+                              data-kind={badge.kind} aria-hidden="true">{badge.txt}</i>{/if}
         </button>
 
         <a class="mg-round" class:on={path.startsWith('/account')} href="/account" aria-label="Account" title="Account">
@@ -175,9 +175,10 @@
   .count {
     position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px; padding: 0 4px;
     display: inline-flex; align-items: center; justify-content: center; border-radius: 9999px;
-    background: var(--mc-crit); color: #fff; border: 2px solid var(--mc-bg);
+    background: #3a3a42; color: var(--mc-ink); border: 2px solid var(--mc-bg);
     font: 700 9.5px/1 var(--mc-font); font-style: normal; font-variant-numeric: tabular-nums;
   }
+  .count.mention { background: var(--mc-accent); color: var(--mc-accent-ink); }
   .phone-go { display: inline-flex; }
 
   /* the scene's slim strip: just the dot and what is happening */
