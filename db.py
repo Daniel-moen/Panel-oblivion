@@ -12,8 +12,9 @@ same one: a home advertised for sale AND to rent is two records on purpose
 tenant), so nothing in here ever merges the two.
 """
 
+import os
 import sqlite3
-from contextlib import contextmanager
+import threading
 
 import config
 
@@ -236,6 +237,15 @@ CREATE TABLE IF NOT EXISTS passkeys (
     created_at    TEXT NOT NULL,
     last_used_at  TEXT
 );
+
+-- Small process-independent key/value state that must survive a redeploy,
+-- e.g. the auto-crawl stamps (webapp.py): kept in memory they reset on every
+-- boot, so every deploy re-fired a crawl.
+CREATE TABLE IF NOT EXISTS app_state (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 INSERT_COLUMNS = (
@@ -350,15 +360,28 @@ def _migrate_price_history(conn: sqlite3.Connection) -> None:
     conn.execute("DROP TABLE price_history_setpk")
 
 
-@contextmanager
-def connect(db_path: str = config.DB_PATH):
-    # check_same_thread=False: pipeline.py crawls the portals on one thread per
-    # source and funnels every read and write through a single lock, so the
-    # connection is shared but never used concurrently.
-    conn = sqlite3.connect(db_path, timeout=30, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=30000")
+# Databases whose schema setup already ran in this process, keyed by
+# (absolute path, device, inode) so a file deleted and recreated under the same
+# name (a scratch test DB) is set up again.
+_setup_done: set[tuple] = set()
+_setup_lock = threading.Lock()
+
+
+def _db_identity(db_path: str) -> tuple:
+    path = os.path.abspath(db_path)
+    try:
+        st = os.stat(path)
+        return (path, st.st_dev, st.st_ino)
+    except OSError:
+        return (path, None, None)
+
+
+def _setup(conn: sqlite3.Connection) -> None:
+    """Migrations, the schema script and the forward-compatible column adds.
+
+    Runs once per process per database (see connect()); every step is
+    idempotent, so a second process doing the same is harmless.
+    """
     _migrate(conn)
     _migrate_price_history(conn)
     conn.executescript(SCHEMA)
@@ -383,9 +406,13 @@ def connect(db_path: str = config.DB_PATH):
                 pass
     # Belt and braces: an older ALTER (or a hand-written row) can leave a NULL
     # behind, and NULL is not 'sale' to a WHERE clause.
+    # Guarded by a SELECT: the unconditional UPDATE opened a write
+    # transaction on every connect() even when it matched nothing.
     try:
-        conn.execute("UPDATE listings SET listing_type = 'sale'"
-                     " WHERE listing_type IS NULL OR listing_type = ''")
+        if conn.execute("SELECT 1 FROM listings WHERE listing_type IS NULL"
+                        " OR listing_type = '' LIMIT 1").fetchone():
+            conn.execute("UPDATE listings SET listing_type = 'sale'"
+                         " WHERE listing_type IS NULL OR listing_type = ''")
     except sqlite3.OperationalError:
         pass
     try:
@@ -412,11 +439,96 @@ def connect(db_path: str = config.DB_PATH):
                 conn.execute(f"ALTER TABLE scores ADD COLUMN {col} {decl}")
             except sqlite3.OperationalError:
                 pass
-    try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+    conn.commit()
+
+
+def ensure_schema(db_path: str = config.DB_PATH, force: bool = False) -> None:
+    """Run _setup() against db_path unless this process already has."""
+    key = _db_identity(db_path)
+    if not force and key in _setup_done:
+        return
+    with _setup_lock:
+        key = _db_identity(db_path)
+        if not force and key in _setup_done:
+            return
+        conn = sqlite3.connect(db_path, timeout=30, check_same_thread=False)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=30000")
+            _setup(conn)
+        finally:
+            conn.close()
+        _setup_done.add(_db_identity(db_path))
+
+
+class _Connect:
+    """connect()'s context manager: commit on a clean exit, always close.
+
+    A class rather than a @contextmanager generator so ``db.connect().
+    __enter__()`` (handy in a one-liner) is not closed the moment the
+    temporary generator is garbage-collected.
+    """
+
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.conn = None
+
+    def __enter__(self) -> sqlite3.Connection:
+        ensure_schema(self.db_path)
+        # check_same_thread=False: pipeline.py crawls the portals on one
+        # thread per source and funnels every read and write through a single
+        # lock, so the connection is shared but never used concurrently.
+        conn = sqlite3.connect(self.db_path, timeout=30,
+                               check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
+        self.conn = conn
+        return conn
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        try:
+            if exc_type is None:
+                self.conn.commit()
+        finally:
+            self.conn.close()
+        return False
+
+
+def connect(db_path: str = config.DB_PATH) -> _Connect:
+    """A connection to the prospects database, committed and closed on exit.
+
+    Invariant: after ``with db.connect() as conn:`` enters,
+    ``conn.in_transaction`` is False and the connection holds no lock. A
+    write lock is taken only by the caller's own first write and released by
+    its commit.
+
+    Why: connect() used to run the schema script, the migrations and an
+    unconditional ``UPDATE listings SET listing_type='sale' ...`` on every
+    call. Python's default isolation level opened an implicit transaction for
+    that UPDATE (even at zero rows) and nothing committed it until the context
+    exited, so every connection — every dashboard read included — held the
+    WAL write lock for its whole life. Reads serialised behind each other and
+    behind the crawler, and a crawl died with "database is locked" behind a
+    40 s prospect build. Setup now runs once per process (ensure_schema) and
+    ends with a commit.
+    """
+    return _Connect(db_path)
+
+
+def get_state(conn: sqlite3.Connection, key: str,
+              default: str | None = None) -> str | None:
+    """Read one app_state value (a string), or default when unset."""
+    row = conn.execute("SELECT value FROM app_state WHERE key = ?",
+                       (key,)).fetchone()
+    return row[0] if row else default
+
+
+def set_state(conn: sqlite3.Connection, key: str, value) -> None:
+    """Write one app_state value and commit it."""
+    conn.execute("INSERT OR REPLACE INTO app_state (key, value, updated_at)"
+                 " VALUES (?, ?, datetime('now'))", (key, str(value)))
+    conn.commit()
 
 
 # The fields whose change makes a listing worth re-judging. A sweep that
