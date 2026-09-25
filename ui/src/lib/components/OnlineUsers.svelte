@@ -87,7 +87,7 @@
                 {#each u.busy as b (b.id)}
                   <div class="busy">
                     <Icon name="bolt" size={12} />
-                    <span>Busy with: <b>{b.title}</b>{#if b.property}<i> · {b.property.label}</i>{/if}</span>
+                    <span>Busy with: <b>{b.title}</b>{#if b.property}<i>{' · ' + b.property.label}</i>{/if}</span>
                   </div>
                 {/each}
               {:else if u.open_tasks && u.status !== 'offline'}

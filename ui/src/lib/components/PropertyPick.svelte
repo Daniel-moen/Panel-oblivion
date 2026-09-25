@@ -49,7 +49,7 @@
   {#if value}
     <span class="mg-chip ok picked">
       <Icon name="property" size={13} />
-      <span class="lb">{value.label}{#if value.suburb}<i> · {value.suburb}</i>{/if}</span>
+      <span class="lb">{value.label}{#if value.suburb}<i>{' · ' + value.suburb}</i>{/if}</span>
       <button type="button" class="x" onclick={clear} aria-label="Remove property link">
         <Icon name="close" size={12} />
       </button>
