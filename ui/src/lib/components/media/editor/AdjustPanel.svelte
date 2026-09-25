@@ -157,6 +157,6 @@
     width: 32px; height: 32px; border-radius: 50%; background: var(--c); cursor: pointer;
     border: 2px solid transparent; box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35);
   }
-  .band.on { border-color: #fff; }
+  .band.on { border-color: var(--mc-ink); }
   .grade { padding-top: 4px; }
 </style>

@@ -46,8 +46,8 @@
       </label>
     </div>
     <p class="note mg-tnum">{project.fps} fps · {project.clips.length} clip{project.clips.length === 1 ? '' : 's'}
-      {#if project.music?.length} · {project.music.length} music piece{project.music.length === 1 ? '' : 's'}{/if}
-      {#if project.titles?.length} · {project.titles.length} title{project.titles.length === 1 ? '' : 's'} (kept as they are){/if}
+      {#if project.music?.length}{" · "}{project.music.length} music piece{project.music.length === 1 ? '' : 's'}{/if}
+      {#if project.titles?.length}{" · "}{project.titles.length} title{project.titles.length === 1 ? '' : 's'} (kept as they are){/if}
     </p>
   </section>
 
@@ -135,7 +135,8 @@
   .f .mg-select > select { width: 100%; }
   .note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--mc-ink3); }
   .toggles { display: flex; flex-wrap: wrap; gap: 8px 18px; }
-  .tg { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13px; color: var(--mc-ink2); cursor: pointer; }
+  .tg { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; color: var(--mc-ink2); cursor: pointer; }
   .tg input { width: 18px; height: 18px; accent-color: var(--mc-accent); }
   input[type='range'] { width: 100%; accent-color: var(--mc-accent); height: 28px; }
+  @media (pointer: coarse) { input[type='range'] { height: 44px; } }
 </style>

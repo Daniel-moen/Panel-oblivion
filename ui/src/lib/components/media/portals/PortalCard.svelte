@@ -4,7 +4,7 @@
 
      The detail panel mounts one section at a time, so opening a card costs a
      single request, not five. */
-  import { fly } from 'svelte/transition';
+  import { rise, slide } from '$lib/motion.js';
   import Icon from '$lib/components/glass/Icon.svelte';
   import Seg from '$lib/components/glass/Seg.svelte';
   import { say } from '$lib/media.svelte.js';
@@ -55,7 +55,7 @@
   }
 </script>
 
-<article class="mg-card sh" in:fly={{ y: 12, duration: 320, delay }}>
+<article class="mg-card sh" in:rise={{ i: Math.round(delay / 60) }}>
   <div class="ch">
     <span class="kind" title={kindMeta?.hint}><Icon name={kindMeta?.icon || 'share'} size={14} /></span>
     <h3>{s.title || 'Untitled portal'}</h3>
@@ -93,7 +93,7 @@
     {#if kind !== 'receive'}<span class="mg-chip"><b class="mg-tnum">{s.count ?? '—'}</b> files</span>{/if}
     <span class="mg-chip"><b class="mg-tnum">{s.views ?? 0}</b> views</span>
     {#if kind !== 'receive'}<span class="mg-chip {s.selects ? 'ok' : ''}"><b class="mg-tnum">{s.selects ?? 0}</b> picked</span>{/if}
-    {#if s.intake_folder_id}<span class="mg-chip {s.intake_waiting ? 'warn' : ''}"><b class="mg-tnum">{s.uploads ?? 0}</b> received{#if s.intake_waiting} · {s.intake_waiting} to file{/if}</span>{/if}
+    {#if s.intake_folder_id}<span class="mg-chip {s.intake_waiting ? 'warn' : ''}"><b class="mg-tnum">{s.uploads ?? 0}</b> received{#if s.intake_waiting}{' · '}{s.intake_waiting} to file{/if}</span>{/if}
     {#if kind !== 'receive'}
       {#if s.allow_download}<span class="mg-chip">downloads{s.allow_zip ? ' + zip' : ', one by one'}</span>{/if}
       {#if s.watermark_previews}<span class="mg-chip">watermarked{s.watermark_name ? ` · ${s.watermark_name}` : ''}</span>{/if}
@@ -111,7 +111,7 @@
   </div>
 
   {#if tab}
-    <div class="panel" in:fly={{ y: -6, duration: 200 }}>
+    <div class="panel" transition:slide={{ y: -6, duration: 200 }}>
       {#key tab}
         {#if tab === 'picks'}<PortalPicks share={s} />
         {:else if tab === 'pins'}<PortalPins share={s} />
@@ -136,18 +136,19 @@
   .meta .w { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
 
   .done { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 12px;
-          border-radius: var(--mc-r-md); background: rgba(62, 207, 142, 0.1);
-          border: 1px solid rgba(62, 207, 142, 0.3); color: var(--mc-accent);
+          border-radius: var(--mc-r-md); background: var(--mc-ok-soft);
+          border: 1px solid var(--mc-ok-line); color: var(--mc-accent);
           font: 400 12.5px/1.4 var(--mc-font); }
   .done span { color: var(--mc-ink2); }
   .done b { color: var(--mc-accent); font-weight: 600; }
 
   .urlrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-  code { flex: 1 1 200px; min-width: 0; height: 32px; display: flex; align-items: center;
-         padding: 0 12px; border-radius: 9999px; background: var(--mc-inset);
+  code { flex: 1 1 200px; min-width: 0; height: 40px; display: flex; align-items: center;
+         padding: 0 12px; border-radius: var(--mc-r-md); background: var(--mc-inset); border: 1px solid var(--mc-line);
          font: 11.5px/1 var(--mc-mono); color: var(--mc-ink2);
          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .urlrow .mg-btn { min-height: 40px; }
+  @media (max-width: 560px) { .urlrow code { flex-basis: 100%; } .urlrow .mg-btn { flex: 1; } }
 
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
   .chips b { color: var(--mc-ink); font-weight: 600; }
@@ -155,6 +156,7 @@
   .acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .tabs { overflow-x: auto; max-width: 100%; }
   .drop { margin-left: auto; min-height: 40px; }
+  @media (pointer: coarse) { .urlrow .mg-btn, .drop { min-height: 44px; } }
 
   .panel { margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--mc-line); min-width: 0; }
 </style>

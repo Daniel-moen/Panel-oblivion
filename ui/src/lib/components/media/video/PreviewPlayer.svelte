@@ -160,7 +160,7 @@
   .pv { display: flex; flex-direction: column; gap: 8px; align-items: center; min-width: 0; }
   .stage {
     position: relative; max-width: 100%;
-    background: #000; border-radius: var(--mc-r-md); overflow: hidden; display: grid; place-items: center;
+    background: var(--mc-inset); border-radius: var(--mc-r-md); overflow: hidden; display: grid; place-items: center;
     margin: 0 auto;
   }
   video { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center; }

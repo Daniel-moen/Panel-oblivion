@@ -190,7 +190,7 @@
   .list { display: flex; flex-direction: column; margin-bottom: 8px; }
   .it { display: flex; align-items: center; gap: 2px; border-bottom: 1px solid var(--mc-line); border-radius: 10px; }
   .it:last-child { border-bottom: 0; }
-  .it.on { background: rgba(62, 207, 142, 0.1); }
+  .it.on { background: var(--mc-ok-soft); }
   .it.on .nm { color: var(--mc-accent); }
   .nm {
     flex: 1; min-width: 0; min-height: 40px; padding: 0 8px; border: 0; background: none; text-align: left;

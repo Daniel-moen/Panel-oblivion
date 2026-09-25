@@ -37,7 +37,7 @@
     <ul class="fl">
       {#each F as f (f.k)}
         {@const on = !!feats[f.k]}
-        <li class="mg-glass-soft" class:off={!on}>
+        <li class="mg-panel" class:off={!on}>
           <span class="mg-dot {on ? 'ok' : ''}"></span>
           <span class="tx">
             <b>{f.name}</b>

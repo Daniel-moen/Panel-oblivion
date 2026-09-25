@@ -13,7 +13,7 @@
      library check and tag rules. Each card is only drawn for a role that can
      use it (/api/me capabilities); the server checks again regardless. */
   import { onMount } from 'svelte';
-  import { fly } from 'svelte/transition';
+  import { rise } from '$lib/motion.js';
   import { mstate, boot, watchJobs, runRescan, runProxies, runAutoTag, say } from '$lib/media.svelte.js';
   import { media, fmtBytes } from '$lib/media.js';
   import Skeleton from '$lib/components/Skeleton.svelte';
@@ -97,7 +97,7 @@
 <section class="sec">
   <span class="mg-label">Where things are</span>
 
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>Footage drive</b>
       <span class="hint mono">{root?.path || 'not configured'}</span>
@@ -108,14 +108,14 @@
     </span>
   </div>
 
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>Catalogue</b>
       <span class="hint mono">{mstate.status?.data_dir || '—'}</span>
     </div>
   </div>
 
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>API mount</b>
       <span class="hint">Where the media backend answers</span>
@@ -123,7 +123,7 @@
     <span class="val mono">{mstate.status?.prefix || '/zerko'}</span>
   </div>
 
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>Backend</b>
       <span class="hint">
@@ -148,7 +148,7 @@
 <section class="sec">
   <span class="mg-label">Maintenance</span>
 
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>Re-index the drive</b>
       <span class="hint">Pick up anything new on the footage drive</span>
@@ -158,7 +158,7 @@
     </button>
   </div>
 
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>Build missing proxies</b>
       <span class="hint">
@@ -176,7 +176,7 @@
     </button>
   </div>
 
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>Auto-tag</b>
       <span class="hint">Camera, stage and spoken-word tags</span>
@@ -187,7 +187,7 @@
     </button>
   </div>
 
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>Repair thumbnails</b>
       <span class="hint">Redraw anything that lost its still</span>
@@ -216,7 +216,7 @@
   <span class="mg-label">Running now</span>
 
   {#if mstate.rescan?.running}
-    <div class="job mg-glass-soft" in:fly={{ y: 6, duration: 200 }}>
+    <div class="job mg-panel" in:rise>
       <div class="jh">
         <span class="pulse" aria-hidden="true"><span class="ring mg-ping"></span><span class="core"></span></span>
         <b>Indexing</b>
@@ -230,7 +230,7 @@
   {/if}
 
   {#each jobs as j (j.id ?? j.video_id)}
-    <div class="job mg-glass-soft" in:fly={{ y: 6, duration: 200 }}>
+    <div class="job mg-panel" in:rise>
       <div class="jh">
         <span class="pulse" aria-hidden="true"><span class="ring mg-ping"></span><span class="core"></span></span>
         <b class="cap">{j.type || 'job'}</b>
@@ -270,29 +270,29 @@
   <span class="mg-label">Machine</span>
   {#if !server}
     {#each Array(4) as _, i (i)}
-      <div class="skel"><Skeleton h="46px" r="14px" delay={i * 60} /></div>
+      <div class="skel"><Skeleton h="56px" r="12px" delay={i * 60} /></div>
     {/each}
   {:else}
     {#if server.cpu_percent != null}
-      <div class="set mg-glass-soft">
+      <div class="set mg-panel">
         <div class="l"><b>CPU</b></div>
         <span class="val mg-tnum">{Math.round(server.cpu_percent)}%</span>
       </div>
     {/if}
     {#if server.memory_percent != null}
-      <div class="set mg-glass-soft">
+      <div class="set mg-panel">
         <div class="l"><b>Memory</b></div>
         <span class="val mg-tnum">{Math.round(server.memory_percent)}%</span>
       </div>
     {/if}
     {#if server.disk_free != null}
-      <div class="set mg-glass-soft">
+      <div class="set mg-panel">
         <div class="l"><b>Disk free</b></div>
         <span class="val mg-tnum">{fmtBytes(server.disk_free)}</span>
       </div>
     {/if}
     {#if storage?.total != null}
-      <div class="set mg-glass-soft">
+      <div class="set mg-panel">
         <div class="l"><b>Library</b></div>
         <span class="val mg-tnum">{fmtBytes(storage.total)}</span>
       </div>
@@ -343,4 +343,5 @@
   .after { margin-top: 8px; }
 
   .skel { margin-bottom: 6px; }
+  @media (pointer: coarse) { .set .mg-btn, .after .mg-btn { min-height: 44px; } }
 </style>

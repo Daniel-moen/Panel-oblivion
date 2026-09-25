@@ -16,14 +16,15 @@
   let cursor = $state(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   let all = $state([]);
   let loading = $state(true);
+  let err = $state(null);        // the list failed to load
   let picked = $state(null);     // a YYYY-MM-DD the agenda narrows to
   let bookOn = $state(null);     // the day the sheet opens with; null = closed
   let showSheet = $state(false);
 
   async function load() {
-    loading = true;
+    loading = true; err = null;
     try { all = (await shoots.list())?.shoots || []; }
-    catch (e) { say(e.message, 'error'); }
+    catch (e) { err = e.message; say(e.message, 'error'); }
     finally { loading = false; }
   }
 
@@ -105,8 +106,15 @@
       {#if unbooked}<a class="mg-chip warn" href="/media/shoots">{unbooked} not booked</a>{/if}
     </div>
 
+    {#if err}
+      <div class="mg-strip crit">
+        <span class="ic"><Icon name="alert" size={15} /></span>
+        <span><b>Couldn't load the bookings</b> — {err}</span>
+        <button class="mg-btn secondary sm retry" onclick={load}><Icon name="refresh" size={13} />Retry</button>
+      </div>
+    {/if}
     {#if loading}
-      <Skeleton h="22rem" r="18px" />
+      <Skeleton h="22rem" r="16px" />
     {:else}
       <div class="cal mg-card" role="grid" aria-label={monthLabel}>
         <div class="wd" role="row">{#each WD as w (w)}<span role="columnheader">{w}</span>{/each}</div>
@@ -172,32 +180,42 @@
   .wd, .days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
   .wd span { padding: 4px 6px 8px; font: 500 11px/1 var(--mc-font); color: var(--mc-ink3); text-align: left; }
   .days { gap: 4px; }
-  .day { position: relative; min-height: 104px; min-width: 0; padding: 4px; border-radius: 12px;
-         background: rgba(255, 255, 255, 0.025); border: 1px solid transparent; display: flex; flex-direction: column; gap: 3px; }
+  .day { position: relative; min-height: 104px; min-width: 0; padding: 4px; border-radius: var(--mc-r-sm);
+         background: var(--mc-raised); border: 1px solid transparent; display: flex; flex-direction: column; gap: 3px; }
   .day.out { opacity: 0.45; }
-  .day.today { border-color: rgba(62, 207, 142, 0.45); }
+  .day.today { border-color: var(--mc-ok-line); }
   .day.sel { background: var(--mc-line); border-color: var(--mc-line2); }
+  .retry { margin-left: auto; align-self: center; }
   .dh { display: flex; align-items: center; justify-content: space-between; }
-  .num { min-width: 28px; height: 28px; border: 0; border-radius: 9999px; background: none; color: var(--mc-ink2);
+  .num { min-width: 28px; height: 28px; border: 0; border-radius: var(--mc-r-sm); background: none; color: var(--mc-ink2);
          font: 500 12.5px/1 var(--mc-font); cursor: pointer; padding: 0 6px; }
   .num:hover { background: var(--mc-line); color: var(--mc-ink); }
   .today .num { background: var(--mc-accent); color: var(--mc-accent-ink); font-weight: 600; }
-  .add { width: 28px; height: 28px; border: 0; border-radius: 50%; background: none; color: var(--mc-ink3); cursor: pointer;
-         display: grid; place-items: center; opacity: 0; transition: opacity 0.15s, background 0.15s; }
+  .add { width: 28px; height: 28px; border: 0; border-radius: var(--mc-r-sm); background: none; color: var(--mc-ink3); cursor: pointer;
+         display: grid; place-items: center; opacity: 0; transition: opacity var(--mc-t-fast), background var(--mc-t-fast); }
   .day:hover .add, .add:focus-visible { opacity: 1; }
+  /* no hover on a touch screen: the book button is simply there */
+  @media (hover: none) { .add { opacity: 1; } }
   .add:hover { background: var(--mc-line); color: var(--mc-ink); }
 
   .evs { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .ev { display: flex; gap: 5px; align-items: baseline; min-width: 0; padding: 4px 6px; border-radius: 7px;
-        font: 500 11.5px/1.25 var(--mc-font); color: var(--mc-ink); background: rgba(240, 180, 41, 0.14);
+        font: 500 11.5px/1.25 var(--mc-font); color: var(--mc-ink); background: var(--mc-warn-soft);
         border-left: 2px solid var(--mc-warn); }
-  .ev.editing { background: rgba(167, 139, 250, 0.14); border-left-color: var(--mc-mgr); }
-  .ev.posted { background: rgba(62, 207, 142, 0.12); border-left-color: var(--mc-accent); }
-  .ev:hover { filter: brightness(1.25); }
+  .ev.editing { background: var(--mc-mgr-soft); border-left-color: var(--mc-mgr); }
+  .ev.posted { background: var(--mc-ok-soft); border-left-color: var(--mc-accent); }
+  .ev { transition: background var(--mc-t-fast); }
+  .ev:hover { background: var(--mc-line2); }
   .ev b { flex: none; font-weight: 600; color: var(--mc-ink2); }
   .ev span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .more { border: 0; background: none; padding: 2px 6px; text-align: left; font: 500 11px/1.2 var(--mc-font); color: var(--mc-ink3); cursor: pointer; }
   .dots { display: none; }
+  @media (pointer: coarse) {
+    .nav .mg-btn { height: 44px; }
+    .nav .mg-btn.icon { width: 44px; }
+    .add { width: 36px; height: 36px; }
+    .more { min-height: 32px; }
+  }
 
   .agenda { margin-top: 16px; }
   .ah { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }

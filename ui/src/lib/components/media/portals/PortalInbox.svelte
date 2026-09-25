@@ -5,6 +5,7 @@
      tick what to move (or leave it all), choose a folder or name a new one,
      and file. Moving files needs media.organise; without it the list is
      read-only and says why. */
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import { onMount } from 'svelte';
   import { thumbUrl, fmtBytes } from '$lib/media.js';
   import { say } from '$lib/media.svelte.js';
@@ -55,10 +56,10 @@
 </script>
 
 {#if err}
-  <p class="none">{err}</p>
+  <div class="mg-strip crit"><span class="ic"><Icon name="alert" size={15} /></span><span>{err}</span></div>
 {:else if !data}
-  <p class="none">Loading…</p>
-{:else if !data.items.length}
+  <div class="sk"><Skeleton h="2.6rem" /><Skeleton h="2.6rem" delay={80} /></div>
+{:else if !data.items?.length}
   <p class="none">The inbox is empty{data.folder ? ` (${data.folder})` : ''} — anything the client sends lands here first.</p>
 {:else}
   <p class="lead">{data.count} file{data.count === 1 ? '' : 's'} waiting in <b>{data.folder}</b></p>
@@ -104,13 +105,14 @@
 {/if}
 
 <style>
+  .sk { display: flex; flex-direction: column; gap: 8px; }
   .none { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .lead { margin: 0 0 8px; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink2); }
   .lead b { color: var(--mc-ink); font-weight: 500; }
   .items { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px;
            max-height: 320px; overflow-y: auto; }
   li { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 6px;
-       border-radius: 10px; background: var(--mc-raised); }
+       border-radius: var(--mc-r-sm); background: var(--mc-raised); border: 1px solid var(--mc-line); }
   .ck { display: grid; place-items: center; width: 32px; height: 36px; flex: none; cursor: pointer; }
   .ck input { width: 17px; height: 17px; accent-color: var(--mc-accent); }
   .th { flex: none; width: 54px; height: 34px; border-radius: 6px; overflow: hidden; background: var(--mc-inset);
@@ -123,4 +125,5 @@
   .grow { flex: 1 1 180px; min-width: 0; }
   .mg-select.grow { display: block; }
   .fileto .mg-btn { min-height: 40px; }
+  @media (pointer: coarse) { .fileto .mg-btn { min-height: 44px; } .ck { width: 44px; height: 44px; } }
 </style>

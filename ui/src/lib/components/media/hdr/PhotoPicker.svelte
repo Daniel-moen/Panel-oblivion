@@ -5,6 +5,7 @@
   import Sheet from '$lib/components/glass/Sheet.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import { media, thumbUrl } from '$lib/media.js';
   import FolderSelect from './FolderSelect.svelte';
 
@@ -42,9 +43,11 @@
     </label>
   </div>
   {#if err}
-    <p class="err">{err}</p>
+    <div class="mg-strip crit"><span class="ic"><Icon name="alert" size={14} /></span><span>{err}</span></div>
   {:else if loading}
-    <div class="mg-bar indeterminate"><i></i></div>
+    <div class="grid" aria-busy="true">
+      {#each Array(8) as _, i (i)}<div class="tile sk"><Skeleton h="auto" r="9px" delay={i * 40} /><Skeleton h="10px" w="70%" delay={i * 40} /></div>{/each}
+    </div>
   {:else if !photos.length}
     <Empty icon="image" title="No photos here" hint="Pick another folder, or add photos in Browse." />
   {:else}
@@ -62,11 +65,12 @@
 <style>
   .bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
   .s { flex: 1 1 180px; }
-  .err { color: var(--mc-crit); font: 400 13px/1.5 var(--mc-font); }
+  .sk { cursor: default; }
+  .sk > :global(.mg-skel:first-child) { aspect-ratio: 3 / 2; }
   .grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
   .tile {
     display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--mc-line);
-    border-radius: 12px; background: var(--mc-raised); color: var(--mc-ink2); cursor: pointer; text-align: left; min-width: 0;
+    border-radius: var(--mc-r-md); background: var(--mc-raised); color: var(--mc-ink2); cursor: pointer; text-align: left; min-width: 0;
   }
   .tile:hover { border-color: var(--mc-line2); background: var(--mc-line); }
   .tile img, .ph { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 9px; display: grid; place-items: center; background: var(--mc-inset); }

@@ -7,7 +7,7 @@
      Drag anything onto the page and it uploads into the folder you are
      standing in, each file carrying its own progress bar. */
   import { onMount } from 'svelte';
-  import { fly, fade } from 'svelte/transition';
+  import { rise, slide, fade } from '$lib/motion.js';
   import { flip } from 'svelte/animate';
   import { mstate, boot, say, can, CAP } from '$lib/media.svelte.js';
   import { media, uploadFile, fmtBytes } from '$lib/media.js';
@@ -18,6 +18,7 @@
   let path = $state('');
   let listing = $state(null);
   let loading = $state(true);
+  let err = $state(null);          // the listing failed
   let sel = $state(new Set());
   let dragging = $state(false);
   let queue = $state([]);          // { id, name, pct, error }
@@ -32,10 +33,10 @@
   });
 
   async function load(p) {
-    loading = true;
+    loading = true; err = null;
     sel = new Set();
     try { listing = await media.files.list(p); path = listing.path ?? p; }
-    catch (e) { say(e.message, 'error'); listing = { entries: [], breadcrumbs: [] }; }
+    catch (e) { err = e.message; say(e.message, 'error'); listing = { entries: [], breadcrumbs: [] }; }
     finally { loading = false; }
   }
 
@@ -169,6 +170,7 @@
   </div>
 
   <!-- ————————————————————————————————————————————————— where you are ——— -->
+  {#if mstate.status?.backend}
   <nav class="crumbs mg-noscroll" aria-label="Folder path">
     <button class="crumb" class:on={!path} onclick={() => load('')}>All files</button>
     {#each crumbs as c (c.path)}
@@ -178,7 +180,7 @@
   </nav>
 
   {#if sel.size}
-    <div class="selbar mg-glass-soft" in:fly={{ y: -8, duration: 180 }}>
+    <div class="selbar mg-panel" transition:slide={{ y: -8, duration: 200 }}>
       <b class="mg-tnum">{sel.size} selected</b>
       {#if can(CAP.DOWNLOAD)}
         <button class="mg-btn secondary sm" onclick={zip}><Icon name="download" size={14} />Zip</button>
@@ -191,7 +193,7 @@
   {/if}
 
   <!-- ——————————————————————————————————————————————— the drop target ——— -->
-  <button class="dz mg-glass-soft" class:over={dragging}
+  <button class="dz" class:over={dragging}
           onclick={() => input?.click()} disabled={!mstate.status?.backend || (mstate.me && !can(CAP.UPLOAD))}>
     <span class="dzi"><Icon name="upload" size={16} /></span>
     {#if dragging}
@@ -201,11 +203,12 @@
     {/if}
     <span class="into">into {path || 'All files'}</span>
   </button>
+  {/if}
 
   {#if queue.length}
     <div class="queue">
       {#each queue as u (u.id)}
-        <div class="up mg-glass-soft" animate:flip={{ duration: 200 }} in:fly={{ y: 8, duration: 200 }}>
+        <div class="up mg-panel" animate:flip={{ duration: 200 }} in:rise>
           <div class="uh">
             <span class="un">{u.name}</span>
             <span class="up-pct mg-tnum" class:failed={u.error}>
@@ -224,22 +227,28 @@
     <Empty icon="alert" title="File store unavailable"
            hint={mstate.status?.backend_error || 'The media backend is not installed here.'} />
   {:else if loading}
-    <div class="rows">
-      {#each Array(7) as _, i (i)}<Skeleton h="60px" r="18px" delay={i * 55} />{/each}
+    <div class="rows mg-panel sk">
+      {#each Array(7) as _, i (i)}<Skeleton h="44px" r="8px" delay={i * 55} />{/each}
+    </div>
+  {:else if err}
+    <div class="mg-strip crit">
+      <span class="ic"><Icon name="alert" size={15} /></span>
+      <span><b>Couldn't open this folder</b> — {err}</span>
+      <button class="mg-btn secondary sm retry" onclick={refresh}><Icon name="refresh" size={13} />Retry</button>
     </div>
   {:else if !entries.length}
     <Empty icon="folder" title="This folder is empty"
            hint="Drag files anywhere on this page to put them here." />
   {:else}
-    <div class="rows">
+    <div class="rows mg-panel">
       {#each entries as e, i (e.path)}
-        <div class="row mg-card" class:sel={sel.has(e.path)} animate:flip={{ duration: 220 }}
-             in:fly={{ y: 8, duration: 260, delay: Math.min(i * 22, 260) }}>
+        <div class="row" class:sel={sel.has(e.path)} animate:flip={{ duration: 220 }}
+             in:rise={{ i }}>
           <input type="checkbox" checked={sel.has(e.path)} onchange={() => toggle(e)}
                  aria-label="Select {e.name}" />
 
           <button class="nm" onclick={() => (e.is_dir ? load(e.path) : location.assign(media.files.downloadUrl(e.path)))}>
-            <span class="ic"><Icon name={ICON[e.kind] || 'list'} size={17} /></span>
+            <span class="ic"><Icon name={ICON[e.kind] || (e.is_dir ? 'folder' : 'list')} size={17} /></span>
             <span class="txt">
               <span class="t">{e.name}</span>
               <span class="sub mg-tnum">{e.is_dir ? 'Folder' : `${e.kind || 'file'} · ${fmtBytes(e.size)}`}</span>
@@ -287,11 +296,11 @@
   }
   .crumb {
     flex: none; border: 0; background: none; padding: 0 10px; height: 32px;
-    border-radius: 9999px; color: var(--mc-ink3);
+    border-radius: var(--mc-r-sm); color: var(--mc-ink3);
     font: 500 12.5px/1 var(--mc-font); white-space: nowrap; cursor: pointer;
-    transition: background 0.18s, color 0.18s;
+    transition: background var(--mc-t-fast), color var(--mc-t-fast);
   }
-  .crumb:hover { background: rgba(255, 255, 255, 0.08); color: var(--mc-ink); }
+  .crumb:hover { background: var(--mc-raised); color: var(--mc-ink); }
   .crumb.on, .crumb:last-child { color: var(--mc-ink); }
   .sep { flex: none; display: flex; color: var(--mc-ink3); opacity: 0.6; }
 
@@ -307,20 +316,20 @@
     width: 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     padding: 12px 14px; margin-bottom: 12px; cursor: pointer; text-align: left;
     border: 1px dashed var(--mc-line2); border-radius: var(--mc-r-md);
-    color: var(--mc-ink2);
-    transition: background 0.18s, border-color 0.18s, color 0.18s;
+    background: var(--mc-surface); color: var(--mc-ink2); font: inherit;
+    transition: background var(--mc-t-fast), border-color var(--mc-t-fast), color var(--mc-t-fast);
   }
-  .dz:hover:not(:disabled) { background: var(--mc-line); }
+  .dz:hover:not(:disabled) { background: var(--mc-raised); }
   .dz:disabled { opacity: 0.4; cursor: default; }
   .dz b { font: 600 13px/1 var(--mc-font); color: var(--mc-ink); }
   .dz .into { font: 400 11.5px/1 var(--mc-font); color: var(--mc-ink3); margin-left: auto; }
   .dzi {
-    width: 30px; height: 30px; flex: none; border-radius: 10px; display: grid;
-    place-items: center; background: rgba(255, 255, 255, 0.07);
+    width: 30px; height: 30px; flex: none; border-radius: var(--mc-r-sm); display: grid;
+    place-items: center; background: var(--mc-raised);
     border: 1px solid var(--mc-line); color: inherit;
   }
   .dz.over {
-    border-color: rgba(62, 207, 142, 0.7); background: rgba(62, 207, 142, 0.1);
+    border-color: var(--mc-accent); background: var(--mc-ok-soft);
     color: var(--mc-accent);
   }
   .dz.over b { color: var(--mc-accent); }
@@ -336,11 +345,17 @@
   .mg-bar.failed > i { background: var(--mc-crit); }
 
   /* —————————————————————————————————————————————————————— the list ——— */
-  .rows { display: flex; flex-direction: column; gap: 6px; }
+  /* one panel, rows split by hairlines */
+  .rows { display: flex; flex-direction: column; overflow: hidden; }
+  .rows.sk { gap: 8px; padding: 12px; }
   .row {
-    display: flex; align-items: center; gap: 10px; padding: 12px;
+    display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 10px 12px 10px 16px;
+    border-bottom: 1px solid var(--mc-line); transition: background var(--mc-t-fast);
   }
-  .row.sel { background: rgba(62, 207, 142, 0.1); border-color: rgba(62, 207, 142, 0.4); }
+  .row:last-child { border-bottom: 0; }
+  .row:hover { background: rgba(255, 255, 255, 0.03); }
+  .row.sel { background: var(--mc-ok-soft); }
+  .retry { margin-left: auto; align-self: center; }
 
   .row input[type='checkbox'] {
     flex: none; width: 17px; height: 17px; margin: 0; accent-color: var(--mc-accent); cursor: pointer;
@@ -351,10 +366,10 @@
     border: 0; background: none; padding: 0; color: inherit; text-align: left; cursor: pointer;
   }
   .ic {
-    width: 36px; height: 36px; flex: none; border-radius: 50%; display: grid;
+    width: 36px; height: 36px; flex: none; border-radius: var(--mc-r-md); display: grid;
     place-items: center; color: var(--mc-ink2);
-    background: rgba(255, 255, 255, 0.07); border: 1px solid var(--mc-line);
-    transition: color 0.18s, border-color 0.18s;
+    background: var(--mc-raised); border: 1px solid var(--mc-line);
+    transition: color var(--mc-t-fast), border-color var(--mc-t-fast);
   }
   .nm:hover .ic { color: var(--mc-ink); border-color: var(--mc-line2); }
   .txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -366,16 +381,15 @@
 
   .acts { flex: none; display: flex; align-items: center; gap: 4px; }
   .st { color: var(--mc-ink3); }
-  .st:hover { color: var(--mc-ink); background: rgba(255, 255, 255, 0.08); }
+  .st:hover { color: var(--mc-ink); background: var(--mc-raised); }
   .st.on { color: var(--mc-warn); }
 
-  /* A thumb is not a mouse pointer: on touch the row's round buttons grow to
-     the 40px the rest of the section keeps for a tap target. */
+  /* A thumb is not a mouse pointer: on touch the row's buttons grow to 44px. */
   @media (pointer: coarse) {
-    .acts .mg-btn.icon { width: 40px; height: 40px; }
-    .crumb { height: 40px; }
+    .acts .mg-btn.icon { width: 44px; height: 44px; }
+    .crumb { height: 44px; }
     .row input[type='checkbox'] { width: 22px; height: 22px; margin: 0 2px; }
-    .selbar .mg-btn { height: 40px; }
+    .selbar .mg-btn { height: 44px; }
   }
 
   /* A phone keeps the two actions you reach for; the rest live on the row you

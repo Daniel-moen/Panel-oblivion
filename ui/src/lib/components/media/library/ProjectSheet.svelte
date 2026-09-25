@@ -84,7 +84,7 @@
         <span class="mg-label">Stage</span>
         <div class="stages">
           {#each liveStages as s (s.key)}
-            <button type="button" class="stage mg-glass-soft" class:on={stage === s.key}
+            <button type="button" class="stage mg-tile" class:on={stage === s.key}
                     onclick={() => (stage = s.key)}>
               <b>{s.name}</b><span>{s.hint}</span>
               {#if current?.stages?.[s.key]}<i class="mg-tnum">{current.stages[s.key].count}</i>{/if}
@@ -123,14 +123,14 @@
   .stages { display: flex; flex-direction: column; gap: 4px; }
   .stage {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto;
-    column-gap: 10px; text-align: left; padding: 8px 12px; border-radius: 12px; cursor: pointer;
+    column-gap: 10px; text-align: left; padding: 8px 12px; border-radius: var(--mc-r-md); cursor: pointer;
     min-height: 44px; color: var(--mc-ink2); border: 1px solid var(--mc-line);
   }
   .stage b { font: 500 13px/1.3 var(--mc-font); color: var(--mc-ink); }
   .stage span { grid-row: 2; font: 400 11.5px/1.35 var(--mc-font); color: var(--mc-ink3); }
   .stage i { grid-row: 1 / 3; grid-column: 2; align-self: center; font-style: normal;
              font-size: 11.5px; color: var(--mc-ink3); }
-  .stage.on { border-color: rgba(62, 207, 142, 0.5); background: rgba(62, 207, 142, 0.1); }
+  .stage.on { border-color: var(--mc-ok-line); background: var(--mc-ok-soft); }
   .stage.on b { color: var(--mc-accent); }
   .hint { margin: 0; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
 </style>

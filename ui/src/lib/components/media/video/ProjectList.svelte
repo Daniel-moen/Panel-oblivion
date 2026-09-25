@@ -76,7 +76,7 @@
 
 {#if loading}
   <div class="mg-grid c3">
-    {#each Array(6) as _, i (i)}<div class="gh"><Skeleton h="100%" r="18px" delay={i * 60} /></div>{/each}
+    {#each Array(6) as _, i (i)}<div class="gh"><Skeleton h="100%" r="var(--mc-r)" delay={i * 60} /></div>{/each}
   </div>
 {:else if !rows.length}
   <Empty icon="film" title="No edits yet"
@@ -157,13 +157,14 @@
   }
   .cov img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .asp {
-    position: absolute; top: 8px; left: 8px; padding: 3px 8px; border-radius: 9999px;
-    background: rgba(0, 0, 0, 0.6); color: #fff; font: 600 11px/1 var(--mc-font);
+    position: absolute; top: 8px; left: 8px; padding: 4px 8px; border-radius: 9999px;
+    background: var(--mc-raised); border: 1px solid var(--mc-line2); color: var(--mc-ink); font: 600 11px/1 var(--mc-font);
   }
   .meta { padding: 12px 14px 4px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .nm { font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sub { font-size: 12px; color: var(--mc-ink3); }
   .acts { display: flex; gap: 2px; padding: 4px 8px 8px; }
+  @media (pointer: coarse) { .acts :global(.mg-btn.sm) { min-height: 44px; } .acts :global(.mg-btn.icon.sm) { min-width: 44px; } }
   .frm { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; }
   .f { display: flex; flex-direction: column; gap: 5px; }
   .why { margin: 0; font-size: 13px; line-height: 1.55; color: var(--mc-ink2); }

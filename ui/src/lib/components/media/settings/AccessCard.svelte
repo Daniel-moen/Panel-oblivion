@@ -29,7 +29,7 @@
 </script>
 
 <SettingsCard label="Access">
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>{who?.username || 'Signed in'}</b>
       <span class="hint">
@@ -42,7 +42,7 @@
   </div>
 
   {#if caps.length}
-    <div class="pane mg-glass-soft">
+    <div class="pane mg-panel">
       <ul class="caps">
         {#each caps as c (c)}
           <li class="yes"><span class="tick" aria-hidden="true">✓</span>{CAP_TEXT[c] || c}</li>

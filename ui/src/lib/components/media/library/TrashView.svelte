@@ -6,7 +6,7 @@
      are an administrator's (media.harddelete) — everyone who can trash can
      also restore. */
   import { onMount } from 'svelte';
-  import { fly } from 'svelte/transition';
+  import { rise } from '$lib/motion.js';
   import { media, murl } from '$lib/media.js';
   import { say, can, CAP, loadClips } from '$lib/media.svelte.js';
   import Icon from '$lib/components/glass/Icon.svelte';
@@ -84,7 +84,10 @@
 <div class="head">
   <div class="sum">
     <b>Trash</b>
-    {#if data}<span class="mg-tnum">{data.count} item{data.count === 1 ? '' : 's'} · {data.total_size_formatted}</span>{/if}
+    {#if data}
+      {@const n = data.count ?? data.items?.length ?? 0}
+      <span class="mg-tnum">{n} item{n === 1 ? '' : 's'}{data.total_size_formatted ? ' · ' + data.total_size_formatted : ''}</span>
+    {/if}
   </div>
   <div class="acts">
     {#if can(CAP.HARD_DELETE) && data}
@@ -123,7 +126,7 @@
 {:else}
   <ul class="rows">
     {#each data.items as it, i (it.id)}
-      <li class="row mg-glass-soft" in:fly={{ y: 8, duration: 240, delay: Math.min(i * 25, 300) }}>
+      <li class="row mg-tile" in:rise={{ i }}>
         <span class="th">
           {#if it.thumbnail_path}<img src={murl(it.thumbnail_path)} alt="" loading="lazy" />
           {:else}<Icon name={it.media_type === 'photo' ? 'image' : 'film'} size={16} />{/if}
@@ -170,9 +173,9 @@
 
   .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   .row { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 12px;
-         align-items: center; padding: 6px 10px 6px 6px; border-radius: 14px; }
+         align-items: center; padding: 6px 10px 6px 6px; border-radius: var(--mc-r-md); }
   .row.sk { display: block; padding: 0; margin-bottom: 6px; background: none; }
-  .th { width: 64px; height: 42px; border-radius: 9px; overflow: hidden; background: var(--mc-inset);
+  .th { width: 64px; height: 42px; border-radius: var(--mc-r-sm); overflow: hidden; background: var(--mc-inset);
         display: grid; place-items: center; color: var(--mc-ink3); }
   .th img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.8; }
   .meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
@@ -187,7 +190,7 @@
     .row { grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; }
     .th { width: 52px; height: 36px; }
     .lbl { display: none; }
-    .row .mg-btn { width: 40px; height: 40px; padding: 0; }
+    .row .mg-btn { width: 44px; height: 44px; padding: 0; }
     .days > select { width: 100%; }
     .days { flex: 1 1 100%; }
     .meta .path { display: none; }

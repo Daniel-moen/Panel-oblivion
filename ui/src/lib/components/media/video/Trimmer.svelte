@@ -188,17 +188,17 @@
 
 <style>
   .trim { display: flex; flex-direction: column; gap: 10px; outline: none; min-width: 0; }
-  .trim:focus-visible { outline: 2px solid rgba(62, 207, 142, 0.5); outline-offset: 4px; border-radius: 14px; }
+  .trim:focus-visible { outline: 2px solid rgba(62, 207, 142, 0.5); outline-offset: 4px; border-radius: var(--mc-r); }
   .screen {
     background: var(--mc-inset); border-radius: var(--mc-r-md); overflow: hidden;
     aspect-ratio: 16 / 9; max-height: 46vh; display: grid; place-items: center;
   }
   .compact .screen { max-height: 30vh; }
-  video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+  video { width: 100%; height: 100%; object-fit: contain; display: block; background: var(--mc-inset); }
 
   .strip {
     position: relative; height: 56px; border-radius: 10px; overflow: visible;
-    background: rgba(255, 255, 255, 0.05); touch-action: none; cursor: pointer; user-select: none;
+    background: var(--mc-raised); touch-action: none; cursor: pointer; user-select: none;
     margin: 0 10px;
   }
   .frames { position: absolute; inset: 0; display: flex; overflow: hidden; border-radius: 10px; }
@@ -211,19 +211,20 @@
   }
   .head {
     position: absolute; top: -6px; bottom: -6px; width: 2px; margin-left: -1px;
-    background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); pointer-events: none; border-radius: 2px;
+    background: var(--mc-ink); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); pointer-events: none; border-radius: 2px;
   }
   .h {
     position: absolute; top: -4px; bottom: -4px; width: 40px; margin-left: -20px;
     border: 0; background: none; padding: 0; cursor: ew-resize; touch-action: none; z-index: 2;
     display: grid; place-items: center;
   }
-  .h i { width: 10px; height: 100%; border-radius: 5px; background: var(--mc-accent); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
+  .h i { width: 10px; height: 100%; border-radius: 5px; background: var(--mc-accent); box-shadow: var(--mc-sh-1); }
 
   .bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .bar .sp { flex: 1; }
   .now { font: 500 13px/1 var(--mc-mono); color: var(--mc-ink); min-width: 64px; text-align: center; }
   .pt b { font: 500 12px/1 var(--mc-mono); color: var(--mc-accent); margin-left: 4px; }
+  @media (pointer: coarse) { .bar :global(.mg-btn.sm) { min-height: 44px; } .bar :global(.mg-btn.icon.sm) { min-width: 44px; } .h { width: 44px; margin-left: -22px; } }
   @media (max-width: 560px) {
     .bar .sp { flex-basis: 100%; height: 0; }
     .strip { height: 48px; }

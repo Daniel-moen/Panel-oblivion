@@ -1,6 +1,8 @@
 <script>
   /* What the person on the other end actually did: opened, downloaded, sent
      files, said they were done. Answers "did they ever download it?" */
+  import Icon from '$lib/components/glass/Icon.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import { onMount } from 'svelte';
   import { portals, when } from '$lib/media/portals.js';
 
@@ -18,18 +20,18 @@
 </script>
 
 {#if err}
-  <p class="none">{err}</p>
+  <div class="mg-strip crit"><span class="ic"><Icon name="alert" size={15} /></span><span>{err}</span></div>
 {:else if !data}
-  <p class="none">Loading…</p>
-{:else if !data.events.length}
+  <div class="sk"><Skeleton h="2.6rem" /><Skeleton h="2.6rem" delay={80} /></div>
+{:else if !data.events?.length}
   <p class="none">Nobody has opened this link yet.</p>
 {:else}
   <div class="sum">
-    {#each Object.entries(data.summary) as [k, n] (k)}
+    {#each Object.entries(data.summary || {}) as [k, n] (k)}
       <span class="mg-chip" class:ok={k === 'confirmed'}><b class="mg-tnum">{n}</b> {LABELS[k] || k}</span>
     {/each}
   </div>
-  {#if data.downloaded_files.length}
+  {#if data.downloaded_files?.length}
     <p class="dl">Downloaded: {data.downloaded_files.join(', ')}</p>
   {/if}
   <ol class="ev">
@@ -37,7 +39,7 @@
       <li>
         <span class="t mg-tnum">{when(e.at)}</span>
         <span class="w">
-          {e.label}{#if e.filename} · <b>{e.filename}</b>{:else if e.detail} · <b>{e.detail}</b>{/if}
+          {e.label}{#if e.filename}{" · "}<b>{e.filename}</b>{:else if e.detail}{" · "}<b>{e.detail}</b>{/if}
           {#if e.viewer_name || e.device}
             <small>{[e.viewer_name, e.device].filter(Boolean).join(' · ')}</small>
           {/if}
@@ -48,6 +50,7 @@
 {/if}
 
 <style>
+  .sk { display: flex; flex-direction: column; gap: 8px; }
   .none { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .sum { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
   .sum b { color: var(--mc-ink); font-weight: 600; }

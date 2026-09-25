@@ -11,7 +11,7 @@
      transcript — and knowing which rule put a tag there is what tells you
      whether to trust it or fix the rule. */
   import { onMount } from 'svelte';
-  import { fly } from 'svelte/transition';
+  import { rise } from '$lib/motion.js';
   import { flip } from 'svelte/animate';
   import { mstate, boot, runAutoTag, say, can, CAP } from '$lib/media.svelte.js';
   import { media } from '$lib/media.js';
@@ -81,6 +81,9 @@
       <Skeleton h="40px" w="{70 + ((i * 37) % 90)}px" r="9999px" delay={i * 45} />
     {/each}
   </div>
+{:else if mstate.error}
+  <Empty icon="alert" title="The media library is offline"
+         hint="The media backend could not be reached. The notice above has the detail." />
 {:else if !tags.length}
   <Empty icon="tag"
          title={q ? 'No tag matches that' : 'Nothing tagged yet'}
@@ -104,7 +107,7 @@
          style:font-size="{sizeOf(t.count)}px"
          title="{t.name} — {t.count ?? 0} clip{(t.count ?? 0) === 1 ? '' : 's'}{t.source ? ' · ' + (SOURCE[t.source] || t.source) : ''}"
          animate:flip={{ duration: 240 }}
-         in:fly={{ y: 10, duration: 300, delay: Math.min(i * 18, 300) }}>
+         in:rise={{ i }}>
         <span class="nm">{t.name}</span>
         {#if t.source}<span class="src">{SOURCE[t.source] || t.source}</span>{/if}
         <span class="n mg-tnum">{t.count ?? 0}</span>
@@ -118,7 +121,7 @@
   .wall { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 
   .tag {
-    min-height: 40px; max-width: 100%; padding: 0 14px;
+    min-height: 40px; max-width: 100%; padding: 0 14px; height: auto;
     font-weight: 500; letter-spacing: -0.01em; color: var(--mc-ink);
   }
   .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -126,6 +129,7 @@
   .n { font-size: 11px; color: var(--mc-ink3); flex: none; }
   .tag:hover .n, .tag:hover .src { color: var(--mc-ink2); }
 
+  @media (pointer: coarse) { .tag { min-height: 44px; } }
   @media (max-width: 560px) {
     .wall { gap: 6px; }
     .tag { padding: 0 12px; }

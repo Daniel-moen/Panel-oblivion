@@ -46,7 +46,8 @@
     { value: '/media/settings', label: 'Settings', icon: 'settings' }
   ];
 
-  const here = $derived(
+  /* /media/shoot?id= is one shoot: it belongs under Shoots. */
+  const here = $derived(path === '/media/shoot' ? '/media/shoots' :
     SECTIONS.reduce(
       (best, s) => ((s.value === '/media' ? path === '/media' : path.startsWith(s.value)) ? s.value : best),
       '/media'

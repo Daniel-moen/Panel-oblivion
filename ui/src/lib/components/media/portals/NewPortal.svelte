@@ -266,10 +266,12 @@
   </div>
 
   {#snippet footer()}
-    <button type="button" class="mg-btn ghost" onclick={close}>Cancel</button>
-    <button type="button" class="mg-btn primary" onclick={create} disabled={busy}>
-      <Icon name="link" size={15} />{busy ? 'Making…' : 'Create the link'}
-    </button>
+    <div class="right">
+      <button type="button" class="mg-btn ghost" onclick={close}>Cancel</button>
+      <button type="button" class="mg-btn primary" onclick={create} disabled={busy}>
+        <Icon name="link" size={15} />{busy ? 'Making…' : 'Create the link'}
+      </button>
+    </div>
   {/snippet}
 </Sheet>
 
@@ -289,6 +291,7 @@
   .wmrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .grow { flex: 1 1 180px; min-width: 0; }
   .file { position: relative; overflow: hidden; min-height: 40px; }
+  @media (pointer: coarse) { .tog, .file { min-height: 44px; } }
   .file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   @media (min-width: 640px) { .two { grid-template-columns: 1fr 1fr; } }
 </style>

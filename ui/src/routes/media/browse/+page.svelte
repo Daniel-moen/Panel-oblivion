@@ -18,7 +18,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { flip } from 'svelte/animate';
-  import { fly } from 'svelte/transition';
+  import { fade, rise, slide } from '$lib/motion.js';
   import { mstate, boot, loadClips, loadFolders, openClip, closeClip, stepClip,
            toggleSelect, clearSelect, selectAll, say, can, CAP, setLabel, dropClips,
            LABELS } from '$lib/media.svelte.js';
@@ -249,7 +249,7 @@
   <Seg options={TYPES} value={mstate.filters.media_type}
        onchange={setType} label="Media type" />
 
-  <span class="lf mg-glass-soft" title="Filter by colour label">
+  <span class="lf" title="Filter by colour label">
     <LabelDots value={mstate.labelFilter} noneLabel="Any label" label="Filter by label"
                onchange={(v) => (mstate.labelFilter = v)} />
   </span>
@@ -274,7 +274,7 @@
 
 <div class="wrap">
   <!-- ——————————————————————————————————————————————————— folder rail ——— -->
-  <nav class="rail mg-glass-soft mg-noscroll" aria-label="Folders">
+  <nav class="rail mg-noscroll" aria-label="Folders">
     <span class="mg-label rl">Folders</span>
 
     <button class="f" class:on={mstate.filters.folder_id == null}
@@ -291,7 +291,7 @@
         {#if f.count != null}<i class="mg-tnum">{f.count}</i>{/if}
       </button>
     {:else}
-      {#if !mstate.ready}
+      {#if !mstate.ready && !mstate.error}
         {#each Array(6) as _, i (i)}
           <div class="sk"><Skeleton h="14px" r="8px" delay={i * 70} /></div>
         {/each}
@@ -311,7 +311,7 @@
       <TrashView oncount={(n) => (trashCount = n)} />
     {:else}
     {#if mstate.clipboard.length && can(CAP.UPLOAD)}
-      <div class="selbar paste mg-glass-soft" in:fly={{ y: 8, duration: 220 }}>
+      <div class="selbar paste" in:slide={{ y: 8, duration: 220 }} out:fade={{ duration: 150 }}>
         <b>{mstate.clipboard.length} copied</b>
         {#if here}
           <button class="mg-btn primary sm" disabled={working} onclick={paste}>
@@ -325,7 +325,7 @@
     {/if}
 
     {#if sel.size}
-      <div class="selbar mg-glass-soft" in:fly={{ y: 8, duration: 220 }}>
+      <div class="selbar" in:slide={{ y: 8, duration: 220 }} out:fade={{ duration: 150 }}>
         <b>{sel.size} selected</b>
         {#if can(CAP.ANNOTATE)}
           <button class="mg-btn secondary sm" class:on={labelOpen} aria-expanded={labelOpen}
@@ -367,7 +367,7 @@
         <button class="mg-btn ghost sm" onclick={selectAll}>All</button>
         <button class="mg-btn ghost sm" onclick={clearSelect}>Clear</button>
         {#if labelOpen}
-          <div class="labelrow" in:fly={{ y: -4, duration: 180 }}>
+          <div class="labelrow" in:slide={{ y: -4, duration: 180 }}>
             <LabelDots value={null} showNone={false} toggle={false} label="Label the selection"
                        onchange={labelSel} />
             <button class="mg-btn ghost sm" onclick={() => labelSel(null)}>Clear label</button>
@@ -379,7 +379,7 @@
     {#if mstate.loading}
       <div class="grid">
         {#each Array(12) as _, i (i)}
-          <div class="ghost"><Skeleton h="100%" r="18px" delay={i * 55} /></div>
+          <div class="ghost"><Skeleton h="100%" r="16px" delay={i * 55} /></div>
         {/each}
       </div>
     {:else if !clips.length}
@@ -401,6 +401,9 @@
             </a>
           {/snippet}
         </Empty>
+      {:else if mstate.error}
+        <Empty icon="alert" title="The media library is offline"
+               hint="The media backend could not be reached, so there is nothing to browse. The notice above has the detail." />
       {:else if !mstate.status?.media_root?.ok}
         <Empty icon="alert" title="Nothing here yet"
                hint="There is no footage drive on this deployment, so the catalogue is empty." />
@@ -418,7 +421,7 @@
       <div class={mstate.view === 'grid' ? 'grid' : 'list'}>
         {#each clips as c, i (c.id)}
           <div animate:flip={{ duration: 260 }}
-               in:fly={{ y: 16, duration: 380, delay: Math.min(i * 28, 420) }}>
+               in:rise={{ i }}>
             <ClipCard clip={c}
                       selected={sel.has(c.id)}
                       selecting={sel.size > 0}
@@ -450,40 +453,42 @@
 
   /* ———————————————————————————————————————————————————— folder rail ——— */
   .rail {
-    position: sticky; top: 16px; align-self: start;
-    max-height: calc(100vh - 190px); overflow-y: auto;
-    border-radius: var(--mc-r-md); padding: 10px;
+    position: sticky; top: calc(var(--mc-strip-h) + 12px); align-self: start;
+    max-height: calc(100dvh - var(--mc-strip-h) - 32px); overflow-y: auto;
+    background: var(--mc-surface); border: 1px solid var(--mc-line);
+    border-radius: var(--mc-r); box-shadow: var(--mc-sh-1); padding: 8px;
     display: flex; flex-direction: column; gap: 2px; min-width: 0;
   }
   .rl { padding: 3px 10px 5px; }
   .f {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     width: 100%; min-height: 36px; text-align: left; padding: 7px 10px;
-    border: 0; border-radius: 10px; background: none; color: var(--mc-ink2);
-    font: 500 12.5px/1.35 var(--mc-font); cursor: pointer;
-    transition: background 0.18s, color 0.18s;
+    border: 1px solid transparent; border-radius: var(--mc-r-sm); background: none; color: var(--mc-ink2);
+    font: 500 13px/1.35 var(--mc-font); cursor: pointer;
+    transition: background var(--mc-t-fast), color var(--mc-t-fast), border-color var(--mc-t-fast);
   }
-  .f:hover { background: rgba(255, 255, 255, 0.06); color: var(--mc-ink); }
-  .f.on { background: rgba(255, 255, 255, 0.1); color: var(--mc-ink); }
+  .f:hover { background: var(--mc-raised); color: var(--mc-ink); }
+  .f.on { background: var(--mc-ok-soft); color: var(--mc-accent); }
   .f span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .f i { font-style: normal; font-size: 11px; color: var(--mc-ink3); flex: none; }
-  .f.on i { color: var(--mc-ink2); }
+  .f.on i { color: var(--mc-accent); }
   .sk { padding: 8px 10px; }
   .sep { display: block; height: 1px; margin: 6px 8px; background: var(--mc-line); flex: none; }
   .f.trash span { display: inline-flex; align-items: center; gap: 7px; }
 
   .lf { display: inline-flex; align-items: center; height: 40px; padding: 0 4px;
-        border-radius: 9999px; border: 1px solid var(--mc-line); }
+        background: var(--mc-raised); border: 1px solid var(--mc-line); border-radius: var(--mc-r-md); }
 
   /* —————————————————————————————————————————————————————— selection ——— */
   .main { min-width: 0; }
   .selbar {
     display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-    padding: 6px 8px 6px 16px; margin-bottom: 12px; border-radius: 9999px;
+    padding: 6px 8px 6px 14px; margin-bottom: 12px; border-radius: var(--mc-r-md);
+    background: var(--mc-raised); border: 1px solid var(--mc-line2); box-shadow: var(--mc-sh-1);
   }
   .selbar b { margin-right: 4px; font: 600 12.5px/1 var(--mc-font); color: var(--mc-ink); }
   .selbar .gap { flex: 1; }
-  .selbar .on { border-color: rgba(62, 207, 142, 0.5); color: var(--mc-accent); }
+  .selbar .on { border-color: var(--mc-ok-line); color: var(--mc-accent); }
   .selbar .hint { font: 400 12px/1 var(--mc-font); color: var(--mc-ink3); }
   .labelrow { flex: 1 1 100%; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
               padding: 4px 0 2px; border-top: 1px solid var(--mc-line); margin-top: 2px; }
@@ -492,6 +497,10 @@
   .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); }
   .list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
   .ghost { aspect-ratio: 16 / 11; }
+  /* List: the same card laid on its side — a thumbnail and two lines per row. */
+  .list :global(.hit) { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 12px; align-items: center; }
+  .list :global(.chips) { display: none; }
+  .list :global(.card:hover) { transform: none; }
 
   /* ——————————————————————————————————— the rail becomes a chip row ——— */
   @media (max-width: 860px) {
@@ -508,17 +517,22 @@
       padding: 0 14px !important; gap: 7px;
       background: var(--mc-raised); border: 1px solid var(--mc-line);
     }
-    .f.on { background: rgba(62, 207, 142, 0.12); border-color: rgba(62, 207, 142, 0.4); color: var(--mc-accent); }
-    .f.on i { color: var(--mc-accent); }
+    .f.on { background: var(--mc-ok-soft); border-color: var(--mc-ok-line); color: var(--mc-accent); }
     .sk { flex: none; width: 90px; padding: 0; }
     .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
     .list { grid-template-columns: minmax(0, 1fr); }
   }
   @media (max-width: 860px) {
     .sep { width: 1px; height: 24px; margin: 0 2px; }
+    .rail { box-shadow: none; }
+  }
+  @media (pointer: coarse) {
+    .f { min-height: 44px; }
+    .selbar .mg-btn, .selbar a.mg-btn { height: 44px; }
+    .selbar .mg-btn:has(.t) { min-width: 44px; }
   }
   @media (max-width: 560px) {
-    .selbar { border-radius: var(--mc-r-md); padding: 8px 10px; }
+    .selbar { padding: 8px 10px; }
     .selbar b { flex: 1 1 100%; margin: 2px 0 4px; }
     .selbar .t { display: none; }
     .selbar .mg-btn { height: 40px; }

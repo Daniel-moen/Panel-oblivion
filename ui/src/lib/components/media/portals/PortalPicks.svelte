@@ -2,6 +2,7 @@
   /* The client's hearts and notes, and the exports that turn them into a bin
      in the edit. A row with a note but no heart is kept on purpose — "the
      lighting is off here" is feedback worth having. */
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import { onMount } from 'svelte';
   import { thumbUrl } from '$lib/media.js';
   import Icon from '$lib/components/glass/Icon.svelte';
@@ -21,9 +22,9 @@
 </script>
 
 {#if err}
-  <p class="none">{err}</p>
+  <div class="mg-strip crit"><span class="ic"><Icon name="alert" size={15} /></span><span>{err}</span></div>
 {:else if !rows}
-  <p class="none">Loading…</p>
+  <div class="sk"><Skeleton h="2.6rem" /><Skeleton h="2.6rem" delay={80} /></div>
 {:else if !rows.length}
   <p class="none">The client has not picked anything yet.</p>
 {:else}
@@ -37,7 +38,7 @@
   </div>
   <div class="strip mg-noscroll">
     {#each rows as p (p.video_id)}
-      <figure class="pick mg-glass-soft">
+      <figure class="pick mg-tile">
         <span class="shot">
           {#if p.thumbnail_path}<img src={thumbUrl(p)} alt="" loading="lazy" />
           {:else}<span class="noimg">no thumbnail</span>{/if}
@@ -54,19 +55,20 @@
 {/if}
 
 <style>
+  .sk { display: flex; flex-direction: column; gap: 8px; }
   .none { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .sum { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
   .sum b { color: var(--mc-ink); font-weight: 600; }
   .strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
   .pick { flex: none; width: 168px; margin: 0; padding: 6px; border-radius: var(--mc-r-md); }
   .shot { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden;
-          border-radius: 10px; background: var(--mc-inset); }
+          border-radius: var(--mc-r-sm); background: var(--mc-inset); }
   .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .noimg { position: absolute; inset: 0; display: grid; place-items: center;
            font: 400 10.5px/1 var(--mc-font); color: var(--mc-ink3); }
   .heart { position: absolute; right: 5px; bottom: 5px; width: 22px; height: 22px; border-radius: 50%;
            display: grid; place-items: center; font-size: 11px; color: var(--mc-accent);
-           background: rgba(8, 8, 10, 0.72); border: 1px solid rgba(62, 207, 142, 0.35); }
+           background: rgba(8, 8, 10, 0.72); border: 1px solid var(--mc-ok-line); }
   figcaption { display: flex; flex-direction: column; gap: 2px; padding: 8px 4px 3px; min-width: 0; }
   figcaption b { font: 500 12px/1.3 var(--mc-font); color: var(--mc-ink);
                  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

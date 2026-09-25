@@ -31,7 +31,7 @@
 </script>
 
 <SettingsCard label="Trash">
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>Empty the trash automatically</b>
       <span class="hint">

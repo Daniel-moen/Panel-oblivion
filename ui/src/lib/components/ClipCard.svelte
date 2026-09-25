@@ -44,7 +44,7 @@
 
 <!-- role="group": the card holds two controls (open, select) and carries the
      hover handlers that swap the still for the moving preview. -->
-<div class="card mg-glass-soft" bind:this={el}
+<div class="card" bind:this={el}
      role="group" aria-label={clip.filename}
      class:sel={selected}
      onmouseenter={() => (hovering = true)}
@@ -101,35 +101,32 @@
 </div>
 
 <style>
-  /* A glass-soft card holding a 12px-radius frame. The frame is the clip; the
+  /* A panel card holding a 12px-radius frame. The frame is the clip; the
      two lines under it are the only chrome. */
   .card {
-    position: relative; border-radius: 16px; padding: 5px;
-    transition: background 0.2s, border-color 0.2s,
-                transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.26s;
+    position: relative; border-radius: var(--mc-r); padding: 5px;
+    background: var(--mc-surface); border: 1px solid var(--mc-line); box-shadow: var(--mc-sh-1);
+    transition: border-color var(--mc-t-fast), transform var(--mc-t) var(--mc-ease);
   }
-  .card:hover {
-    transform: translateY(-3px); background: var(--mc-line);
-    border-color: var(--mc-line2); box-shadow: var(--mc-sh-1); z-index: 2;
-  }
-  .card.sel { border-color: rgba(62, 207, 142, 0.55); box-shadow: 0 0 0 1px rgba(62, 207, 142, 0.35); }
+  .card:hover { transform: translateY(-2px); border-color: var(--mc-line2); z-index: 2; }
+  .card.sel { border-color: var(--mc-ok-line); box-shadow: 0 0 0 1px var(--mc-ok-line); }
 
   .hit { display: block; width: 100%; text-align: left; padding: 0; border: 0;
-         background: none; border-radius: 12px; cursor: pointer; }
+         background: none; border-radius: var(--mc-r-md); cursor: pointer; }
   .hit:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
 
   .frame {
-    position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 12px;
+    position: relative; display: block; aspect-ratio: 16 / 9; border-radius: var(--mc-r-md);
     background: var(--mc-inset); overflow: hidden;
   }
   .frame img, .frame video {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; display: block;
   }
-  .frame img { opacity: 0; transition: opacity 0.4s, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .frame img { opacity: 0; transition: opacity var(--mc-t-slow), transform var(--mc-t-slow) var(--mc-ease); }
   .frame img.in { opacity: 1; }
   .card:hover .frame img { transform: scale(1.04); }
-  .frame video { z-index: 1; animation: fadein 0.45s ease both; }
+  .frame video { z-index: 1; animation: fadein var(--mc-t-slow) var(--mc-ease) both; }
   @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
   .noimg { position: absolute; inset: 0; display: grid; place-items: center;
@@ -143,30 +140,31 @@
   }
   .card:hover .shade { opacity: 1; }
 
-  /* Readability beats glass on a moving image: the duration sits on near-opaque
-     dark so it survives a white frame. */
+  /* The duration sits on the inset colour so it survives a white frame. */
   .dur {
     position: absolute; right: 6px; bottom: 6px; z-index: 3;
-    font: 600 11px/1 var(--mc-font); font-variant-numeric: tabular-nums;
-    background: var(--mc-inset); color: #fff; padding: 4px 7px; border-radius: 9999px;
+    font: 500 11px/1 var(--mc-mono); font-variant-numeric: tabular-nums;
+    background: var(--mc-inset); color: var(--mc-ink); padding: 4px 7px; border-radius: var(--mc-r-sm);
   }
 
-  .chips { position: absolute; left: 6px; bottom: 6px; z-index: 3; display: flex; gap: 4px;
+  /* Clear of the duration badge: on a narrow card the chips clip, never overlap. */
+  .chips { position: absolute; left: 6px; bottom: 6px; right: 60px; z-index: 3; display: flex; gap: 4px; overflow: hidden;
            opacity: 0; transform: translateY(4px); transition: opacity 0.22s, transform 0.22s; }
   .card:hover .chips { opacity: 1; transform: none; }
   .chip {
     font: 500 10.5px/1 var(--mc-font); letter-spacing: 0.01em;
-    background: rgba(8, 8, 10, 0.72); color: rgba(255, 255, 255, 0.86);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    padding: 4px 7px; border-radius: 9999px; white-space: nowrap;
+    background: var(--mc-inset); color: var(--mc-ink2);
+    border: 1px solid var(--mc-line);
+    padding: 4px 7px; border-radius: var(--mc-r-sm); white-space: nowrap;
   }
 
-  .stars { position: absolute; left: 8px; top: 7px; z-index: 3; font-size: 11px;
-           color: var(--mc-warn); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); letter-spacing: 0.04em; }
+  .stars { position: absolute; left: 36px; top: 6px; z-index: 3; font-size: 10.5px; line-height: 1;
+           color: var(--mc-warn); letter-spacing: 0.04em;
+           background: var(--mc-inset); padding: 4px 6px; border-radius: var(--mc-r-sm); }
   .flag {
     position: absolute; right: 6px; top: 6px; z-index: 3;
-    font: 500 10px/1 var(--mc-font); padding: 4px 7px; border-radius: 9999px;
-    background: rgba(240, 180, 41, 0.16); border: 1px solid rgba(240, 180, 41, 0.35);
+    font: 500 10px/1 var(--mc-font); padding: 4px 7px; border-radius: var(--mc-r-sm);
+    background: var(--mc-inset); border: 1px solid var(--mc-warn-line);
     color: var(--mc-warn);
   }
 
@@ -174,29 +172,27 @@
   .meta b { display: block; font: 500 13px/1.35 var(--mc-font); color: var(--mc-ink);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lbl { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px;
-         vertical-align: 0.05em; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25); }
+         vertical-align: 0.05em; }
   .meta span { display: block; font: 400 11.5px/1.45 var(--mc-font); color: var(--mc-ink3);
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  /* The select tick: a 24px round piece of glass that fills green once it is on. */
+  /* The select tick: a 24px round control that fills green once it is on. */
   .tick {
     position: absolute; left: 12px; top: 12px; z-index: 4;
     width: 24px; height: 24px; border-radius: 50%; padding: 0; cursor: pointer;
     display: grid; place-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(8, 8, 10, 0.55);
-    color: rgba(255, 255, 255, 0.9);
-    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-    opacity: 0; transform: scale(0.7);
-    transition: opacity 0.2s, transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1),
-                background 0.2s, border-color 0.2s, color 0.2s;
+    border: 1px solid var(--mc-line3); background: var(--mc-inset);
+    color: var(--mc-ink2);
+    opacity: 0; transform: scale(0.85);
+    transition: opacity var(--mc-t-fast), transform var(--mc-t) var(--mc-ease),
+                background var(--mc-t-fast), border-color var(--mc-t-fast), color var(--mc-t-fast);
   }
   .card:hover .tick, .tick.on, .tick:focus-visible { opacity: 1; transform: scale(1); }
   .tick.on {
     background: var(--mc-accent); border-color: var(--mc-accent); color: var(--mc-accent-ink);
-    transform: scale(1.06);
   }
-  /* 24px to look at, 40px to hit: a thumb needs the bigger target. */
-  .tick::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; }
+  /* 24px to look at, 44px to hit: a thumb needs the bigger target. */
+  .tick::before { content: ''; position: absolute; inset: -10px; border-radius: 50%; }
   .tick:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
 
   @media (hover: none) {

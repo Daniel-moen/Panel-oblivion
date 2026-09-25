@@ -29,6 +29,7 @@
   let who = $state(null);
   let shoot = $state(null);
   let missing = $state(false);
+  let loadErr = $state(null);     // a failure that is not a 404
   let items = $state([]);
   let form = $state(null);
   let agents = $state([]);
@@ -51,11 +52,11 @@
   });
 
   async function load(sid) {
-    missing = false;
+    missing = false; loadErr = null;
     try {
       set(await shoots.get(sid));
     } catch (e) {
-      if (e.status === 404) missing = true; else say(e.message, 'error');
+      if (e.status === 404) missing = true; else { loadErr = e.message; say(e.message, 'error'); }
     }
   }
 
@@ -138,6 +139,12 @@
       <Empty icon="camera" title="No such shoot" hint="It may have been removed. Pick one from the list.">
         {#snippet children()}<a class="mg-btn primary sm" href="/media/shoots">All shoots</a>{/snippet}
       </Empty>
+    {:else if !shoot && loadErr}
+      <div class="mg-strip crit">
+        <span class="ic"><Icon name="alert" size={15} /></span>
+        <span><b>Couldn't load this shoot</b> — {loadErr}</span>
+        <button class="mg-btn secondary sm retry" onclick={() => load(id)}><Icon name="refresh" size={13} />Retry</button>
+      </div>
     {:else if !shoot}
       <div class="sk"><Skeleton h="1.6rem" w="45%" /><Skeleton h="8rem" /><Skeleton h="8rem" delay={80} /></div>
     {:else}
@@ -160,7 +167,7 @@
         <Seg options={STATUS_OPTS} value={shoot.status} onchange={setStatus} label="Status" />
         <span class="stamps mg-tnum">
           {#if since(shoot.editing_at)}editing since {since(shoot.editing_at)}{/if}
-          {#if since(shoot.posted_at)} · posted {since(shoot.posted_at)}{/if}
+          {#if since(shoot.posted_at)}{" · "}posted {since(shoot.posted_at)}{/if}
         </span>
       </div>
 
@@ -249,9 +256,10 @@
 
 <style>
   .back { margin: -4px 0 10px; }
+  .retry { margin-left: auto; align-self: center; }
   .sk { display: flex; flex-direction: column; gap: 12px; }
   .head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; min-width: 0; }
-  .cover { flex: none; width: 96px; height: 68px; border-radius: 14px; overflow: hidden; display: grid; place-items: center;
+  .cover { flex: none; width: 96px; height: 68px; border-radius: var(--mc-r-md); overflow: hidden; display: grid; place-items: center;
            background: var(--mc-inset); color: var(--mc-ink3); }
   .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .ttl { min-width: 0; flex: 1; }
@@ -273,9 +281,9 @@
   .more { margin: 8px 0 0; font: 400 12px/1.4 var(--mc-font); color: var(--mc-ink3); }
 
   .thumbs { display: grid; gap: 6px; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
-  figure { position: relative; margin: 0; aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden; background: var(--mc-inset);
+  figure { position: relative; margin: 0; aspect-ratio: 3 / 2; border-radius: var(--mc-r-sm); overflow: hidden; background: var(--mc-inset);
            border: 1px solid transparent; }
-  figure.cov { border-color: rgba(62, 207, 142, 0.6); }
+  figure.cov { border-color: var(--mc-accent); }
   figure a { display: block; width: 100%; height: 100%; }
   figure img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .ph { display: grid; place-items: center; width: 100%; height: 100%; color: var(--mc-ink3); }
@@ -283,10 +291,11 @@
          background: rgba(8, 8, 10, 0.72); color: var(--mc-ink); }
   .setc { position: absolute; right: 3px; top: 3px; width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0;
           display: grid; place-items: center; background: rgba(8, 8, 10, 0.6); color: var(--mc-ink2); cursor: pointer;
-          opacity: 0; transition: opacity 0.18s; }
+          opacity: 0; transition: opacity var(--mc-t-fast); }
   figure:hover .setc, .setc:focus-visible, .setc.on { opacity: 1; }
   .setc.on { color: var(--mc-accent); cursor: default; }
   @media (hover: none) { .setc { opacity: 0.85; } }
+  @media (pointer: coarse) { .setc { width: 36px; height: 36px; } }
 
   .foot { margin-top: 20px; display: flex; justify-content: flex-end; }
   @media (max-width: 520px) { .cover { width: 72px; height: 52px; } }

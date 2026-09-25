@@ -7,6 +7,7 @@
   import Sheet from '$lib/components/glass/Sheet.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
 
   let { open = false, onclose, onpick, title = 'Add clips', single = false } = $props();
 
@@ -53,7 +54,9 @@
   </label>
 
   {#if loading && !items.length}
-    <p class="hint">Loading the library…</p>
+    <div class="grid" aria-busy="true" aria-label="Loading the library">
+      {#each Array(8) as _, i (i)}<div class="it sk"><Skeleton h="auto" r="9px" delay={i * 40} /><Skeleton h="10px" w="70%" delay={i * 40} /></div>{/each}
+    </div>
   {:else if !items.length}
     <Empty icon="film" title="No video clips" hint={q ? 'Nothing matches that name.' : 'Index some footage first.'} />
   {:else}
@@ -91,17 +94,21 @@
   .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
   .it {
     display: flex; flex-direction: column; gap: 6px; padding: 6px; text-align: left;
-    border: 1px solid var(--mc-line); border-radius: 14px; background: var(--mc-raised);
+    border: 1px solid var(--mc-line); border-radius: var(--mc-r-md); background: var(--mc-raised);
+    transition: border-color var(--mc-t-fast), background var(--mc-t-fast);
     color: var(--mc-ink2); cursor: pointer; min-width: 0; font: 500 12px/1.3 var(--mc-font);
   }
-  .it.on { border-color: var(--mc-accent); background: rgba(62, 207, 142, 0.1); color: var(--mc-ink); }
+  .it:hover { border-color: var(--mc-line2); }
+  .it.on { border-color: var(--mc-ok-line); background: var(--mc-ok-soft); color: var(--mc-ink); }
+  .it.sk { cursor: default; }
+  .it.sk > :global(.mg-skel:first-child) { aspect-ratio: 16 / 9; }
   .th { position: relative; aspect-ratio: 16 / 9; border-radius: 9px; overflow: hidden; background: var(--mc-inset); }
   .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .n {
     position: absolute; top: 6px; left: 6px; width: 24px; height: 24px; border-radius: 50%;
     display: grid; place-items: center; background: var(--mc-accent); color: var(--mc-accent-ink); font-size: 12px;
   }
-  .d { position: absolute; right: 6px; bottom: 6px; font-style: normal; font-size: 11px; padding: 2px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.6); color: #fff; }
+  .d { position: absolute; right: 6px; bottom: 6px; font-style: normal; font-size: 11px; padding: 2px 6px; border-radius: 6px; background: var(--mc-raised); border: 1px solid var(--mc-line2); color: var(--mc-ink); }
   .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   @media (max-width: 560px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>

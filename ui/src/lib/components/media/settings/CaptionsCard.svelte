@@ -5,6 +5,7 @@
   import { onMount } from 'svelte';
   import { say } from '$lib/media.svelte.js';
   import Icon from '$lib/components/glass/Icon.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import SettingsCard from './SettingsCard.svelte';
   import { settingsApi as api } from './api.js';
 
@@ -30,11 +31,11 @@
 
 <SettingsCard label="Caption defaults" sub="Added to every social caption drafted for a shoot.">
   {#if err}
-    <p class="note">{err}</p>
+    <div class="mg-strip crit"><span class="ic"><Icon name="alert" size={15} /></span><span>{err}</span></div>
   {:else if !s}
-    <p class="note">Loading…</p>
+    <Skeleton h="7rem" r="12px" />
   {:else}
-    <div class="pane mg-glass-soft">
+    <div class="pane mg-panel">
       <div class="fields">
         <div class="field">
           <label class="mg-label" for="cap-h">Hashtags</label>

@@ -18,6 +18,7 @@
   import ExportSheet from './ExportSheet.svelte';
   import Seg from '$lib/components/glass/Seg.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
 
   let { id, caps = new Set() } = $props();
@@ -151,7 +152,14 @@
     {#snippet children()}<a class="mg-btn secondary sm" href="/media/video"><Icon name="arrowLeft" size={14} />All edits</a>{/snippet}
   </Empty>
 {:else if !data}
-  <p class="loading">Opening the edit…</p>
+  <div class="loading" aria-busy="true" aria-label="Opening the edit">
+    <Skeleton h="40px" w="min(360px, 70%)" r="12px" />
+    <div class="top">
+      <div class="mg-panel pvw"><Skeleton h="220px" r="12px" /></div>
+      <div class="mg-panel side"><Skeleton h="32px" w="60%" r="10px" delay={80} /><div style="height:14px"></div><Skeleton lines={5} delay={80} /></div>
+      <div class="mg-panel tlw sk"><Skeleton h="110px" r="10px" delay={160} /></div>
+    </div>
+  </div>
 {:else}
   <div class="mg-row head">
     <a class="mg-btn ghost icon" href="/media/video" aria-label="All edits" title="All edits"><Icon name="arrowLeft" size={16} /></a>
@@ -174,7 +182,7 @@
   </div>
 
   <div class="top">
-    <div class="pvw mg-glass-soft">
+    <div class="pvw mg-panel">
       <PreviewPlayer project={data} bind:time />
     </div>
     {#if data.clips.length}
@@ -185,7 +193,7 @@
                   onseek={(t) => (time = t)} />
       </div>
     {/if}
-    <div class="side mg-glass-soft">
+    <div class="side mg-panel">
       <div class="tabs mg-noscroll"><Seg options={TABS} value={tab} onchange={(v) => (tab = v)} label="Panel" /></div>
       <fieldset disabled={!canEdit}>
         {#if tab === 'clip'}
@@ -221,25 +229,31 @@
 {/if}
 
 <style>
-  .loading { color: var(--mc-ink3); font-size: 13px; }
+  .loading { display: flex; flex-direction: column; gap: 14px; }
+  .tlw.sk { padding: 10px; }
   .head { gap: 8px; }
   .nm {
-    flex: 1 1 200px; min-width: 0; max-width: 32rem; height: 40px; padding: 0 12px; border-radius: 12px;
+    flex: 1 1 200px; min-width: 0; max-width: 32rem; height: 40px; padding: 0 12px; border-radius: var(--mc-r-md);
     background: transparent; border: 1px solid transparent; color: var(--mc-ink);
     font: 600 18px/1.2 var(--mc-font); letter-spacing: -0.01em;
   }
   .nm:hover:not([readonly]) { border-color: var(--mc-line); }
-  .nm:focus { outline: none; border-color: rgba(62, 207, 142, 0.6); background: var(--mc-raised); }
+  .nm:focus { outline: none; border-color: rgba(62, 207, 142, 0.6); box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.18); background: var(--mc-inset); }
   .top {
     display: grid; grid-template-columns: minmax(260px, 420px) minmax(0, 1fr); gap: 14px; align-items: start;
     grid-template-areas: 'pv side' 'tl tl';
   }
-  .pvw { grid-area: pv; border-radius: var(--mc-r-md); padding: 12px; min-width: 0; }
+  .pvw { grid-area: pv; padding: 12px; min-width: 0; }
   .tlw { grid-area: tl; min-width: 0; }
-  .side { grid-area: side; border-radius: var(--mc-r-md); padding: 12px 14px 16px; min-width: 0; }
+  .side { grid-area: side; padding: 12px 14px 16px; min-width: 0; }
   .tabs { margin-bottom: 14px; overflow-x: auto; }
   fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   .foot { margin: 10px 4px 0; font-size: 12px; color: var(--mc-ink3); }
+  @media (pointer: coarse) {
+    .top :global(.mg-btn.sm), .head :global(.mg-btn.sm), .top :global(button.mg-chip) { min-height: 44px; }
+    .top :global(.mg-btn.icon.sm), .head :global(.mg-btn.icon.sm) { min-width: 44px; }
+    .nm { height: 44px; }
+  }
   @media (max-width: 900px) {
     .top { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'pv' 'tl' 'side'; }
   }

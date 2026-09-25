@@ -3,6 +3,7 @@
      Each one is a to-do; ticking it here is the same tick the photo editor
      shows. Read through the public route with a staff preview token, so a
      client password is no obstacle and nothing counts as a view. */
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import { onMount } from 'svelte';
   import { thumbUrl } from '$lib/media.js';
   import { say } from '$lib/media.svelte.js';
@@ -48,16 +49,16 @@
 </script>
 
 {#if err}
-  <p class="none">{err}</p>
+  <div class="mg-strip crit"><span class="ic"><Icon name="alert" size={15} /></span><span>{err}</span></div>
 {:else if !pins}
-  <p class="none">Loading…</p>
+  <div class="sk"><Skeleton h="2.6rem" /><Skeleton h="2.6rem" delay={80} /></div>
 {:else if !pins.length}
   <p class="none">No marked spots yet. On a photo the client can tap “Mark a spot” and say what should change there.</p>
 {:else}
   <div class="grid">
     {#each groups as [vid, list] (vid)}
       {@const f = files[vid]}
-      <div class="ph mg-glass-soft">
+      <div class="ph mg-tile">
         <div class="img">
           {#if f?.thumbnail_path}<img src={thumbUrl(f)} alt="" loading="lazy" />{:else}<span class="noimg">photo {vid}</span>{/if}
           {#each list as p, i (p.id)}
@@ -86,10 +87,11 @@
 {/if}
 
 <style>
+  .sk { display: flex; flex-direction: column; gap: 8px; }
   .none { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
   .ph { border-radius: var(--mc-r-md); padding: 8px; min-width: 0; }
-  .img { position: relative; border-radius: 10px; overflow: hidden; background: var(--mc-inset); min-height: 60px; }
+  .img { position: relative; border-radius: var(--mc-r-sm); overflow: hidden; background: var(--mc-inset); min-height: 60px; }
   .img img { display: block; width: 100%; height: auto; }
   .noimg { display: grid; place-items: center; height: 120px; font: 400 11px/1 var(--mc-font); color: var(--mc-ink3); }
   .dot { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%;
@@ -108,4 +110,5 @@
   .t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .t small { display: block; color: var(--mc-ink3); font-size: 11px; text-decoration: none; }
   li .mg-btn { flex: none; min-height: 36px; }
+  @media (pointer: coarse) { li .mg-btn { min-height: 44px; } }
 </style>

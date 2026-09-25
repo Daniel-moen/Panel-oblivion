@@ -179,7 +179,7 @@
 <div class="lay">
   <!-- ————————————————————————————————————————— the photo + painting ——— -->
   <section class="col">
-    <div class="mg-glass-soft card">
+    <div class="mg-panel card">
       <div class="hd">
         <span class="mg-label">Photo</span>
         {#if photo}
@@ -218,7 +218,7 @@
       {/if}
     </div>
 
-    <div class="mg-glass-soft card">
+    <div class="mg-panel card">
       <span class="mg-label">Look to paint</span>
       <div class="chips">
         {#if twilight}
@@ -269,7 +269,7 @@
     </div>
 
     {#if results.length}
-      <div class="mg-glass-soft card">
+      <div class="mg-panel card">
         <div class="hd">
           <span class="mg-label">Results · {results.length}</span>
           {#if savedRef}<button class="mg-btn ghost sm" onclick={takeOff} disabled={!canEdit}><Icon name="undo" size={13} />Remove look layer</button>{/if}
@@ -309,7 +309,7 @@
 
   <!-- ———————————————————————————————————————————————— the library ——— -->
   <aside class="col side">
-    <div class="mg-glass-soft card">
+    <div class="mg-panel card">
       <div class="hd">
         <span class="mg-label">Studio looks · {list.length}</span>
         {#if canEdit}
@@ -357,8 +357,8 @@
 <style>
   .lay { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
   .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .side { position: sticky; top: 16px; }
-  .card { border-radius: var(--mc-r-md); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .side { position: sticky; top: calc(var(--mc-strip-h) + var(--sat) + 16px); }
+  .card { padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .hd { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .hd .mg-label { margin-right: auto; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -369,13 +369,13 @@
   .hint { margin: 0; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .err { color: var(--mc-crit); }
   .lnk { color: var(--mc-accent) !important; text-decoration: underline !important; }
-  .ph { border-radius: 12px; overflow: hidden; background: var(--mc-inset); }
+  .ph { border-radius: var(--mc-r-md); overflow: hidden; background: var(--mc-inset); }
   .ph img { display: block; width: 100%; max-height: 420px; object-fit: contain; }
   .meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
   .meta b { font: 600 13px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .chips { display: flex; gap: 6px; flex-wrap: wrap; }
   .chips .mg-chip { min-height: 36px; cursor: pointer; gap: 6px; }
-  .mg-chip.tw:not(.on) { color: var(--mc-mgr); border-color: rgba(167, 139, 250, 0.35); }
+  .mg-chip.tw:not(.on) { color: var(--mc-mgr); border-color: var(--mc-mgr-line); }
   .mg-btn.lg { flex: 1 1 auto; max-width: 360px; }
 
   .res { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
@@ -389,14 +389,19 @@
   .acts { display: flex; gap: 6px; flex-wrap: wrap; }
 
   .looks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-  .looks li { border: 1px solid var(--mc-line); border-radius: 14px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
-  .looks li.on { border-color: rgba(62, 207, 142, 0.5); background: rgba(62, 207, 142, 0.06); }
+  .looks li { border: 1px solid var(--mc-line); border-radius: var(--mc-r-md); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .looks li.on { border-color: var(--mc-ok-line); background: var(--mc-ok-soft); }
   .pick { border: 0; background: none; padding: 2px 4px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px; color: inherit; min-height: 40px; }
   .pick b { display: inline-flex; align-items: center; gap: 6px; font: 600 13px/1.3 var(--mc-font); color: var(--mc-ink); }
   .exs { display: flex; gap: 4px; }
   .exs img { width: 56px; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 6px; }
   .la { display: flex; gap: 2px; justify-content: flex-end; }
 
+  @media (pointer: coarse) {
+    .chips .mg-chip { min-height: 44px; }
+    .amt input { height: 44px; }
+    .col :global(.mg-btn.sm), .side :global(.mg-btn.sm) { min-height: 44px; }
+  }
   @media (max-width: 960px) {
     .lay { grid-template-columns: minmax(0, 1fr); }
     .side { position: static; }

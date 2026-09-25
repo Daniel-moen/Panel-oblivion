@@ -169,4 +169,5 @@
   .row input { flex: 1; min-width: 0; }
   .v { font-size: 12px; color: var(--mc-ink2); width: 40px; text-align: right; }
   input[type='range'] { width: 100%; accent-color: var(--mc-accent); height: 28px; }
+  @media (pointer: coarse) { input[type='range'] { height: 44px; } }
 </style>

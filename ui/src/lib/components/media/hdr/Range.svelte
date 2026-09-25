@@ -29,5 +29,6 @@
   .rs { border: 0; background: none; color: var(--mc-ink3); cursor: pointer; font-size: 13px; padding: 0 2px; }
   .rs:hover { color: var(--mc-ink); }
   input { width: 100%; height: 28px; accent-color: var(--mc-accent); margin: 0; }
+  @media (pointer: coarse) { input { height: 44px; } .rs { min-width: 32px; min-height: 32px; } }
   .h { margin: 0; font: 400 11.5px/1.4 var(--mc-font); color: var(--mc-ink3); }
 </style>

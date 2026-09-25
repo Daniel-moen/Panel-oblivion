@@ -295,8 +295,19 @@
 
 <svelte:head><title>{clip ? clip.filename + ' · ' : ''}Photo editor · Media</title></svelte:head>
 
-{#if !qid}
-  {#if ready}<PhotoPicker />{/if}
+{#if mstate.error}
+  <Empty icon="sliders" title="The photo editor needs the media library"
+         hint="It is unavailable on this deployment, so there are no photos to edit." />
+{:else if !qid}
+  {#if ready}
+    <PhotoPicker />
+  {:else}
+    <div class="boot" aria-busy="true" aria-label="Loading photos">
+      <Skeleton h="22px" w="160px" />
+      <Skeleton h="40px" w="min(22rem, 100%)" r="12px" delay={60} />
+      <div class="bootg">{#each Array(8) as _, i (i)}<Skeleton h="auto" r="12px" delay={i * 40} />{/each}</div>
+    </div>
+  {/if}
 {:else if clipError}
   <Empty icon="alert" title="Can't open this photo" hint={clipError}>
     <a class="mg-btn secondary" href="/media/edit">Choose another photo</a>
@@ -413,6 +424,10 @@
 
 <style>
   .head { align-items: center; }
+  .boot { display: flex; flex-direction: column; gap: 14px; }
+  .bootg { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .bootg > :global(.mg-skel) { aspect-ratio: 4 / 3; }
+  @media (max-width: 480px) { .bootg { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .ttl { min-width: 0; flex: 1 1 200px; display: flex; flex-direction: column; gap: 4px; }
   .ttl .mg-h2 { font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sub { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mc-ink3); flex-wrap: wrap; }
@@ -454,6 +469,13 @@
   .loupe p { margin: 0; padding: 20px 8px; text-align: center; font-size: 12px; color: var(--mc-ink3); }
   .tip { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); pointer-events: none;
          background: var(--mc-raised); border-color: var(--mc-line2); color: var(--mc-ink); box-shadow: var(--mc-sh-2); }
+
+  /* A finger on a dense tool: every small control grows to 44px on touch. */
+  @media (pointer: coarse) {
+    .head :global(.mg-btn.sm), .ed :global(.mg-btn.sm), .ed :global(button.mg-chip) { min-height: 44px; }
+    .head :global(.mg-btn.icon.sm), .ed :global(.mg-btn.icon.sm) { min-width: 44px; }
+    .ed :global(.mg-input) { min-height: 44px; }
+  }
 
   @media (max-width: 1100px) {
     .ed { grid-template-columns: minmax(0, 1fr) 320px; }

@@ -47,7 +47,7 @@
 </script>
 
 <SettingsCard label="Library check">
-  <div class="set mg-glass-soft">
+  <div class="set mg-panel">
     <div class="l">
       <b>Check files against the catalogue</b>
       <span class="hint">{st?.message || 'Not run yet'}{st?.finished_at && !st.running ? ' · last run ' + st.finished_at.slice(0, 16).replace('T', ' ') + ' UTC' : ''}</span>
@@ -62,7 +62,7 @@
   {/if}
 
   {#if st && !st.running && st.missing?.length}
-    <div class="pane mg-glass-soft">
+    <div class="pane mg-panel">
       <div class="hd">
         <b>{st.missing.length} missing</b>
         {#if relinkable.length}
@@ -93,7 +93,7 @@
   {/if}
 
   {#if st && !st.running && st.unindexed_count}
-    <div class="pane mg-glass-soft">
+    <div class="pane mg-panel">
       <div class="hd"><b>{st.unindexed_count} on disk but not in the library</b></div>
       <ul class="rows">
         {#each st.unindexed.slice(0, 12) as p (p)}<li><span class="nm"><small title={p}>…/{short(p)}</small></span></li>{/each}
@@ -114,4 +114,5 @@
   .nm b { font: 500 12.5px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .nm small { font: 11.5px/1.4 var(--mc-mono); color: var(--mc-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rows .mg-btn { flex: none; min-height: 36px; }
+  @media (pointer: coarse) { .rows .mg-btn { min-height: 44px; } }
 </style>

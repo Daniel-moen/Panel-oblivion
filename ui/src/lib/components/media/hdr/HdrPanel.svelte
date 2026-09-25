@@ -188,7 +188,7 @@
 <div class="lay">
   <!-- ——————————————————————————————————————————— left: the sets ——— -->
   <section class="col">
-    <div class="mg-glass-soft card">
+    <div class="mg-panel card">
       <span class="mg-label">1 · Frames</span>
       <div class="row">
         {#if SOURCES.length > 1}
@@ -231,7 +231,7 @@
     {/if}
 
     {#each groups as g, n (g.key)}
-      <article class="set mg-glass-soft" class:off={!g.on}>
+      <article class="set mg-tile" class:off={!g.on}>
         <header>
           <label class="tick">
             <input type="checkbox" bind:checked={g.on} />
@@ -279,7 +279,7 @@
 
   <!-- ——————————————————————————————————————— right: the settings ——— -->
   <aside class="col side">
-    <div class="mg-glass-soft card">
+    <div class="mg-panel card">
       <span class="mg-label">2 · Settings</span>
 
       {#if mode === 'hdr'}
@@ -353,7 +353,7 @@
       {/if}
     </div>
 
-    <div class="mg-glass-soft card go">
+    <div class="mg-panel card go">
       <span class="mg-label">3 · Merge</span>
       <p class="sum mg-tnum">{chosen.length} set{chosen.length === 1 ? '' : 's'} · {frames} frame{frames === 1 ? '' : 's'}</p>
       {#if running}
@@ -368,7 +368,7 @@
     </div>
 
     {#if job && (job.results?.length || job.errors?.length)}
-      <div class="mg-glass-soft card">
+      <div class="mg-panel card">
         <span class="mg-label">Results</span>
         <ul class="res">
           {#each job.results as r (r.path)}
@@ -400,8 +400,8 @@
 <style>
   .lay { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
   .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .side { position: sticky; top: 16px; }
-  .card { border-radius: var(--mc-r-md); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .side { position: sticky; top: calc(var(--mc-strip-h) + var(--sat) + 16px); }
+  .card { padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; align-items: end; }
   .fld { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -428,15 +428,16 @@
   button.thumb { cursor: pointer; }
   .fr.flash .thumb { border-color: var(--mc-warn); }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .tag { position: absolute; left: 5px; bottom: 5px; padding: 3px 7px; border-radius: 9999px; background: rgba(0, 0, 0, 0.6);
-         color: #fff; font: 500 10.5px/1 var(--mc-font); }
-  .fr.flash .tag { background: var(--mc-warn); color: #231a02; }
+  .tag { position: absolute; left: 5px; bottom: 5px; padding: 3px 7px; border-radius: 9999px; background: var(--mc-raised);
+         border: 1px solid var(--mc-line2); color: var(--mc-ink); font: 500 10.5px/1 var(--mc-font); }
+  .fr.flash .tag { background: var(--mc-warn); border-color: var(--mc-warn); color: #231a02; }
   .fn { font: 400 11px/1.3 var(--mc-font); color: var(--mc-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .x { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border-radius: 50%; border: 0;
-       background: rgba(0, 0, 0, 0.6); color: #fff; display: grid; place-items: center; cursor: pointer; }
-  .x:hover { background: rgba(242, 109, 100, 0.85); }
+  .x { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%;
+       border: 1px solid var(--mc-line2); background: var(--mc-raised); color: var(--mc-ink); box-shadow: var(--mc-sh-1);
+       display: grid; place-items: center; cursor: pointer; transition: color var(--mc-t-fast), border-color var(--mc-t-fast); }
+  .x:hover { color: var(--mc-crit); border-color: var(--mc-crit-line); }
   .pvbox { display: flex; flex-direction: column; gap: 8px; }
-  .pvbox img { width: 100%; border-radius: 12px; display: block; transition: opacity 0.2s; }
+  .pvbox img { width: 100%; border-radius: var(--mc-r-md); display: block; transition: opacity 0.2s; }
   .pvbox img.dim { opacity: 0.6; }
 
   .go .sum { margin: 0; font: 600 15px/1.2 var(--mc-font); color: var(--mc-ink); }
@@ -448,6 +449,12 @@
   .rt b { font: 600 12.5px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acts { display: flex; gap: 6px; flex-wrap: wrap; }
 
+  @media (pointer: coarse) {
+    .sw, .more, .tick { min-height: 44px; align-items: center; }
+    .sw input { margin-top: 0; }
+    .x { width: 36px; height: 36px; }
+    .col :global(.mg-btn.sm), .side :global(.mg-btn.sm) { min-height: 44px; }
+  }
   @media (max-width: 960px) {
     .lay { grid-template-columns: minmax(0, 1fr); }
     .side { position: static; }

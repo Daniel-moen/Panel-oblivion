@@ -312,7 +312,7 @@
         <section>
           <span class="mg-label">Notes</span>
           {#each notes as n (n.id)}
-            <p class="note mg-glass-soft">{n.content}</p>
+            <p class="note mg-tile">{n.content}</p>
           {:else}
             <p class="dim">Nothing noted.</p>
           {/each}
@@ -369,7 +369,7 @@
   .box:hover .nav { opacity: 0.85; }
   .nav:hover, .nav:focus-visible { opacity: 1; }
   .prev { left: 12px; }
-  .next { right: 12px; }
+  .next { right: calc(320px + 12px); }  /* the stage edge, not over the sidebar */
 
   .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
   .stagecol { display: flex; flex-direction: column; min-width: 0; overflow-y: auto; }

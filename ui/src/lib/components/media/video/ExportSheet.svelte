@@ -147,7 +147,7 @@
   </section>
 
   {#if job}
-    <section class="job mg-glass-soft">
+    <section class="job mg-tile">
       <div class="jh">
         <b>{job.kind === 'pack' ? 'Resolve pack' : 'Render'}</b>
         <span class="mg-chip {job.status === 'done' ? 'ok' : job.status === 'running' ? 'warn' : 'crit'}">{job.status}</span>
@@ -177,7 +177,7 @@
   .full, .full > select { width: 100%; }
   .why { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--mc-ink3); }
   .why b { color: var(--mc-ink2); font-weight: 600; }
-  .tg { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; font-size: 13px; color: var(--mc-ink2); cursor: pointer; }
+  .tg { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; color: var(--mc-ink2); cursor: pointer; }
   .tg input { width: 18px; height: 18px; accent-color: var(--mc-accent); }
   .btns { display: flex; gap: 8px; flex-wrap: wrap; }
   .job { border-radius: var(--mc-r-md); padding: 12px 14px; border-top: 0 !important; margin-top: 4px; }

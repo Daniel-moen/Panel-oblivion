@@ -86,7 +86,7 @@
               {:else}<span class="mg-chip ok"><span class="dot"></span>live</span>{/if}
             </div>
             <p class="meta mg-tnum">
-              sent {day(d.created_at)}{#if d.expires_at} · until {day(d.expires_at)}{/if}
+              sent {day(d.created_at)}{#if d.expires_at}{" · "}until {day(d.expires_at)}{/if}
               {#each Object.entries(d.activity || {}) as [k, n] (k)} · {n} {ACT[k] || k}{/each}
               {#if !Object.keys(d.activity || {}).length} · not opened yet{/if}
             </p>
@@ -159,7 +159,7 @@
   h3 { margin: 0; flex: 1; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); }
   .none { margin: 0; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }
   .dl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-  .dl li { padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.03); }
+  .dl li { padding: 10px 12px; border-radius: var(--mc-r-md); background: var(--mc-raised); border: 1px solid var(--mc-line); }
   .top { display: flex; align-items: center; gap: 8px; }
   .top b { flex: 1; min-width: 0; font: 500 13px/1.3 var(--mc-font); color: var(--mc-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .meta { margin: 4px 0 8px; font: 400 11.5px/1.45 var(--mc-font); color: var(--mc-ink3); }

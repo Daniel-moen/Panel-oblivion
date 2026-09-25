@@ -6,7 +6,7 @@
      that eventually deletes the wrong master — so resolving is per group and
      asks first. The copy being kept is marked before you press anything. */
   import { onMount } from 'svelte';
-  import { fly } from 'svelte/transition';
+  import { rise } from '$lib/motion.js';
   import { mstate, boot, say, can, CAP, loadMe } from '$lib/media.svelte.js';
   import { media, thumbUrl, fmtBytes } from '$lib/media.js';
   import Skeleton from '$lib/components/Skeleton.svelte';
@@ -66,7 +66,7 @@
   <h2 class="mg-h2">Duplicates</h2>
   {#if data}
     <span class="mg-count">
-      {groups.length} group{groups.length === 1 ? '' : 's'}{#if data.reclaimable} · {fmtBytes(data.reclaimable)} reclaimable{/if}
+      {groups.length} group{groups.length === 1 ? '' : 's'}{#if data.reclaimable}{' · '}{fmtBytes(data.reclaimable)} reclaimable{/if}
     </span>
   {:else}
     <span class="mg-count">Byte-identical copies</span>
@@ -81,6 +81,9 @@
 {#if denied}
   <Empty icon="lock" title="Duplicates are an administrator tool"
          hint="Finding and removing duplicate masters needs the administrator role. Ask an admin to run the scan." />
+{:else if mstate.error}
+  <Empty icon="alert" title="The media library is offline"
+         hint="The media backend could not be reached. The notice above has the detail." />
 {:else if loading}
   <div class="list">
     {#each Array(4) as _, i (i)}
@@ -99,7 +102,7 @@
 {:else}
   <div class="list">
     {#each groups as g, i (g.hash)}
-      <article class="mg-card grp" in:fly={{ y: 12, duration: 320, delay: Math.min(i * 45, 320) }}>
+      <article class="mg-card grp" in:rise={{ i }}>
         <div class="gh">
           <b>{g.videos?.length || 0} copies</b>
           <span class="dim mg-tnum">{fmtBytes(g.size || g.videos?.[0]?.file_size || 0)} each</span>
@@ -113,7 +116,7 @@
 
         <div class="copies mg-noscroll">
           {#each g.videos || [] as v, vi (v.id)}
-            <figure class="copy mg-glass-soft" class:keep={vi === 0}>
+            <figure class="copy mg-tile" class:keep={vi === 0}>
               <span class="shot">
                 {#if thumbUrl(v)}
                   <img src={thumbUrl(v)} alt="" loading="lazy" />
@@ -150,17 +153,17 @@
   .copies { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
 
   .copy { flex: none; width: 160px; margin: 0; padding: 6px; border-radius: var(--mc-r-md); }
-  .copy.keep { border-color: rgba(62, 207, 142, 0.4); background: rgba(62, 207, 142, 0.08); }
+  .copy.keep { border-color: var(--mc-ok-line); background: var(--mc-ok-soft); }
 
   .shot {
     position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden;
-    border-radius: 10px; background: var(--mc-inset);
+    border-radius: var(--mc-r-sm); background: var(--mc-inset);
   }
   .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .noimg { position: absolute; inset: 0; display: grid; place-items: center;
            font: 400 10.5px/1 var(--mc-font); color: var(--mc-ink3); }
   .mark { position: absolute; left: 5px; bottom: 5px; padding: 3px 8px; font-size: 10.5px;
-          background: rgba(6, 40, 26, 0.75); border-color: rgba(62, 207, 142, 0.5); }
+          height: 22px; background: var(--mc-inset); border-color: var(--mc-ok-line); }
 
   figcaption { display: flex; flex-direction: column; gap: 2px; padding: 8px 4px 3px; min-width: 0; }
   figcaption b { font: 500 12px/1.3 var(--mc-font); color: var(--mc-ink);
@@ -168,7 +171,7 @@
   @media (max-width: 560px) {
     .grp { padding: 12px; }
     .ga { margin-left: 0; flex: 1 1 100%; }
-    .ga .mg-btn { height: 40px; width: 100%; }
+    .ga .mg-btn { height: 44px; width: 100%; }
     .copy { width: 140px; }
   }
   .path { font: 11px/1.35 var(--mc-mono); color: var(--mc-ink3);

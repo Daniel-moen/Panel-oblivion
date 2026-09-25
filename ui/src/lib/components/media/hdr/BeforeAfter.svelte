@@ -41,18 +41,18 @@
   .base { object-fit: contain; }
   /* labels: "after" is on the left because the result is revealed from the left */
   .lbl {
-    position: absolute; top: 8px; padding: 4px 9px; border-radius: 9999px;
-    background: rgba(0, 0, 0, 0.55); color: #fff; font: 500 11px/1 var(--mc-font); pointer-events: none;
+    position: absolute; top: 8px; padding: 5px 9px; border-radius: 9999px;
+    background: var(--mc-raised); border: 1px solid var(--mc-line2); color: var(--mc-ink); font: 500 11px/1 var(--mc-font); pointer-events: none;
   }
   .lbl.l { right: 8px; }
   .lbl.r { left: 8px; }
   .bar {
     position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px;
-    background: rgba(255, 255, 255, 0.9); pointer-events: none;
+    background: var(--mc-ink); pointer-events: none;
   }
   .bar i {
     position: absolute; top: 50%; left: 50%; width: 28px; height: 28px; margin: -14px 0 0 -14px;
-    border-radius: 50%; background: rgba(255, 255, 255, 0.92); box-shadow: var(--mc-sh-1);
+    border-radius: 50%; background: var(--mc-ink); box-shadow: var(--mc-sh-2);
   }
   .rng { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; opacity: 0; height: 1px; pointer-events: none; }
   .rng:focus-visible { opacity: 1; height: auto; pointer-events: auto; }

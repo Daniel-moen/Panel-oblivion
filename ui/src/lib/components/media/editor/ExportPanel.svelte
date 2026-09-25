@@ -168,7 +168,7 @@
   </button>
 
   {#if job}
-    <div class="res mg-glass-soft">
+    <div class="res mg-tile">
       <div class="mg-bar"><i style:width="{job.total ? (100 * job.done) / job.total : 0}%"></i></div>
       <span class="mg-tnum">{job.running ? `Exporting ${job.current || ''}` : 'Done'} · {job.results?.length || 0} file(s)</span>
       {#each job.results || [] as f (f)}<code>{f}</code>{/each}
@@ -176,7 +176,7 @@
     </div>
   {/if}
   {#if result}
-    <div class="res mg-glass-soft">
+    <div class="res mg-tile">
       <b>{result.filename}</b>
       <span class="mg-tnum">{result.width} × {result.height} · {fmtBytes(result.size)}{result.filename.endsWith('.jpg') ? ` · quality ${result.quality}` : ''}</span>
       <code>{result.path}</code>
@@ -241,17 +241,18 @@
   .marks { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
   .mk { position: relative; }
   .pick {
-    width: 72px; height: 48px; border-radius: 10px; border: 1px solid var(--mc-line);
+    width: 72px; height: 48px; border-radius: var(--mc-r-sm); border: 1px solid var(--mc-line);
     background: repeating-conic-gradient(#2a2a2e 0 25%, #1c1c20 0 50%) 0 0 / 12px 12px;
     display: grid; place-items: center; padding: 4px; cursor: pointer; overflow: hidden; color: var(--mc-ink3); font-size: 10px;
   }
   .pick img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .mk.on .pick { border-color: var(--mc-accent); box-shadow: 0 0 0 1px var(--mc-accent); }
   .x { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; border-radius: 50%; border: 0;
-       background: #333; color: #fff; display: grid; place-items: center; cursor: pointer; padding: 0; }
-  .pos { display: grid; grid-template-columns: repeat(3, 40px); gap: 4px; margin: 4px 0 8px; }
-  .pos button { height: 40px; border-radius: 10px; border: 1px solid var(--mc-line); background: var(--mc-raised);
+       background: var(--mc-raised); border: 1px solid var(--mc-line2); color: var(--mc-ink); box-shadow: var(--mc-sh-1);
+       display: grid; place-items: center; cursor: pointer; padding: 0; }
+  .pos { display: grid; grid-template-columns: repeat(3, 44px); gap: 4px; margin: 4px 0 8px; }
+  .pos button { height: 44px; border-radius: var(--mc-r-sm); border: 1px solid var(--mc-line); background: var(--mc-raised);
                 color: var(--mc-ink2); cursor: pointer; font-size: 14px; }
-  .pos button.on { border-color: var(--mc-accent); color: var(--mc-accent); background: rgba(62, 207, 142, 0.12); }
+  .pos button.on { border-color: var(--mc-ok-line); color: var(--mc-accent); background: var(--mc-ok-soft); }
   .start { align-self: flex-start; }
 </style>

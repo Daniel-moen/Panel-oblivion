@@ -3,20 +3,20 @@
 
      The stage plays the library back at you: up to five of its own clips,
      muted and looping, crossfading one into the next. It is the fastest way to
-     say "this is your footage, it is indexed, it is here" — and on a deploy
-     with no footage drive it falls back to the same hero photograph the scene
-     is standing on, so the page is never a grey box.
+     say "this is your footage, it is indexed, it is here". With nothing to
+     play (no drive, no proxies yet) there is no stage at all: the page opens
+     on the numbers rather than on a black box.
 
      Everything below it is a read: counts that arrive, whatever is running
      shown as a moving bar rather than a number, and the four things anyone
      actually comes here to start. */
   import { onMount } from 'svelte';
-  import { fly } from 'svelte/transition';
   import { mstate, boot, runRescan, runProxies, runAutoTag, can, CAP } from '$lib/media.svelte.js';
   import { media, streamUrl, thumbUrl, fmtBytes, fmtHours } from '$lib/media.js';
   import CountUp from '$lib/components/CountUp.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
+  import Empty from '$lib/components/glass/Empty.svelte';
   import ActivityBell from '$lib/components/media/library/ActivityBell.svelte';
   import ProjectsPanel from '$lib/components/media/library/ProjectsPanel.svelte';
 
@@ -25,9 +25,6 @@
   let heroFail = $state(false);
   let recent = $state([]);
   let timer;
-
-  const hour = new Date().getHours();
-  const stillHero = hour < 10 ? 'morning' : hour < 17 ? 'day' : 'dusk';
 
   onMount(async () => {
     await boot();
@@ -59,12 +56,17 @@
     return total ? Math.round((done / total) * 100) : null;
   });
 
+  const pending = $derived(mstate.proxies?.pending || 0);
   const tiles = $derived(s ? [
-    { k: 'Clips', v: s.total_videos || 0, f: (n) => Math.round(n).toLocaleString('en-ZA').replace(/,/g, ' ') },
-    { k: 'Storage', v: s.total_storage || 0, f: fmtBytes },
-    { k: 'Hours', v: (s.avg_duration || 0) * (s.total_videos || 0), f: fmtHours },
-    { k: 'Folders', v: s.total_projects || 0, f: (n) => String(Math.round(n)) }
+    { k: 'Clips', icon: 'film', href: '/media/browse', v: s.total_videos || 0,
+      f: (n) => Math.round(n).toLocaleString('en-ZA').replace(/,/g, ' '),
+      sub: pending ? `${pending} still need a proxy` : 'All with proxies', tone: pending ? 'warn' : '' },
+    { k: 'Storage', icon: 'box', href: '/media/settings', v: s.total_storage || 0, f: fmtBytes, sub: 'On the footage drive' },
+    { k: 'Hours', icon: 'clock', href: '/media/browse', v: (s.avg_duration || 0) * (s.total_videos || 0), f: fmtHours, sub: 'Of footage indexed' },
+    { k: 'Folders', icon: 'folder', href: '/media/browse', v: s.total_projects || 0, f: (n) => String(Math.round(n)), sub: 'Shoots and projects' }
   ] : []);
+
+  const live = $derived(reel.length > 0 && !heroFail);
 
   const clipCount = $derived(s?.total_videos ?? null);
 </script>
@@ -73,7 +75,7 @@
 
 <!-- ————————————————————————————————————————————————————— header row ——— -->
 <div class="mg-row">
-  <h2 class="mg-h2">Media</h2>
+  <h1 class="mg-h2">Media</h1>
   {#if clipCount != null}
     <span class="mg-count">{clipCount.toLocaleString('en-ZA').replace(/,/g, ' ')} clips</span>
   {/if}
@@ -84,241 +86,246 @@
   </div>
 </div>
 
-<!-- ————————————————————————————————————————————————————— the stage ——— -->
-<section class="stage" class:still={!reel.length || heroFail}>
-  <div class="film" aria-hidden="true">
-    {#if reel.length && !heroFail}
-      {#each reel as clip, i (clip.id)}
-        <video
-          class:on={i === shot}
-          src={streamUrl(clip)}
-          poster={thumbUrl(clip)}
-          muted autoplay loop playsinline preload={i === 0 ? 'auto' : 'none'}
-          onerror={() => { if (i === 0) heroFail = true; }}
-        ></video>
-      {/each}
-    {:else}
-      <div class="still-img" style:background-image="url(/hero-{stillHero}.jpg)"></div>
-    {/if}
-  </div>
-  <div class="veil" aria-hidden="true"></div>
-
-  <div class="caption">
-    <span class="mg-label">Media library</span>
-    <p class="line">{s ? 'Everything you have shot, findable.' : 'Media library'}</p>
-    {#if reel.length && !heroFail}
-      <p class="now">{reel[shot]?.filename}</p>
-    {/if}
-  </div>
-
-  {#if reel.length > 1 && !heroFail}
-    <div class="dots" role="tablist" aria-label="Montage">
-      {#each reel as clip, i (clip.id)}
-        <button role="tab" aria-selected={i === shot} aria-label={clip.filename}
-                class:on={i === shot} onclick={() => (shot = i)}></button>
-      {/each}
-    </div>
-  {/if}
-</section>
-
-<!-- ————————————————————————————————————————————————————— the numbers ——— -->
-<section class="mg-grid c4 tiles">
-  {#if !s}
-    {#each [0, 1, 2, 3] as i (i)}
-      <div class="mg-glass-soft tile">
-        <Skeleton h="0.68rem" w="42%" delay={i * 90} />
-        <div style="height:0.6rem"></div>
-        <Skeleton h="1.5rem" w="66%" delay={i * 90} />
-      </div>
-    {/each}
-  {:else}
-    {#each tiles as t, i (t.k)}
-      <div class="mg-glass-soft tile" in:fly={{ y: 10, duration: 320, delay: i * 60 }}>
-        <span class="mg-label">{t.k}</span>
-        <b class="mg-tnum"><CountUp value={t.v} format={t.f} /></b>
-      </div>
-    {/each}
-  {/if}
-</section>
-
-<!-- ————————————————————————————————————————————————— what's running ——— -->
-{#if rescan?.running || running.length}
-  <section class="mg-glass-soft work" in:fly={{ y: 10, duration: 300 }}>
-    <div class="wh">
-      <span class="dot" aria-hidden="true"><span class="ring mg-ping"></span><span class="core"></span></span>
-      <b>{rescan?.running ? 'Indexing the library' : `${running.length} job${running.length === 1 ? '' : 's'} running`}</b>
-      <span class="dim">{rescan?.message || running[0]?.filename || ''}</span>
-      {#if scanPct != null}<span class="pct mg-tnum">{scanPct}%</span>{/if}
-    </div>
-    <div class="mg-bar" class:indeterminate={scanPct == null}>
-      <i style:width={scanPct != null ? scanPct + '%' : null}></i>
-    </div>
+{#if mstate.error}
+  <!-- the layout's red strip already says why; this says what still works -->
+  <section class="mg-section mg-rise">
+    <Empty icon="film" title="The media library is offline"
+           hint="Nothing can be indexed or played until the media backend is back. Portals and the file store come back with it.">
+      <a class="mg-btn secondary" href="/media/settings"><Icon name="settings" size={15} />Media settings</a>
+    </Empty>
   </section>
-{/if}
+{:else}
+  <!-- ——————————————————————————————————————————————————— the stage ——— -->
+  {#if live}
+    <section class="stage mg-rise">
+      <div class="film" aria-hidden="true">
+        {#each reel as clip, i (clip.id)}
+          <video
+            class:on={i === shot}
+            src={streamUrl(clip)}
+            poster={thumbUrl(clip)}
+            muted autoplay loop playsinline preload={i === 0 ? 'auto' : 'none'}
+            onerror={() => { if (i === 0) heroFail = true; }}
+          ></video>
+        {/each}
+      </div>
+      <div class="veil" aria-hidden="true"></div>
 
-<!-- ————————————————————————————————————————————————— quick actions ——— -->
-<section class="mg-grid acts">
-  {#if can(CAP.ORGANISE)}
-    <button class="mg-card act" onclick={runRescan} disabled={mstate.busy || !mstate.ready}>
-      <span class="ic"><Icon name="refresh" size={17} /></span>
-      <b>Re-index</b><span class="hint">Pick up anything new on the drive</span>
-    </button>
-  {/if}
-  {#if can(CAP.PROXY)}
-    <button class="mg-card act" onclick={runProxies} disabled={!mstate.ready}>
-      <span class="ic"><Icon name="film" size={17} /></span>
-      <b>Build proxies</b><span class="hint">{mstate.proxies?.pending ?? '—'} clips still need one</span>
-    </button>
-  {/if}
-  {#if can(CAP.ADMIN)}
-    <button class="mg-card act" onclick={runAutoTag} disabled={!mstate.ready}>
-      <span class="ic"><Icon name="sparkles" size={17} /></span>
-      <b>Auto-tag</b><span class="hint">Camera, stage and spoken-word tags</span>
-    </button>
-  {/if}
-  {#if can(CAP.SHARES)}
-    <a class="mg-card act" href="/media/shares">
-      <span class="ic"><Icon name="link" size={17} /></span>
-      <b>New share link</b><span class="hint">Send a reel to a client</span>
-    </a>
-  {/if}
-  <a class="mg-card act" href="/media/browse?trash=1">
-    <span class="ic"><Icon name="trash" size={17} /></span>
-    <b>Trash</b><span class="hint">Restore what was deleted</span>
-  </a>
-</section>
+      <div class="caption">
+        <span class="mg-label">Media library</span>
+        <p class="line">Everything you have shot, findable.</p>
+        <p class="now">{reel[shot]?.filename}</p>
+      </div>
 
-{#if mstate.ready}<ProjectsPanel />{/if}
+      {#if reel.length > 1}
+        <div class="dots" role="tablist" aria-label="Montage">
+          {#each reel as clip, i (clip.id)}
+            <button role="tab" aria-selected={i === shot} aria-label={clip.filename}
+                    class:on={i === shot} onclick={() => (shot = i)}><i></i></button>
+          {/each}
+        </div>
+      {/if}
+    </section>
+  {/if}
 
-<!-- —————————————————————————————————————————————————————————— recent ——— -->
-<section class="recent">
-  <div class="mg-row rh">
-    <h3 class="mg-h2 sm">Latest in</h3>
-    <div class="mg-actions">
-      <a class="mg-btn ghost sm" href="/media/browse">All clips<Icon name="chevronRight" size={14} /></a>
-    </div>
-  </div>
-  <div class="strip mg-noscroll">
-    {#if !mstate.ready && !mstate.error}
-      {#each Array(8) as _, i (i)}
-        <div class="rcard"><Skeleton h="100%" r="14px" delay={i * 60} /></div>
+  <!-- ————————————————————————————————————————————————— the numbers ——— -->
+  <section class="tiles">
+    {#if !s}
+      {#each [0, 1, 2, 3] as i (i)}
+        <div class="mg-stat-tile">
+          <Skeleton h="11px" w="42%" delay={i * 90} />
+          <div style="height:12px"></div>
+          <Skeleton h="26px" w="62%" delay={i * 90} />
+          <div style="height:8px"></div>
+          <Skeleton h="11px" w="70%" delay={i * 90} />
+        </div>
       {/each}
-    {:else if !recent.length}
-      <p class="none">Nothing indexed yet. Run a re-index once the drive is connected.</p>
     {:else}
-      {#each recent as v, i (v.id)}
-        <a class="rcard real mg-glass-soft" href="/media/browse?open={v.id}"
-           in:fly={{ y: 12, duration: 340, delay: Math.min(i * 40, 320) }}>
-          {#if thumbUrl(v)}
-            <img src={thumbUrl(v)} alt="" loading="lazy" />
-          {:else}
-            <span class="noimg">no thumbnail</span>
-          {/if}
-          <span class="cap">{v.filename}</span>
+      {#each tiles as t, i (t.k)}
+        <a class="mg-stat-tile mg-rise" style:--i={i} href={t.href}>
+          <span class="hud"><Icon name={t.icon} size={13} />{t.k}</span>
+          <span class="v"><CountUp value={t.v} format={t.f} /></span>
+          <span class="sub" class:warn={t.tone === 'warn'}>{t.sub}</span>
         </a>
       {/each}
     {/if}
-  </div>
-</section>
+  </section>
+
+  <!-- ——————————————————————————————————————————————— what's running ——— -->
+  {#if rescan?.running || running.length}
+    <section class="mg-section work mg-rise">
+      <div class="head">
+        <span class="mg-dot warn"><i class="mg-ping"></i></span>
+        <h2>{rescan?.running ? 'Indexing the library' : `${running.length} job${running.length === 1 ? '' : 's'} running`}</h2>
+        {#if scanPct != null}<span class="mg-count pct">{scanPct}%</span>{/if}
+      </div>
+      <div class="body">
+        {#if rescan?.message || running[0]?.filename}
+          <p class="mg-hint dim">{rescan?.message || running[0]?.filename}</p>
+        {/if}
+        <div class="mg-bar warn" class:indeterminate={scanPct == null}>
+          <i style:width={scanPct != null ? scanPct + '%' : null}></i>
+        </div>
+      </div>
+    </section>
+  {/if}
+
+  <!-- ——————————————————————————————————————————————— quick actions ——— -->
+  <span class="mg-label lab">Start something</span>
+  <section class="mg-grid acts">
+    {#if can(CAP.ORGANISE)}
+      <button class="mg-card act" onclick={runRescan} disabled={mstate.busy || !mstate.ready}>
+        <span class="ic"><Icon name="refresh" size={17} /></span>
+        <b>Re-index</b><span class="hint">Pick up anything new on the drive</span>
+      </button>
+    {/if}
+    {#if can(CAP.PROXY)}
+      <button class="mg-card act" onclick={runProxies} disabled={!mstate.ready}>
+        <span class="ic"><Icon name="film" size={17} /></span>
+        <b>Build proxies</b><span class="hint">{mstate.proxies?.pending ?? '—'} clips still need one</span>
+      </button>
+    {/if}
+    {#if can(CAP.ADMIN)}
+      <button class="mg-card act" onclick={runAutoTag} disabled={!mstate.ready}>
+        <span class="ic"><Icon name="sparkles" size={17} /></span>
+        <b>Auto-tag</b><span class="hint">Camera, stage and spoken-word tags</span>
+      </button>
+    {/if}
+    {#if can(CAP.SHARES)}
+      <a class="mg-card act" href="/media/shares">
+        <span class="ic"><Icon name="link" size={17} /></span>
+        <b>New share link</b><span class="hint">Send a reel to a client</span>
+      </a>
+    {/if}
+    <a class="mg-card act" href="/media/browse?trash=1">
+      <span class="ic"><Icon name="trash" size={17} /></span>
+      <b>Trash</b><span class="hint">Restore what was deleted</span>
+    </a>
+  </section>
+
+  {#if mstate.ready}<div class="projects"><ProjectsPanel /></div>{/if}
+
+  <!-- ———————————————————————————————————————————————————————— recent ——— -->
+  <section class="mg-section recent">
+    <div class="head">
+      <h2>Latest in</h2>
+      {#if recent.length}<span class="mg-count">{recent.length}</span>{/if}
+      <div class="mg-actions">
+        <a class="mg-btn ghost sm" href="/media/browse">All clips<Icon name="chevronRight" size={14} /></a>
+      </div>
+    </div>
+    {#if mstate.ready && !recent.length}
+      <Empty icon="film" title="Nothing indexed yet" hint="Run a re-index once the footage drive is connected." />
+    {:else}
+      <div class="strip mg-noscroll">
+        {#if !mstate.ready}
+          {#each Array(8) as _, i (i)}
+            <div class="rcard"><Skeleton h="100%" r="12px" delay={i * 60} /></div>
+          {/each}
+        {:else}
+          {#each recent as v, i (v.id)}
+            <a class="rcard real mg-rise" style:--i={i} href="/media/browse?open={v.id}">
+              {#if thumbUrl(v)}
+                <img src={thumbUrl(v)} alt="" loading="lazy" />
+              {:else}
+                <span class="noimg"><Icon name="film" size={18} /></span>
+              {/if}
+              <span class="cap">{v.filename}</span>
+            </a>
+          {/each}
+        {/if}
+      </div>
+    {/if}
+  </section>
+{/if}
 
 <style>
   /* ————————————————————————————————————————————————————————— stage ——— */
   .stage {
     position: relative; isolation: isolate; overflow: hidden;
-    border-radius: 18px; border: 1px solid var(--mc-line);
-    min-height: clamp(220px, 34vh, 380px);
+    border-radius: var(--mc-r); border: 1px solid var(--mc-line); box-shadow: var(--mc-sh-1);
+    min-height: clamp(200px, 30vh, 340px); margin-bottom: 12px;
     display: flex; flex-direction: column; justify-content: flex-end;
-    padding: clamp(14px, 2.4vw, 26px);
+    padding: clamp(16px, 2.4vw, 24px);
     background: var(--mc-inset);
   }
   .film { position: absolute; inset: 0; z-index: -2; }
-  .film video, .still-img {
+  .film video {
     position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; opacity: 0; transition: opacity 1.4s ease; will-change: opacity;
+    object-fit: cover; opacity: 0; transition: opacity 1.2s ease; will-change: opacity;
   }
   .film video.on { opacity: 1; }
-  .still-img { opacity: 1; background-size: cover; background-position: center; }
+  /* footage is the one place a photographic scrim is earned: it keeps the
+     caption legible over whatever frame is playing */
   .veil {
     position: absolute; inset: 0; z-index: -1;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0.1) 38%,
-                                rgba(0, 0, 0, 0.3) 66%, rgba(0, 0, 0, 0.78) 100%);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.72) 100%);
   }
-
-  .caption { max-width: 620px; min-width: 0; }
-  .caption .mg-label { color: rgba(255, 255, 255, 0.72); }
-  .line {
-    margin: 4px 0 0; font: 600 clamp(19px, 2.6vw, 30px)/1.15 var(--mc-font);
-    letter-spacing: -0.02em; color: #fff; text-shadow: 0 2px 22px rgba(0, 0, 0, 0.5);
-  }
+  .caption { max-width: 620px; min-width: 0; padding-right: 96px; }
+  .caption .mg-label { color: var(--mc-ink2); }
+  .line { margin: 4px 0 0; font: 600 clamp(18px, 2.4vw, 26px)/1.2 var(--mc-font); letter-spacing: -0.02em; color: var(--mc-ink); }
   .now {
-    margin: 7px 0 0; font: 400 12px/1.4 var(--mc-mono); color: rgba(255, 255, 255, 0.72);
+    margin: 6px 0 0; font: 400 12px/1.4 var(--mc-mono); color: var(--mc-ink2);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-
-  .dots { position: absolute; right: clamp(14px, 2.4vw, 26px); bottom: clamp(14px, 2.4vw, 26px);
-          display: flex; gap: 5px; }
-  .dots button {
-    width: 22px; height: 3px; border-radius: 2px; border: 0; padding: 0; cursor: pointer;
-    background: rgba(255, 255, 255, 0.35); transition: background 0.25s, transform 0.25s;
-  }
-  .dots button.on { background: #fff; transform: scaleY(1.6); }
+  .dots { position: absolute; right: clamp(8px, 2vw, 16px); bottom: clamp(8px, 2vw, 16px); display: flex; }
+  /* a 44px hit area around a 22×3 bar */
+  .dots button { width: 32px; height: 44px; border: 0; padding: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+  .dots i { display: block; width: 22px; height: 3px; border-radius: 2px; background: var(--mc-line3); transition: background var(--mc-t-fast), transform var(--mc-t) var(--mc-ease); }
+  .dots button.on i { background: var(--mc-ink); transform: scaleY(1.6); }
 
   /* ————————————————————————————————————————————————————————— tiles ——— */
-  .tiles { margin-top: 12px; }
-  .tile { border-radius: var(--mc-r-md); padding: 13px 15px; }
-  .tile b { display: block; margin-top: 3px; font: 600 24px/1.1 var(--mc-font);
-            letter-spacing: -0.025em; color: var(--mc-ink); }
+  .tiles { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  a.mg-stat-tile { transition: border-color var(--mc-t-fast); }
+  a.mg-stat-tile:hover { border-color: var(--mc-line2); }
 
   /* ——————————————————————————————————————————————————————— running ——— */
-  .work { margin-top: 12px; padding: 13px 15px; border-radius: var(--mc-r-md); }
-  .wh { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; flex-wrap: wrap; }
-  .wh b { font: 600 13.5px/1 var(--mc-font); color: var(--mc-ink); }
-  .wh .dim { flex: 1; min-width: 0; font-size: 12.5px; color: var(--mc-ink3);
-             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pct { font: 600 12.5px/1 var(--mc-font); color: var(--mc-accent); }
-  .dot { position: relative; display: flex; width: 8px; height: 8px; flex: none; }
-  .core, .ring { position: absolute; inset: 0; border-radius: 50%; background: var(--mc-accent); }
-  .ring { opacity: 0.6; }
+  .work { margin-top: 12px; }
+  .work > .head { align-items: center; }
+  .pct { margin-left: auto; color: var(--mc-warn); }
+  .dim { margin-bottom: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* ——————————————————————————————————————————————————————— actions ——— */
-  .acts { margin-top: 12px; }
-  .act { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .lab { margin: 24px 0 10px; }
+  .act { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; }
   .act .ic {
-    width: 34px; height: 34px; border-radius: 11px; margin-bottom: 8px;
+    width: 34px; height: 34px; border-radius: 10px; margin-bottom: 10px;
     display: grid; place-items: center; color: var(--mc-ink2);
-    background: rgba(255, 255, 255, 0.07); border: 1px solid var(--mc-line);
+    background: var(--mc-raised); border: 1px solid var(--mc-line);
   }
   .act b { font: 600 14px/1.3 var(--mc-font); letter-spacing: -0.01em; color: var(--mc-ink); }
   .act .hint { font: 400 12px/1.45 var(--mc-font); color: var(--mc-ink3); }
+  .projects { margin-top: 24px; }
 
   /* ———————————————————————————————————————————————————————— recent ——— */
-  .recent { margin-top: 26px; }
-  .rh { margin-bottom: 10px; }
-  .mg-h2.sm { font-size: 15px; }
-  .strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+  .recent { margin-top: 24px; }
+  .recent > .head { align-items: center; padding-top: 6px; padding-bottom: 6px; min-height: 48px; }
+  .recent > .head > .mg-actions { margin-left: auto; }
+  .strip { display: flex; gap: 10px; overflow-x: auto; padding: 16px; }
   .rcard {
-    flex: none; width: min(190px, 62vw); aspect-ratio: 16 / 10; border-radius: 14px;
-    overflow: hidden; position: relative; background: rgba(255, 255, 255, 0.05);
+    flex: none; width: min(190px, 58vw); aspect-ratio: 16 / 10; border-radius: var(--mc-r-md);
+    overflow: hidden; position: relative; background: var(--mc-inset); border: 1px solid var(--mc-line);
   }
-  .rcard.real { transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.2s; }
-  .rcard.real:hover { transform: translateY(-3px); border-color: var(--mc-line2); }
+  .rcard.real { transition: border-color var(--mc-t-fast), transform var(--mc-t) var(--mc-ease); }
+  .rcard.real:hover { border-color: var(--mc-line2); transform: translateY(-2px); }
   .rcard img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .noimg { position: absolute; inset: 0; display: grid; place-items: center;
-           font-size: 11.5px; color: var(--mc-ink3); }
+  .noimg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--mc-ink3); }
   .cap {
-    position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 9px 7px;
-    font: 500 11.5px/1.3 var(--mc-font); color: #fff;
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 10px 8px;
+    font: 500 11.5px/1.3 var(--mc-font); color: var(--mc-ink);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.85));
+    background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.8));
   }
-  .none { margin: 0; padding: 22px 0; font-size: 13px; color: var(--mc-ink3); }
 
+  @media (max-width: 760px) {
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  }
   @media (max-width: 560px) {
     .acts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .act .hint { display: none; }
-    .tile b { font-size: 20px; }
+    .caption { padding-right: 0; }
+    .dots { top: 8px; bottom: auto; }
   }
-
   @media (prefers-reduced-motion: reduce) {
     .film video { transition: none; }
     .rcard.real:hover { transform: none; }

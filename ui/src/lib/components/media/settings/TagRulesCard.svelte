@@ -9,12 +9,14 @@
   import { onMount } from 'svelte';
   import { say } from '$lib/media.svelte.js';
   import Icon from '$lib/components/glass/Icon.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import SettingsCard from './SettingsCard.svelte';
   import { settingsApi as api } from './api.js';
 
   let { transcription = false } = $props();
 
   let rules = $state(null);
+  let loadErr = $state('');
   let showBuiltin = $state(false);
   let form = $state({ tag: '', phrases: '', min_hits: 1 });
   let preview = $state(null);
@@ -23,7 +25,7 @@
   const phrasesOf = (s) => s.split(/[,\n;]/).map((x) => x.trim()).filter(Boolean);
 
   async function load() {
-    try { rules = await api.tagRules(); } catch (e) { say(e.message, 'error'); }
+    try { rules = await api.tagRules(); loadErr = ''; } catch (e) { loadErr = e.message; say(e.message, 'error'); }
   }
   onMount(load);
 
@@ -66,10 +68,12 @@
 <SettingsCard label="Tag rules"
               sub={transcription ? 'Words in a transcript that earn a tag. Applied on the next auto-tag pass.'
                                  : 'Words in a transcript that earn a tag. Transcription is not installed here, so these only apply to transcripts made elsewhere.'}>
-  {#if !rules}
-    <p class="note">Loading…</p>
+  {#if !rules && loadErr}
+    <div class="mg-strip crit"><span class="ic"><Icon name="alert" size={15} /></span><span>{loadErr}</span></div>
+  {:else if !rules}
+    <Skeleton h="7rem" r="12px" />
   {:else}
-    <div class="pane mg-glass-soft">
+    <div class="pane mg-panel">
       <div class="fields">
         <div class="field sm">
           <label class="mg-label" for="tr-tag">Tag</label>
@@ -98,10 +102,10 @@
       </div>
     </div>
 
-    {#if rules.custom.length}
+    {#if (rules.custom || []).length}
       <ul class="rules">
-        {#each rules.custom as r (r.id)}
-          <li class="mg-glass-soft" class:off={!r.enabled}>
+        {#each (rules.custom || []) as r (r.id)}
+          <li class="mg-panel" class:off={!r.enabled}>
             <span class="nm"><b>{r.tag}</b><small>{r.phrases.join(', ')}{r.min_hits > 1 ? ` · ${r.min_hits}+ hits` : ''}</small></span>
             <button class="mg-chip tog" class:on={r.enabled} aria-pressed={r.enabled} onclick={() => toggleCustom(r)}>
               {r.enabled ? 'On' : 'Off'}
@@ -114,12 +118,12 @@
 
     <button class="mg-btn ghost sm more" onclick={() => (showBuiltin = !showBuiltin)}>
       <Icon name={showBuiltin ? 'chevronUp' : 'chevronDown'} size={13} />
-      {showBuiltin ? 'Hide' : 'Show'} the {rules.builtin.length} built-in rules
+      {showBuiltin ? 'Hide' : 'Show'} the {(rules.builtin || []).length} built-in rules
     </button>
     {#if showBuiltin}
       <ul class="rules">
-        {#each rules.builtin as r (r.tag)}
-          <li class="mg-glass-soft" class:off={!r.enabled}>
+        {#each (rules.builtin || []) as r (r.tag)}
+          <li class="mg-panel" class:off={!r.enabled}>
             <span class="nm"><b>{r.tag}</b><small class="mono">{r.matches}</small></span>
             <button class="mg-chip tog" class:on={r.enabled} aria-pressed={r.enabled} onclick={() => toggleBuiltin(r)}>
               {r.enabled ? 'On' : 'Off'}
@@ -145,5 +149,6 @@
   .nm small { font: 400 11.5px/1.4 var(--mc-font); color: var(--mc-ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .nm small.mono { font-family: var(--mc-mono); }
   .tog { min-height: 36px; min-width: 52px; justify-content: center; cursor: pointer; }
+  @media (pointer: coarse) { .tog { min-height: 44px; } }
   .more { margin-top: 4px; min-height: 40px; }
 </style>

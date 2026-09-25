@@ -69,7 +69,7 @@
     {#if found.candidates.length}
       <div class="cands">
         {#each found.candidates as c (c.id)}
-          <button type="button" class="cand mg-glass-soft mg-hover" onclick={() => pull(c.id)} disabled={disabled || !!pulling}>
+          <button type="button" class="cand mg-tile mg-hover" onclick={() => pull(c.id)} disabled={disabled || !!pulling}>
             <img src={photoUrl(c, 400)} alt="" loading="lazy" />
             <span class="nm">{c.filename}</span>
             <span class="meta mg-tnum">{c.ev} EV · match {Math.round(c.match * 100)}%</span>
@@ -88,7 +88,7 @@
       {#if pickOther}
         <div class="cands">
           {#each others.slice(0, 40) as c (c.id)}
-            <button type="button" class="cand mg-glass-soft mg-hover" onclick={() => pull(c.id)} disabled={disabled || !!pulling}>
+            <button type="button" class="cand mg-tile mg-hover" onclick={() => pull(c.id)} disabled={disabled || !!pulling}>
               <img src={photoUrl(c, 400)} alt="" loading="lazy" />
               <span class="nm">{c.filename}</span>
               {#if pulling === c.id}<span class="mg-spin sp"></span>{/if}
@@ -116,7 +116,7 @@
     border-radius: var(--mc-r-md); cursor: pointer; color: inherit; font: inherit;
   }
   .cand:disabled { opacity: 0.5; cursor: default; }
-  .cand img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 8px; background: #000; }
+  .cand img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 8px; background: var(--mc-inset); }
   .nm { font-size: 11.5px; color: var(--mc-ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .meta { font-size: 11px; color: var(--mc-ink3); }
   .sp { position: absolute; top: 12px; right: 12px; }

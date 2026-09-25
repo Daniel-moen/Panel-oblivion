@@ -5,7 +5,7 @@
      the way people type it, so "ocean view dr" finds "12 Ocean View Drive").
      A row opens /media/shoot?id=. */
   import { goto } from '$app/navigation';
-  import { fly } from 'svelte/transition';
+  import { rise } from '$lib/motion.js';
   import { say } from '$lib/media.svelte.js';
   import { thumbUrl } from '$lib/media.js';
   import { shoots, STATUSES, STATUS, fmtWhen, centreOf } from '$lib/media/shoots.js';
@@ -20,6 +20,7 @@
   let list = $state([]);
   let all = $state([]);           // unfiltered, for the counts and the map centre
   let loading = $state(true);
+  let err = $state(null);
   let search = $state('');
   let status = $state('all');
   let making = $state(false);
@@ -34,14 +35,14 @@
   ]);
 
   async function load() {
-    loading = true;
+    loading = true; err = null;
     try {
       const params = { q: search.trim(), status };
       const r = await shoots.list(params);
       list = r?.shoots || [];
       if (!params.q && status === 'all') all = list;
       else if (!all.length) all = (await shoots.list())?.shoots || [];
-    } catch (e) { say(e.message, 'error'); }
+    } catch (e) { err = e.message; say(e.message, 'error'); }
     finally { loading = false; }
   }
 
@@ -90,11 +91,18 @@
       </div>
     </div>
 
+    {#if err}
+      <div class="mg-strip crit">
+        <span class="ic"><Icon name="alert" size={15} /></span>
+        <span><b>Couldn't load the shoots</b> — {err}</span>
+        <button class="mg-btn secondary sm retry" onclick={load}><Icon name="refresh" size={13} />Retry</button>
+      </div>
+    {/if}
     {#if loading && !list.length}
       <div class="list">
         {#each Array(4) as _, i (i)}<div class="mg-card"><Skeleton h="3rem" delay={i * 70} /></div>{/each}
       </div>
-    {:else if !list.length}
+    {:else if !list.length && !err}
       {#if search || status !== 'all'}
         <Empty icon="search" title="No shoots match" hint="Try fewer words of the address, or another status." />
       {:else}
@@ -108,7 +116,7 @@
     {:else}
       <div class="list">
         {#each list as s, i (s.id)}
-          <a class="mg-card row" href="/media/shoot?id={s.id}" in:fly={{ y: 10, duration: 260, delay: Math.min(i * 35, 280) }}>
+          <a class="mg-card row" href="/media/shoot?id={s.id}" in:rise={{ i }}>
             <span class="cover">
               {#if s.cover?.thumbnail_path}<img src={thumbUrl(s.cover)} alt="" loading="lazy" />
               {:else}<Icon name="camera" size={18} />{/if}
@@ -138,9 +146,10 @@
 
 <style>
   .segwrap { overflow-x: auto; max-width: 100%; }
+  .retry { margin-left: auto; align-self: center; }
   .list { display: flex; flex-direction: column; gap: 10px; }
   .row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; min-height: 64px; }
-  .cover { flex: none; width: 72px; height: 50px; border-radius: 10px; overflow: hidden;
+  .cover { flex: none; width: 72px; height: 50px; border-radius: var(--mc-r-sm); overflow: hidden;
            display: grid; place-items: center; background: var(--mc-inset); color: var(--mc-ink3); }
   .cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }

@@ -54,7 +54,7 @@
   }
 </script>
 
-<div class="tl mg-glass-soft">
+<div class="tl mg-panel">
   <div class="tools">
     <span class="mg-label">Timeline · <span class="mg-tnum">{tc(lay.total)}</span></span>
     <span class="sp"></span>
@@ -122,8 +122,9 @@
 </div>
 
 <style>
-  .tl { border-radius: var(--mc-r-md); padding: 10px 10px 12px; min-width: 0; }
+  .tl { padding: 10px 10px 12px; min-width: 0; }
   .tools { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; padding: 0 4px; }
+  @media (pointer: coarse) { .tools :global(.mg-btn.sm) { min-height: 44px; } .tools :global(.mg-btn.icon.sm) { min-width: 44px; } }
   .tools .sp { flex: 1; }
   .scroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 6px; }
   .inner { position: relative; height: 128px; }
@@ -133,7 +134,7 @@
   .track { position: absolute; left: 0; right: 0; top: 30px; height: 92px; }
   .clip {
     position: absolute; top: 0; height: 84px; border-radius: 10px; overflow: hidden;
-    border: 2px solid rgba(255, 255, 255, 0.14); background: var(--mc-inset); cursor: grab;
+    border: 2px solid var(--mc-line2); background: var(--mc-inset); cursor: grab;
     box-sizing: border-box; transition: border-color 0.15s, transform 0.15s;
   }
   .clip:active { cursor: grabbing; }
@@ -144,13 +145,13 @@
   .fr img { flex: 1 1 0; min-width: 0; height: 100%; object-fit: cover; opacity: 0.75; pointer-events: none; }
   .lab {
     position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 7px 5px; display: flex; flex-direction: column;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.75)); font: 500 11px/1.25 var(--mc-font); color: #fff;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.75)); font: 500 11px/1.25 var(--mc-font); color: var(--mc-ink);
   }
   .nm, .du { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .du { color: rgba(255, 255, 255, 0.7); font-size: 10.5px; }
+  .du { color: var(--mc-ink2); font-size: 10.5px; }
   .badge {
     position: absolute; top: 5px; left: 5px; padding: 2px 5px; border-radius: 5px;
-    background: rgba(167, 139, 250, 0.85); color: #fff; font: 600 9.5px/1 var(--mc-font);
+    background: var(--mc-mgr); color: #1a1033; font: 600 9.5px/1 var(--mc-font);
   }
   .mv { position: absolute; top: 4px; right: 4px; display: flex; gap: 3px; }
   .tr {
@@ -158,6 +159,6 @@
     background: repeating-linear-gradient(135deg, rgba(62, 207, 142, 0.7) 0 4px, rgba(62, 207, 142, 0.25) 4px 8px);
     border-radius: 6px;
   }
-  .ph { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; z-index: 4; pointer-events: none; }
-  .ph::before { content: ''; position: absolute; top: 0; left: -5px; border: 6px solid transparent; border-top-color: #fff; }
+  .ph { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--mc-ink); z-index: 4; pointer-events: none; }
+  .ph::before { content: ''; position: absolute; top: 0; left: -5px; border: 6px solid transparent; border-top-color: var(--mc-ink); }
 </style>

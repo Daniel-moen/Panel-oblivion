@@ -8,6 +8,7 @@
   import { onMount } from 'svelte';
   import { say } from '$lib/media.svelte.js';
   import Icon from '$lib/components/glass/Icon.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import SettingsCard from './SettingsCard.svelte';
   import { settingsApi as api } from './api.js';
 
@@ -103,12 +104,12 @@
 
 <SettingsCard label="AI" sub="Administrators only. Keys are stored on the server and never shown again — only their last four characters.">
   {#if err}
-    <p class="note">{err}</p>
+    <div class="mg-strip crit"><span class="ic"><Icon name="alert" size={15} /></span><span>{err}</span></div>
   {:else if !ai || !img}
-    <p class="note">Loading…</p>
+    <Skeleton h="7rem" r="12px" />
   {:else}
     <!-- ——————————————————————————————————————————————————— Claude ——— -->
-    <div class="pane mg-glass-soft">
+    <div class="pane mg-panel">
       <div class="hd">
         <b>Claude</b>
         <span class="mg-chip {ai.ai ? 'ok' : ''}"><span class="dot"></span>{ai.ai ? 'On' : 'Off'}</span>
@@ -157,7 +158,7 @@
     </div>
 
     <!-- ————————————————————————————————————————————————— Image AI ——— -->
-    <div class="pane mg-glass-soft">
+    <div class="pane mg-panel">
       <div class="hd">
         <b>Image AI</b>
         <span class="mg-chip {img.on ? 'ok' : ''}"><span class="dot"></span>{img.on ? 'On' : 'Off'}</span>

@@ -10,7 +10,7 @@
      sentences themselves as ghost rows, every one of them a seek. */
   import { onMount } from 'svelte';
   import { flip } from 'svelte/animate';
-  import { fly } from 'svelte/transition';
+  import { rise } from '$lib/motion.js';
   import { mstate, boot, openClip, closeClip, stepClip, labelColor } from '$lib/media.svelte.js';
   import { media, thumbUrl, fmtDuration } from '$lib/media.js';
   import ClipDrawer from '$lib/components/ClipDrawer.svelte';
@@ -79,7 +79,7 @@
   <h2 class="mg-h2">Search</h2>
   {#if ran && !busy}
     <span class="mg-count">
-      {results.length} clip{results.length === 1 ? '' : 's'}{#if totalHits} · {totalHits} spoken match{totalHits === 1 ? '' : 'es'}{/if}
+      {results.length} clip{results.length === 1 ? '' : 's'}{#if totalHits}{' · '}{totalHits} spoken match{totalHits === 1 ? '' : 'es'}{/if}
     </span>
   {/if}
 </div>
@@ -114,6 +114,9 @@
       </div>
     {/each}
   </div>
+{:else if mstate.error}
+  <Empty icon="alert" title="The media library is offline"
+         hint="The media backend could not be reached. The notice above has the detail." />
 {:else if !q.trim()}
   <Empty icon="search" title="Search transcripts"
          hint="Every transcript in the library is searched as you type — no button, no waiting." />
@@ -124,8 +127,8 @@
   <div class="rows">
     {#each results as r, i (r.id)}
       <article class="mg-card row" animate:flip={{ duration: 300 }}
-               in:fly={{ y: 12, duration: 320, delay: Math.min(i * 35, 350) }}>
-        <button class="th mg-glass-soft" onclick={() => playFrom(r, 0)}
+               in:rise={{ i }}>
+        <button class="th mg-tile" onclick={() => playFrom(r, 0)}
                 aria-label="Open {r.filename}">
           {#if thumbUrl(r)}
             <img src={thumbUrl(r)} alt="" loading="lazy" />
@@ -152,7 +155,7 @@
             <ul class="quotes">
               {#each r.search_matches.slice(0, 4) as m (m.start)}
                 <li>
-                  <button class="tc mg-pill" onclick={() => playFrom(r, m.start)}
+                  <button class="tc" onclick={() => playFrom(r, m.start)}
                           title="Play from {fmtDuration(m.start)}">
                     <Icon name="play" size={10} stroke={2} />
                     <span class="mg-tnum">{fmtDuration(m.start)}</span>
@@ -181,10 +184,10 @@
 {/if}
 
 <style>
-  /* Chrome draws its own × inside a search field; this one has a pill button. */
+  /* Chrome draws its own × inside a search field; this one has its own button. */
   input[type='search']::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 
-  /* ———————————————————————————————————————————————————— the big pill ——— */
+  /* ———————————————————————————————————————————————— the big search field ——— */
   .find { max-width: 620px; margin: 0 auto 20px; }
   .big .mg-input { height: 48px; padding-left: 46px; padding-right: 50px; font-size: 15px; }
   .big > .ic { left: 17px; }
@@ -198,15 +201,15 @@
 
   .th {
     position: relative; flex: none; width: 96px; height: 54px; padding: 0;
-    border-radius: 12px; overflow: hidden; cursor: pointer;
-    transition: border-color 0.18s;
+    border-radius: var(--mc-r-sm); overflow: hidden; cursor: pointer;
+    transition: border-color var(--mc-t-fast);
   }
   .th:hover { border-color: var(--mc-line2); }
   .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .noimg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--mc-ink3); }
   .dur {
     position: absolute; right: 4px; bottom: 4px; padding: 1px 4px; border-radius: 5px;
-    background: rgba(0, 0, 0, 0.72); color: #fff; font: 600 10px/1.5 var(--mc-font);
+    background: var(--mc-inset); color: var(--mc-ink); font: 500 10px/1.5 var(--mc-mono);
   }
 
   .body { min-width: 0; flex: 1; }
@@ -222,7 +225,7 @@
   .quotes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
   .quotes li {
     display: flex; gap: 9px; align-items: flex-start;
-    padding: 7px 10px; border-radius: 11px; background: rgba(255, 255, 255, 0.04);
+    padding: 7px 10px; border-radius: var(--mc-r-md); background: var(--mc-raised);
     font: 400 12.5px/1.55 var(--mc-font); color: var(--mc-ink2);
   }
   .quotes q { quotes: '“' '”'; overflow-wrap: anywhere; min-width: 0; }
@@ -230,15 +233,15 @@
 
   .tc {
     display: inline-flex; align-items: center; gap: 4px; flex: none; height: 32px;
-    padding: 0 10px; border: 1px solid var(--mc-line); background: var(--mc-raised);
+    padding: 0 10px; border: 1px solid var(--mc-line); border-radius: var(--mc-r-sm); background: var(--mc-surface);
     color: var(--mc-ink2); font: 500 11.5px/1 var(--mc-font); cursor: pointer;
-    transition: background 0.18s, border-color 0.18s, color 0.18s;
+    transition: background var(--mc-t-fast), border-color var(--mc-t-fast), color var(--mc-t-fast), transform 120ms var(--mc-ease);
   }
-  .tc:hover { background: rgba(62, 207, 142, 0.12); border-color: rgba(62, 207, 142, 0.4); color: var(--mc-accent); }
+  .tc:hover { background: var(--mc-ok-soft); border-color: var(--mc-ok-line); color: var(--mc-accent); }
   .tc:active { transform: scale(0.97); }
 
   mark {
-    background: rgba(62, 207, 142, 0.3); color: #5fe3a8;
+    background: var(--mc-ok-line); color: var(--mc-accent-bright);
     border-radius: 3px; padding: 0 0.12em; font-weight: 600;
   }
 
@@ -251,8 +254,11 @@
   }
   @media (max-width: 620px) {
     .row { padding: 11px; gap: 11px; }
-    .tc { height: 40px; padding: 0 12px; }
+    .tc { height: 44px; padding: 0 12px; }
     .quotes li { flex-direction: column; gap: 6px; }
+  }
+  @media (pointer: coarse) {
+    .big > .clear { width: 44px; height: 44px; right: 2px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .tc:active { transform: none; }

@@ -24,6 +24,7 @@
   let who = $state(null);
   let shares = $state([]);
   let loading = $state(true);
+  let err = $state(null);
   let folders = $state([]);
   let shoots = $state([]);
   let watermarks = $state([]);
@@ -76,8 +77,9 @@
   }
 
   async function load() {
+    err = null;
     try { shares = (await portals.list()) || []; }
-    catch (e) { say(e.message, 'error'); }
+    catch (e) { err = e.message; say(e.message, 'error'); }
     finally { loading = false; }
   }
 
@@ -137,6 +139,12 @@
 {:else if !canShares}
   <Empty icon="lock" title="Portals aren't part of your role"
          hint="Making and reading client links needs the Editor or Admin media role. Roles come from the dashboard's People page." />
+{:else if err && !shares.length}
+  <div class="mg-strip crit">
+    <span class="ic"><Icon name="alert" size={15} /></span>
+    <span><b>Couldn't load the portals</b> — {err}</span>
+    <button class="mg-btn secondary sm retry" onclick={load}><Icon name="refresh" size={13} />Retry</button>
+  </div>
 {:else if !shares.length}
   <Empty icon="share" title="No portals yet"
          hint="Send a set for the client to watch, pick and comment on; or a receiving link they can drop their own files into. What they do comes back here.">
@@ -158,11 +166,11 @@
   </div>
 
   {#if !listed.length}
-    <p class="none">
-      {show === 'done' ? 'No client has pressed “I’m done” yet.'
-       : show === 'inbox' ? 'Nothing waiting to be filed.'
-       : 'No live portals — switch to All to see the ones that are off or expired.'}
-    </p>
+    <Empty icon={show === 'inbox' ? 'inbox' : show === 'done' ? 'check' : 'share'}
+           title={show === 'done' ? 'Nobody has said done' : show === 'inbox' ? 'Nothing to file' : 'No live portals'}
+           hint={show === 'done' ? 'No client has pressed “I’m done” yet.'
+                : show === 'inbox' ? 'Nothing waiting to be filed.'
+                : 'Switch to All to see the ones that are off or expired.'} />
   {:else}
     <div class="list">
       {#each listed as s, i (s.id)}
@@ -177,5 +185,5 @@
 <style>
   .list { display: flex; flex-direction: column; gap: 12px; }
   .filter { overflow-x: auto; margin-bottom: 12px; max-width: 100%; }
-  .none { margin: 8px 2px; font: 400 13px/1.5 var(--mc-font); color: var(--mc-ink3); }
+  .retry { margin-left: auto; align-self: center; }
 </style>

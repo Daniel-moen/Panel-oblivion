@@ -133,11 +133,12 @@
   .rooms b { color: var(--mc-ink); font-weight: 600; }
   .x { border: 0; background: none; color: var(--mc-ink3); padding: 4px; margin: -4px -6px -4px 0; cursor: pointer; display: grid; place-items: center; }
   .x:hover { color: var(--mc-crit); }
+  @media (pointer: coarse) { .x { min-width: 32px; min-height: 32px; } }
   .add { display: flex; gap: 8px; }
   .add .mg-input { flex: 1; min-width: 0; }
   .photos { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); margin-top: 12px; }
   figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
-  .im { display: block; aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden; background: var(--mc-inset); }
+  .im { display: block; aspect-ratio: 3 / 2; border-radius: var(--mc-r-sm); overflow: hidden; background: var(--mc-inset); }
   .im img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .mg-select { display: block; }
   .mg-select select { height: 36px; font-size: 12.5px; }

@@ -4,7 +4,7 @@
      project filter — a stage IS a folder, so the folder filter already does
      the work. */
   import { onMount } from 'svelte';
-  import { fly } from 'svelte/transition';
+  import { rise } from '$lib/motion.js';
   import { media } from '$lib/media.js';
   import { say, can, CAP } from '$lib/media.svelte.js';
   import Sheet from '$lib/components/glass/Sheet.svelte';
@@ -44,9 +44,9 @@
   const total = (p) => Object.values(p.stages || {}).reduce((a, s) => a + (s.count || 0), 0);
 </script>
 
-<section class="projects">
-  <div class="mg-row rh">
-    <h3 class="mg-h2 sm">Projects</h3>
+<section class="mg-section projects">
+  <div class="head">
+    <h2>Projects</h2>
     {#if projects?.length}<span class="mg-count">{projects.length}</span>{/if}
     <div class="mg-actions">
       {#if can(CAP.ORGANISE)}
@@ -57,48 +57,50 @@
     </div>
   </div>
 
-  {#if projects == null}
-    <div class="list">
-      {#each [0, 1] as i (i)}<div class="mg-glass-soft card"><Skeleton h="44px" delay={i * 80} /></div>{/each}
-    </div>
-  {:else if !projects.length}
-    <p class="none">
-      No projects yet. A project is one folder per shoot with 01 Originals → 05 Exports inside, so each
-      step's output lands in the right place. Start one here, or select clips in Browse and choose
-      “Add to project”.
-    </p>
-  {:else}
-    <div class="list">
-      {#each shown as p, i (p.id)}
-        <article class="mg-glass-soft card" in:fly={{ y: 8, duration: 260, delay: i * 40 }}>
-          <div class="top">
-            <b title={p.path}>{p.name}</b>
-            <span class="mg-tnum">{total(p)} file{total(p) === 1 ? '' : 's'}</span>
-          </div>
-          <div class="stages mg-noscroll">
-            {#each stages as s (s.key)}
-              {@const st = p.stages?.[s.key]}
-              {#if st && !p.skipped?.includes(s.key)}
-                {#if st.folder_id}
-                  <a class="mg-chip st" class:has={st.count} href="/media/browse?folder={st.folder_id}"
-                     title={s.hint}>
-                    {st.name}<i class="mg-tnum">{st.count}</i>
-                  </a>
-                {:else}
-                  <span class="mg-chip st" title="Folder not indexed yet">{st.name}<i>–</i></span>
+  <div class="body">
+    {#if projects == null}
+      <div class="list">
+        {#each [0, 1] as i (i)}<div class="mg-tile card"><Skeleton h="52px" delay={i * 80} /></div>{/each}
+      </div>
+    {:else if !projects.length}
+      <p class="mg-hint none">
+        No projects yet. A project is one folder per shoot with 01 Originals → 05 Exports inside, so each
+        step's output lands in the right place. Start one here, or select clips in Browse and choose
+        “Add to project”.
+      </p>
+    {:else}
+      <div class="list">
+        {#each shown as p, i (p.id)}
+          <article class="mg-tile card" in:rise={{ i }}>
+            <div class="top">
+              <b title={p.path}>{p.name}</b>
+              <span class="mg-tnum">{total(p)} file{total(p) === 1 ? '' : 's'}</span>
+            </div>
+            <div class="stages mg-noscroll">
+              {#each stages as s (s.key)}
+                {@const st = p.stages?.[s.key]}
+                {#if st && !p.skipped?.includes(s.key)}
+                  {#if st.folder_id}
+                    <a class="mg-chip st" class:has={st.count} href="/media/browse?folder={st.folder_id}"
+                       title={s.hint}>
+                      {st.name}<i class="mg-tnum">{st.count}</i>
+                    </a>
+                  {:else}
+                    <span class="mg-chip st" title="Folder not indexed yet">{st.name}<i>–</i></span>
+                  {/if}
                 {/if}
-              {/if}
-            {/each}
-          </div>
-        </article>
-      {/each}
-    </div>
-    {#if projects.length > 4}
-      <button class="mg-btn ghost sm more" onclick={() => (showAll = !showAll)}>
-        {showAll ? 'Show fewer' : `Show all ${projects.length}`}
-      </button>
+              {/each}
+            </div>
+          </article>
+        {/each}
+      </div>
+      {#if projects.length > 4}
+        <button class="mg-btn ghost sm more" onclick={() => (showAll = !showAll)}>
+          {showAll ? 'Show fewer' : `Show all ${projects.length}`}
+        </button>
+      {/if}
     {/if}
-  {/if}
+  </div>
 </section>
 
 <Sheet open={making} title="New project" size="sm" onclose={() => (making = false)}>
@@ -121,9 +123,7 @@
 </Sheet>
 
 <style>
-  .projects { margin-top: 26px; }
-  .rh { margin-bottom: 10px; }
-  .mg-h2.sm { font-size: 15px; }
+  .projects { margin-top: 12px; }
   .list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
   .card { border-radius: var(--mc-r-md); padding: 12px 14px; min-width: 0; }
   .top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
@@ -136,9 +136,9 @@
   a.st:hover { color: var(--mc-ink); border-color: var(--mc-line2); }
   .st i { font-style: normal; font-size: 11px; color: var(--mc-ink3); }
   .st.has i { color: var(--mc-accent); }
-  .none { margin: 0; font-size: 13px; line-height: 1.55; color: var(--mc-ink3); max-width: 680px; }
+  .none { max-width: 680px; }
   .more { margin-top: 8px; }
   .fld { display: flex; flex-direction: column; gap: 6px; }
   .hint { margin: 12px 0 0; font: 400 12px/1.5 var(--mc-font); color: var(--mc-ink3); }
-  @media (pointer: coarse) { .st { min-height: 40px; } }
+  @media (pointer: coarse) { .st { min-height: 44px; } }
 </style>

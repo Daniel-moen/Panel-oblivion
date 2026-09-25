@@ -125,7 +125,7 @@
   h3 { margin: 0; flex: 1; display: flex; align-items: center; gap: 7px; font: 600 14px/1.3 var(--mc-font); color: var(--mc-ink); }
   .fl { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
   .fl li { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 4px 0 10px;
-           border-radius: 12px; background: rgba(255, 255, 255, 0.03); color: var(--mc-ink3); }
+           border-radius: var(--mc-r-md); background: var(--mc-raised); border: 1px solid var(--mc-line); color: var(--mc-ink3); }
   .nm { flex: 1; min-width: 0; font: 500 13px/1.3 var(--mc-font); color: var(--mc-ink);
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .none { margin: 0 0 12px; font: 400 12.5px/1.5 var(--mc-font); color: var(--mc-ink3); }

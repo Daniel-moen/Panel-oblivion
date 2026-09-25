@@ -13,6 +13,7 @@
   import Sheet from '$lib/components/glass/Sheet.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
   import Skeleton from '$lib/components/Skeleton.svelte';
+  import Empty from '$lib/components/glass/Empty.svelte';
 
   let { compact = false } = $props();
 
@@ -107,7 +108,7 @@
       <div class="sk"><Skeleton h="14px" w="80%" delay={i * 60} /><Skeleton h="11px" w="40%" delay={i * 60} /></div>
     {/each}
   {:else if !feed?.events?.length}
-    <p class="none">Nothing yet. Notes, client picks, comments and uploads show up here.</p>
+    <Empty icon="bell" title="No activity yet" hint="Notes, client picks, comments and uploads show up here." />
   {:else}
     <ul class="list">
       {#each feed.events as e (e.id)}
@@ -131,24 +132,24 @@
   .badge {
     position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px;
     padding: 0 5px; border-radius: 9999px; display: grid; place-items: center;
-    background: var(--mc-crit); color: #fff; font: 700 10.5px/1 var(--mc-font);
+    background: var(--mc-crit); color: var(--mc-ink); font: 700 10.5px/1 var(--mc-font);
     box-shadow: 0 0 0 2px var(--mc-bg);
   }
   @media (pointer: coarse) {
-    .bell.icon { width: 40px; height: 40px; }
+    .bell { height: 44px; }
+    .bell.icon { width: 44px; }
   }
 
   .sk { display: grid; gap: 6px; padding: 10px 2px; }
-  .none { margin: 0; padding: 14px 2px; font-size: 13px; color: var(--mc-ink3); }
 
   .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start;
-       padding: 8px 6px; border-radius: 12px; position: relative; }
-  li.unread { background: rgba(62, 207, 142, 0.07); }
+       padding: 8px 6px; border-radius: var(--mc-r-md); position: relative; }
+  li.unread { background: var(--mc-ok-soft); }
   li.unread::after { content: ''; position: absolute; right: 10px; top: 14px; width: 7px; height: 7px;
                      border-radius: 50%; background: var(--mc-accent); }
-  .ic { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center;
-        background: rgba(255, 255, 255, 0.07); border: 1px solid var(--mc-line); color: var(--mc-ink2); }
+  .ic { width: 30px; height: 30px; border-radius: var(--mc-r-sm); display: grid; place-items: center;
+        background: var(--mc-surface); border: 1px solid var(--mc-line); color: var(--mc-ink2); }
   .body { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-right: 14px;
           color: inherit; text-decoration: none; }
   a.body:hover b { color: var(--mc-accent); }

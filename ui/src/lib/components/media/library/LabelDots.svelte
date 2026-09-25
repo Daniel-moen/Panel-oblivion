@@ -39,18 +39,18 @@
   .d {
     width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%;
     background: none; cursor: pointer; display: grid; place-items: center;
-    color: var(--mc-ink3); transition: background 0.18s;
+    color: var(--mc-ink3); transition: background var(--mc-t-fast);
   }
-  .d:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); }
+  .d:hover:not(:disabled) { background: var(--mc-line); }
   .d:disabled { cursor: default; opacity: 0.5; }
   .d i {
     width: 14px; height: 14px; border-radius: 50%; background: var(--c);
-    box-shadow: 0 0 0 0 transparent; transition: box-shadow 0.2s, transform 0.2s;
+    box-shadow: 0 0 0 0 transparent; transition: box-shadow var(--mc-t-fast), transform var(--mc-t-fast);
   }
   .d.on i { box-shadow: 0 0 0 2px var(--mc-bg), 0 0 0 4px var(--c); transform: scale(1.05); }
-  .d.none.on { color: var(--mc-ink); background: rgba(255, 255, 255, 0.08); }
+  .d.none.on { color: var(--mc-ink); background: var(--mc-line2); }
   .d:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 1px; }
   @media (pointer: coarse) {
-    .d { width: 40px; height: 40px; }
+    .d { width: 44px; height: 44px; }
   }
 </style>

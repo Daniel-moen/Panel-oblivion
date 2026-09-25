@@ -144,10 +144,11 @@
   .exs { display: flex; gap: 8px; flex-wrap: wrap; }
   figure { position: relative; margin: 0; width: 132px; aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden; background: var(--mc-inset); }
   figure img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .x { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%; border: 0;
-       background: rgba(0, 0, 0, 0.6); color: #fff; display: grid; place-items: center; cursor: pointer; }
+  .x { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; border-radius: 50%;
+       border: 1px solid var(--mc-line2); background: var(--mc-raised); color: var(--mc-ink); box-shadow: var(--mc-sh-1); display: grid; place-items: center; cursor: pointer; }
   .add { width: 132px; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px dashed var(--mc-line2); background: var(--mc-raised);
          color: var(--mc-ink2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
          font: 500 12px/1 var(--mc-font); cursor: pointer; }
-  .add:hover { background: var(--mc-line); color: var(--mc-ink); }
+  .add:hover { border-color: var(--mc-line3); color: var(--mc-ink); }
+  @media (pointer: coarse) { .sw { min-height: 44px; align-items: center; } .sw input { margin-top: 0; } .x { width: 36px; height: 36px; } }
 </style>

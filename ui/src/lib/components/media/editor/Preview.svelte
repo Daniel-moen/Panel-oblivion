@@ -14,6 +14,10 @@
        brush  paint a stroke; onstroke(points, radius) on release, both 0..1
               of the displayed frame (radius as a fraction of its width)
        point  a click target: onpoint(u, v) */
+  import Empty from '$lib/components/glass/Empty.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
+  import { fade } from '$lib/motion.js';
+
   let {
     src, before = null, showBefore = false, busy = false,
     mode = 'view', crop = $bindable([0, 0, 1, 1]), cropAspect = 0,
@@ -183,15 +187,16 @@
       {/if}
     </div>
   {:else if failed}
-    <p class="msg">The preview could not be rendered.</p>
+    <Empty icon="image" title="The preview could not be rendered"
+           hint="The server did not return a picture for this edit. Try another tool, or reload the photo." />
   {:else}
-    <span class="mg-spin big" aria-label="Loading"></span>
+    <div class="skel" aria-busy="true" aria-label="Loading"><Skeleton h="100%" r="var(--mc-r-md)" /></div>
   {/if}
 
   {#if (loading || busy) && shown}
-    <span class="rend mg-chip"><span class="mg-spin"></span>Rendering</span>
+    <span class="rend mg-chip" transition:fade={{ duration: 150 }}><span class="mg-spin"></span>Rendering</span>
   {/if}
-  {#if showBefore}<span class="tag mg-chip">Before</span>{/if}
+  {#if showBefore}<span class="tag mg-chip" transition:fade={{ duration: 150 }}>Before</span>{/if}
 </div>
 
 <style>
@@ -219,7 +224,7 @@
   .g3, .g4 { left: 0; right: 0; height: 1px; }
   .g3 { top: 33.33%; } .g4 { top: 66.66%; }
   .h { position: absolute; width: 28px; height: 28px; touch-action: none; }
-  .h::after { content: ''; position: absolute; inset: 9px; background: #fff; border-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+  .h::after { content: ''; position: absolute; inset: 9px; background: var(--mc-ink); border-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
   .tl { left: -14px; top: -14px; cursor: nwse-resize; }
   .tr { right: -14px; top: -14px; cursor: nesw-resize; }
   .bl { left: -14px; bottom: -14px; cursor: nesw-resize; }
@@ -231,6 +236,15 @@
   .rend { position: absolute; top: 10px; right: 10px; gap: 8px; font-size: 11.5px; }
   .rend .mg-spin { width: 11px; height: 11px; }
   .tag { position: absolute; top: 10px; left: 10px; }
-  .big { width: 28px; height: 28px; }
-  .msg { color: var(--mc-ink3); font-size: 13px; }
+  .rend, .tag { background: var(--mc-raised); border-color: var(--mc-line2); color: var(--mc-ink); box-shadow: var(--mc-sh-2); }
+  .skel { position: absolute; inset: 0; display: flex; }
+  .skel > :global(.mg-skel) { flex: 1; }
+  /* crop handles: a 44px target for a finger */
+  @media (pointer: coarse) {
+    .h { width: 44px; height: 44px; }
+    .h::after { inset: 16px; }
+    .tl, .bl, .l { left: -22px; } .tr, .br, .r { right: -22px; }
+    .tl, .tr, .t { top: -22px; } .bl, .br, .b { bottom: -22px; }
+    .t, .b { margin-left: -22px; } .l, .r { margin-top: -22px; }
+  }
 </style>

@@ -194,7 +194,7 @@
   .src { margin-left: auto; font: 400 11.5px/1 var(--mc-font); color: var(--mc-ink3); }
   h4.mg-label { margin: 16px 0 6px; }
   .hist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-  .hist li { padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.03); }
+  .hist li { padding: 8px 10px; border-radius: var(--mc-r-md); background: var(--mc-raised); border: 1px solid var(--mc-line); }
   .meta { display: flex; align-items: center; gap: 8px; }
   .t { font: 400 11.5px/1 var(--mc-font); color: var(--mc-ink3); }
   .sp { flex: 1; }

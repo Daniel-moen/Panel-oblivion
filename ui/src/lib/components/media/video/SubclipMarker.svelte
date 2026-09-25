@@ -18,6 +18,7 @@
   import Trimmer from './Trimmer.svelte';
   import Seg from '$lib/components/glass/Seg.svelte';
   import Empty from '$lib/components/glass/Empty.svelte';
+  import Skeleton from '$lib/components/Skeleton.svelte';
   import Icon from '$lib/components/glass/Icon.svelte';
 
   let { videoId, caps = new Set() } = $props();
@@ -143,7 +144,13 @@
     {#snippet children()}<a class="mg-btn secondary sm" href="/media/video"><Icon name="arrowLeft" size={14} />Video editor</a>{/snippet}
   </Empty>
 {:else if !video}
-  <p class="loading">Opening the clip…</p>
+  <div class="loading" aria-busy="true" aria-label="Opening the clip">
+    <Skeleton h="24px" w="min(320px, 70%)" />
+    <div class="lay">
+      <div class="mg-panel mark"><Skeleton h="240px" r="12px" /><Skeleton h="56px" r="10px" delay={80} /></div>
+      <div class="mg-panel list"><Skeleton h="16px" w="40%" delay={120} /><Skeleton lines={4} delay={120} /></div>
+    </div>
+  </div>
 {:else}
   <div class="mg-row">
     <a class="mg-btn ghost icon" href="/media/video" aria-label="Video editor" title="Video editor"><Icon name="arrowLeft" size={16} /></a>
@@ -159,7 +166,7 @@
   </div>
 
   <div class="lay">
-    <div class="mark mg-glass-soft">
+    <div class="mark mg-panel">
       <Trimmer {video} {inPt} {outPt} {fps} {ranges} onchange={(a, b) => { inPt = a; outPt = b; }} />
       <div class="save">
         <input class="mg-input" bind:value={name} maxlength="200" placeholder="Name this range (optional)" aria-label="Range name" />
@@ -179,7 +186,7 @@
       <p class="hint">Drag the green handles or press <kbd>I</kbd> / <kbd>O</kbd> at the playhead. Purple bands are ranges you've kept.</p>
     </div>
 
-    <div class="list mg-glass-soft">
+    <div class="list mg-panel">
       <div class="lh">
         <span class="mg-label">Kept ranges · {subs.length}</span>
         <span class="sp"></span>
@@ -266,24 +273,24 @@
 {/if}
 
 <style>
-  .loading { color: var(--mc-ink3); font-size: 13px; }
+  .loading { display: flex; flex-direction: column; gap: 14px; }
   .ttl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
   .lay { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-  .mark, .list { border-radius: var(--mc-r-md); padding: 12px 14px 14px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .mark, .list { padding: 12px 14px 14px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
   .save { display: flex; gap: 8px; flex-wrap: wrap; }
   .save .mg-input { flex: 1 1 200px; min-width: 0; }
   .hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--mc-ink3); }
   .hint.warn { color: var(--mc-warn); }
-  kbd { font: 600 11px/1 var(--mc-mono); padding: 2px 5px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); color: var(--mc-ink2); }
+  kbd { font: 600 11px/1 var(--mc-mono); padding: 2px 5px; border-radius: 4px; background: var(--mc-raised); border: 1px solid var(--mc-line2); color: var(--mc-ink2); }
   .lh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .lh .sp, .bulk .sp { flex: 1; }
   .rows { display: flex; flex-direction: column; gap: 6px; }
   .r {
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px; border-radius: 12px;
-    border: 1px solid var(--mc-line); background: rgba(255, 255, 255, 0.03);
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px; border-radius: var(--mc-r-md);
+    border: 1px solid var(--mc-line); background: var(--mc-raised);
   }
-  .r.on { border-color: var(--mc-accent); }
-  .pk { display: grid; place-items: center; width: 36px; height: 40px; cursor: pointer; }
+  .r.on { border-color: var(--mc-ok-line); background: var(--mc-ok-soft); }
+  .pk { display: grid; place-items: center; width: 40px; height: 44px; cursor: pointer; }
   .pk input { width: 18px; height: 18px; accent-color: var(--mc-accent); }
   .info { flex: 1 1 160px; min-width: 0; display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: var(--mc-ink2); }
   .info img { width: 64px; height: 36px; object-fit: cover; border-radius: 6px; background: var(--mc-inset); flex: none; }
@@ -296,5 +303,9 @@
   .jh b { font-size: 13px; color: var(--mc-ink); }
   .pc { margin-left: auto; font-size: 12.5px; color: var(--mc-ink2); }
   .err { margin: 0; width: 100%; max-height: 100px; overflow: auto; white-space: pre-wrap; font: 11px/1.45 var(--mc-mono); color: var(--mc-crit); }
+  @media (pointer: coarse) {
+    .lay :global(.mg-btn.sm), .lay :global(button.mg-chip) { min-height: 44px; }
+    .lay :global(.mg-btn.icon.sm) { min-width: 44px; }
+  }
   @media (max-width: 900px) { .lay { grid-template-columns: minmax(0, 1fr); } }
 </style>
