@@ -40,7 +40,8 @@
      to the engine, which is the one thing that is true on every page. */
   const status = $derived(shell.status || engineStatus(app.status));
   const crawling = $derived(!!app.status.running);
-  const hot = $derived(app.prospects.reduce((n, r) => n + (r.tier === 'hot' ? 1 : 0), 0));
+  /* From /api/stats, so no page has to download the whole list for it. */
+  const hot = $derived(app.stats?.hot ?? 0);
   const badge = $derived(chatBadge());
 
   /* ——— the clock: browser locale, 24-hour, refreshed on the minute ——— */

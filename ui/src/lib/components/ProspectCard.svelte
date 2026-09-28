@@ -33,7 +33,7 @@
          onclick={open} onkeydown={(e) => e.key === 'Enter' && open()}
          role="button" tabindex="0" data-prospect={r.listing_key}>
   <div class="ph">
-    <Photo {r} alt={r.title || ''} />
+    <Photo {r} w={320} alt={r.title || ''} />
     {#if !rent}
       <div class="over">
         {#if r.tier}<span class="tier {r.tier}">{r.tier}</span>{:else}<span></span>{/if}

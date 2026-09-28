@@ -103,11 +103,23 @@ export async function setDealType(v) {
    still on the wire rides the same request instead of starting another. */
 let prospectsPending = null;
 export function ensureProspects() {
-  if (app.loaded) return Promise.resolve();
+  if (app.loaded && !stale) return Promise.resolve();
+  stale = false;
   if (!prospectsPending) {
     prospectsPending = loadProspects().finally(() => (prospectsPending = null));
   }
   return prospectsPending;
+}
+
+/* How many mounted pages actually show the list. The poll re-downloads it
+   only while one does; otherwise a finished refresh is just marked stale and
+   the next page that shows the list revalidates it (a 304 when unchanged). */
+let viewers = 0;
+let stale = false;
+export function watchProspects() {
+  viewers++;
+  ensureProspects();
+  return () => { viewers--; };
 }
 
 /* ------------------------------------------------------------- polling --- */
@@ -123,6 +135,19 @@ let live = false;
 let timer = null;
 let ticking = false;
 let lastHeavy = 0;
+let lastList = 0;
+/* The list is ~2 MB even compressed and the server rebuilds it every 30 s
+   during a crawl, so a crawl-long refresh is capped at once a minute. */
+const LIST_EVERY_MS = 60000;
+
+function refreshList(force = false) {
+  if (!app.loaded) return;
+  const now = Date.now();
+  if (!force && now - lastList < LIST_EVERY_MS) return;
+  lastList = now;
+  if (viewers > 0) loadProspects();
+  else stale = true;
+}
 let wasActive = false;
 
 /* One status read. Callers go through tick(), which keeps these from
@@ -139,17 +164,17 @@ async function pollOnce() {
   } catch { /* ditto */ }
   active = active || anyBusy();
 
-  /* Only refresh the list if something already wanted it: re-downloading
-     the whole book behind /media or /leads is exactly the cost we avoid by
-     not loading it on boot. Stats are small, so they refresh regardless. */
+  /* Only refresh the list while a page is showing it: re-downloading the
+     whole book behind /media or /leads is exactly the cost we avoid by not
+     loading it on boot. Stats are small, so they refresh regardless. */
   const now = Date.now();
   if (active && now - lastHeavy > 5000) {
     lastHeavy = now;
-    if (app.loaded) loadProspects();
+    refreshList();
     loadStats();
   } else if (!active && wasActive) {
     // job just finished — one final refresh so the list settles
-    if (app.loaded) loadProspects();
+    refreshList(true);
     loadStats();
   }
   wasActive = active;

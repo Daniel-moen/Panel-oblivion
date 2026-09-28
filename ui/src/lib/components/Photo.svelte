@@ -1,11 +1,13 @@
 <script>
   import { photoSrc } from '$lib/format.js';
 
-  /** r: prospect row · fills its parent; parent sets the box size */
-  let { r, alt = '', eager = false } = $props();
+  /** r: prospect row · fills its parent; parent sets the box size
+      w: the box's width in CSS px — pass it for small boxes so a downsized
+         copy loads instead of the portal's full-size original */
+  let { r, alt = '', eager = false, w = null } = $props();
 
   let failedKey = $state(null);
-  const src = $derived(photoSrc(r));
+  const src = $derived(photoSrc(r, w));
   const show = $derived(src && failedKey !== r.listing_key);
 </script>
 

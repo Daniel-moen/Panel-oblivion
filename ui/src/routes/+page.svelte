@@ -25,7 +25,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { api } from '$lib/api.js';
-  import { app, toast, ensureProspects } from '$lib/state.svelte.js';
+  import { app, toast } from '$lib/state.svelte.js';
   import { slots, chrome, shell, openQuickLog, stripWanted } from '$lib/shell.svelte.js';
   import { chat, toggleChat, chatBadge } from '$lib/chat.svelte.js';
   import { me } from '$lib/me.svelte.js';
@@ -112,9 +112,6 @@
     }, 5000);
     const onVis = () => { if (document.hidden) return; tick(); if (Date.now() - homeAt > 5000) loadHome(); };
     document.addEventListener('visibilitychange', onVis);
-    /* Nothing here waits on the prospect list any more, but it is the most
-       likely next tap, so it is warmed once the greeting is up. */
-    const t2 = setTimeout(ensureProspects, 600);
     const t4 = setTimeout(() => (meWaited = true), 1200);
     const stopIdle = quietChrome();
     /* The greeting, sentence and pill rise in once, on the first paint. */
@@ -122,7 +119,7 @@
     const t5 = setTimeout(() => (firstPaint = false), 900);
     const stopRise = riseOverview();
     return () => {
-      clearTimeout(t0); clearInterval(t); clearInterval(t3); clearTimeout(t2); clearTimeout(t4); clearTimeout(t5);
+      clearTimeout(t0); clearInterval(t); clearInterval(t3); clearTimeout(t4); clearTimeout(t5);
       document.removeEventListener('visibilitychange', onVis);
       stopIdle();
       stopRise();
@@ -238,8 +235,7 @@
   }
 
   const stats = $derived(home?.stats ?? app.stats ?? null);
-  const listHot = $derived(app.prospects.filter((r) => r.tier === 'hot').length);
-  const hot = $derived(home?.hot ?? (homeFailed && app.loaded ? listHot : null));
+  const hot = $derived(home?.hot ?? (homeFailed ? (app.stats?.hot ?? null) : null));
   const overdue = $derived(today ? today.overdue.length : 0);
   const dueCount = $derived(today ? today.overdue.length + today.due_today.length : null);
   const crawling = $derived(!!app.status.running);

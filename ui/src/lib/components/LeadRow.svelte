@@ -70,7 +70,7 @@
 
 <div class="lr {tone}" in:staggerIn|global={{ i }}>
   <div class="in">
-    <a class="ph" href="/leads/properties/{p.group_id}" tabindex="-1" aria-hidden="true"><Photo r={p} /></a>
+    <a class="ph" href="/leads/properties/{p.group_id}" tabindex="-1" aria-hidden="true"><Photo r={p} w={80} /></a>
     <div class="main">
       <div class="top">
         <a class="addr" href="/leads/properties/{p.group_id}">{addrOf(p)}</a>

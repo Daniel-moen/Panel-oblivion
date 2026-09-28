@@ -36,7 +36,7 @@
 <article class="pick">
   <a class="card" href={r.url} target="_blank" rel="noreferrer">
     <div class="ph">
-      <Photo {r} alt={r.title || ''} />
+      <Photo {r} w={320} alt={r.title || ''} />
       {#if pick.fit != null}
         <span class="fit {fitClass}" title="how well Agent Z rates the fit">{pick.fit}</span>
       {/if}

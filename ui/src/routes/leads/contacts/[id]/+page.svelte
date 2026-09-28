@@ -176,7 +176,7 @@
           <div class="mg-list">
             {#each p.properties as x (x.group_id)}
               <a class="mg-listrow prop" href="/leads/properties/{x.group_id}">
-                <span class="ph"><Photo r={x} /></span>
+                <span class="ph"><Photo r={x} w={80} /></span>
                 <span class="t">
                   <b>{addrOfX(x)}</b>
                   <span>{[x.suburb, x.price_zar ? fmtM(x.price_zar) : null].filter(Boolean).join(' · ')}</span>

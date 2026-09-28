@@ -67,10 +67,14 @@ export const satUrl = (lat, lng) =>
   `https://www.google.com/maps/place/${lat},${lng}/@${lat},${lng},110m/data=!3m1!1e3`;
 
 /* Hero-photo src for a prospect row; null means "no photo known". */
-export function photoSrc(r) {
-  if (r.photo_url && r.photo_url !== '-') return r.photo_url;
+/* w: the width in CSS px the photo is drawn at. Given, the server's
+   downsized WebP copy is used (/api/thumb, sized for 2x screens) instead of
+   the portal's full-size original; left out, the original. */
+export function photoSrc(r, w = null) {
   if (r.photo_url === '-' && !r.photo_key) return null;
   if (r.has_photo === false) return null;
   const key = r.photo_key || r.listing_key;
+  if (w && key) return '/api/thumb/' + encodeURIComponent(key) + '?w=' + w * 2;
+  if (r.photo_url && r.photo_url !== '-') return r.photo_url;
   return '/api/photo/' + encodeURIComponent(key);
 }

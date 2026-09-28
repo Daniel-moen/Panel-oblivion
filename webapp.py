@@ -1475,6 +1475,81 @@ def api_photo(listing_key):
     return ("", 404)
 
 
+# Card-sized copies of listing photos. Portals serve 1280 px (or original)
+# JPEGs of 200–400 KB each; a card is ~300 px wide, so the prospects grid was
+# pulling megabytes of pixels nobody sees. Each (photo, width) is fetched and
+# downsized once, kept on disk under DATA_DIR/thumbs, and served with a long
+# cache lifetime. Any failure falls back to the original via redirect, so a
+# card never loses its photo over this.
+_THUMB_DIR = os.path.join(config.DATA_DIR, "thumbs")
+_THUMB_WIDTHS = (160, 320, 640)
+_THUMB_MAX_BYTES = 15 * 1024 * 1024
+# Decoding and resizing are CPU work under the GIL; a page of 60 cards must
+# not starve the dashboard's own requests (or a crawl) while it warms.
+_thumb_gate = threading.BoundedSemaphore(3)
+
+
+def _make_thumb(url: str, width: int, path: str) -> bool:
+    import io
+
+    import requests
+    from PIL import Image, ImageOps
+
+    with requests.get(url, timeout=(5, 15), stream=True,
+                      headers={"User-Agent": "Mozilla/5.0"}) as r:
+        if r.status_code != 200:
+            return False
+        buf = io.BytesIO()
+        for chunk in r.iter_content(64 * 1024):
+            buf.write(chunk)
+            if buf.tell() > _THUMB_MAX_BYTES:
+                return False
+    buf.seek(0)
+    with Image.open(buf) as im:
+        im = ImageOps.exif_transpose(im)
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        if im.width > width:
+            im.thumbnail((width, width * 4), Image.LANCZOS)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        im.save(tmp, "WEBP", quality=72, method=4)
+    os.replace(tmp, path)
+    return True
+
+
+@app.get("/api/thumb/<path:listing_key>")
+def api_thumb(listing_key):
+    """A listing's hero photo at card size (?w=160|320|640, WebP). Same
+    lookup and ?fetch=0 meaning as /api/photo."""
+    try:
+        want = int(request.args.get("w") or 640)
+    except ValueError:
+        want = 640
+    width = next((w for w in _THUMB_WIDTHS if w >= want), _THUMB_WIDTHS[-1])
+    allow_fetch = request.args.get("fetch") != "0"
+    with db.connect() as conn:
+        url = photos.first_photo(conn, listing_key, allow_fetch=allow_fetch)
+    if not url:
+        return ("", 404)
+    if not url.startswith(("http://", "https://")):
+        return redirect(url, code=302)
+    digest = hashlib.sha1(url.encode()).hexdigest()
+    path = os.path.join(_THUMB_DIR, digest[:2], f"{digest}_{width}.webp")
+    if not os.path.exists(path):
+        try:
+            with _thumb_gate:
+                if not os.path.exists(path):
+                    if not _make_thumb(url, width, path):
+                        return redirect(url, code=302)
+        except Exception:
+            return redirect(url, code=302)
+    rv = send_from_directory(os.path.dirname(path), os.path.basename(path),
+                             mimetype="image/webp")
+    rv.headers["Cache-Control"] = "private, max-age=2592000"
+    return rv
+
+
 @app.get("/api/row/<ident>")
 def api_row(ident):
     """A tab-separated spreadsheet row for one property.
@@ -1599,8 +1674,13 @@ def _stats_dict(conn: sqlite3.Connection) -> dict:
 
 @app.get("/api/stats")
 def api_stats():
+    # `hot` rides along so the status strip can show the Hot count on every
+    # page without downloading the whole prospect list for it.
     with db.connect() as conn:
-        return jsonify(_stats_dict(conn))
+        hot = _home_hot_cached()
+        if hot is None:
+            hot = _home_hot_sql(conn)
+        return jsonify({**_stats_dict(conn), "hot": hot})
 
 
 # ---------------------------------------------------------------- /api/home

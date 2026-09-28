@@ -36,7 +36,7 @@
         <tr class="item" class:sel={r.listing_key === app.selectedKey} data-prospect={r.listing_key}
             in:staggerIn|global={{ i }}
             onclick={() => pick(r)} onkeydown={(e) => e.key === 'Enter' && pick(r)} role="button" tabindex="0">
-          <td class="td-ph"><div class="thumb"><Photo {r} /></div></td>
+          <td class="td-ph"><div class="thumb"><Photo {r} w={80} /></div></td>
           <td class="main">
             <span class="title">{r.title || r.source_id}</span>
             <span class="meta">
