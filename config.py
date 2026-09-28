@@ -475,13 +475,33 @@ VERIFY_MAX_FETCHES = 40
 # other.
 AUTO_CRAWL = os.environ.get("AUTO_CRAWL") == "1"
 AUTO_CRAWL_HOUR = int(os.environ.get("AUTO_CRAWL_HOUR", "1"))   # local hour
-AUTO_SWEEP_HOURS = float(os.environ.get("AUTO_SWEEP_HOURS", "6"))  # 0 = off
+# Sweeps are counted from when the last sweep / full pass STARTED, so a slow
+# sweep can't push the next one ever later and the crawl never drifts into
+# running most of the day. 12 h (was 6): with the nightly pass that is three
+# crawls a day, not five.
+AUTO_SWEEP_HOURS = float(os.environ.get("AUTO_SWEEP_HOURS", "12"))  # 0 = off
 # The auto-crawl stamps live in the database (app_state), so a redeploy no
 # longer re-fires a crawl: the nightly pass starts only when the last one
 # STARTED at least AUTO_FULL_MIN_HOURS ago (a redeploy during
-# AUTO_CRAWL_HOUR used to start a second one), and a sweep only when the
-# newer of the last finished sweep / full pass is AUTO_SWEEP_HOURS old.
+# AUTO_CRAWL_HOUR used to start a second one). A nightly pass that could not
+# start in its hour (a sweep was still running) catches up for
+# AUTO_FULL_CATCHUP_HOURS after it.
 AUTO_FULL_MIN_HOURS = float(os.environ.get("AUTO_FULL_MIN_HOURS", "20"))
+AUTO_FULL_CATCHUP_HOURS = float(os.environ.get("AUTO_FULL_CATCHUP_HOURS", "4"))
+# Sweep window: sweeps may only START between these local hours
+# (from == to means any time). E.g. 18/7 keeps business hours crawl-free,
+# 7/18 crawls only while someone is in the office.
+AUTO_SWEEP_FROM = int(os.environ.get("AUTO_SWEEP_FROM", "0"))
+AUTO_SWEEP_TO = int(os.environ.get("AUTO_SWEEP_TO", "0"))
+# Idle skipping: a suburb x portal whose page 1 turned up nothing new (no new
+# listing, no content change) in the last AUTO_SWEEP_SKIP_IDLE sweeps is left
+# out of sweeps, except every AUTO_SWEEP_REPROBE-th one, which re-checks it.
+# The nightly full pass always crawls everything. 0 = never skip.
+AUTO_SWEEP_SKIP_IDLE = int(os.environ.get("AUTO_SWEEP_SKIP_IDLE", "3"))
+AUTO_SWEEP_REPROBE = int(os.environ.get("AUTO_SWEEP_REPROBE", "4"))
+# Owner/admin can override every auto-crawl setting above from the dashboard
+# (GET/PATCH /api/crawl/schedule); the overrides are kept in app_state and
+# survive restarts. These env vars are only the defaults.
 
 # The nightly pass crawls both books — for-sale and to-rent — so the rental
 # view fills itself on a hosted deploy instead of only ever from the CLI.

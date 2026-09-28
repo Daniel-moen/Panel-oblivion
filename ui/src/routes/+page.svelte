@@ -41,6 +41,7 @@
   import Skeleton from '$lib/components/Skeleton.svelte';
   import StatTile from '$lib/components/StatTile.svelte';
   import ActivityFeed from '$lib/components/ActivityFeed.svelte';
+  import MyTasksCard from '$lib/components/tasks/MyTasksCard.svelte';
   import { fmtInt } from '$lib/format.js';
 
   let now = $state(new Date());
@@ -481,7 +482,12 @@
       {/if}
     </section>
 
-    <section class="mg-section links mg-rise" style:--i={6}>
+    <!-- My tasks (lib/components/tasks): overdue, due today, on it and new
+         from others, with a one-line add. Its own small /api/team/tasks
+         fetch; everything else on Home is /api/home. -->
+    <div class="tasks mg-rise" style:--i={6}><MyTasksCard /></div>
+
+    <section class="mg-section links mg-rise" style:--i={7}>
       <div class="head"><h2>Go to</h2></div>
       <div class="mg-list">
         {#each LINKS as l (l.href)}
@@ -502,11 +508,11 @@
     <div class="slot" data-slot="home-cards">
       {#each slots.home as card, i (card.id)}
         {@const C = card.component}
-        <div class="mg-rise" style:--i={7 + i}><C {...card.props || {}} /></div>
+        <div class="mg-rise" style:--i={8 + i}><C {...card.props || {}} /></div>
       {/each}
     </div>
 
-      <div class="feedwrap mg-rise" style:--i={7 + slots.home.length}>
+      <div class="feedwrap mg-rise" style:--i={8 + slots.home.length}>
         <ActivityFeed events={home?.events || []} loading={!home && !homeFailed} />
       </div>
     </div>
@@ -674,12 +680,12 @@
   .tiles { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   @media (min-width: 900px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 
-  /* Two columns from 1100px: what needs you + the links on the left, the
+  /* Two columns from 1100px: what needs you, my tasks + the links on the left, the
      feature cards + the activity feed on the right. Narrower, one column in
-     order of importance: needs you, feature cards, activity, links. */
+     order of importance: needs you, my tasks, feature cards, activity, links. */
   .cols { display: flex; flex-direction: column; gap: 16px; }
   .left, .right { display: contents; }
-  .needs { order: 1; } .slot { order: 2; } .feedwrap { order: 3; } .links { order: 4; }
+  .needs { order: 1; } .tasks { order: 2; } .slot { order: 3; } .feedwrap { order: 4; } .links { order: 5; }
   @media (min-width: 1100px) {
     .cols { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; }
     .left, .right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }

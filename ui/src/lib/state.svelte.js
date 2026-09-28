@@ -24,6 +24,13 @@ export const app = $state({
   busy: { resolving: false, locating: [], reevaluating: [] },
   showSole: false,
   loaded: false,          // first prospects fetch has landed
+  /* /prospects' server-side query (filters.svelte.js): one page of rows,
+     the match count, facet counts and the book's summary numbers. */
+  list: { rows: [], total: 0, facets: null, summary: null, book: null,
+          loading: false, loaded: false, error: null },
+  /* Rows fetched by key for things that point at properties the current
+     page does not hold (the finder's picks) — keyed by listing_key. */
+  extraRows: {},
   selectedKey: null,      // drawer
   runOpen: false,         // crawl slide-over
   logOpen: false,         // activity log panel
@@ -51,7 +58,9 @@ export async function trackProspect(r) {
 }
 
 export const selected = () =>
-  app.prospects.find((p) => p.listing_key === app.selectedKey) || null;
+  app.prospects.find((p) => p.listing_key === app.selectedKey) ||
+  app.list.rows.find((p) => p.listing_key === app.selectedKey) ||
+  app.extraRows[app.selectedKey] || null;
 
 let toastTimer = null;
 export function toast(msg, kind = 'info') {
@@ -78,9 +87,11 @@ export async function loadConfig() {
   try { app.config = await api.config(); } catch { /* transient */ }
 }
 
+/* Both of these reload the full book only if something already holds it;
+   /prospects re-runs its own query off the change. */
 export async function setShowSole(v) {
   app.showSole = v;
-  await loadProspects();
+  if (app.loaded || viewers > 0) await loadProspects();
 }
 
 /* Switch books. The two lists share nothing — a rental has no score, no
@@ -92,9 +103,14 @@ export async function setDealType(v) {
   app.dealType = next;
   try { localStorage.setItem('obv2.deal', next); } catch { /* private mode */ }
   app.selectedKey = null;
+  const had = app.loaded;
   app.prospects = [];
   app.loaded = false;
-  await loadProspects();
+  app.list.rows = [];
+  app.list.loaded = false;
+  app.list.facets = null;
+  app.extraRows = {};
+  if (had || viewers > 0) await loadProspects();
 }
 
 /* The list is the heaviest thing the app fetches, and most pages (media,
@@ -137,16 +153,38 @@ let ticking = false;
 let lastHeavy = 0;
 let lastList = 0;
 /* The list is ~2 MB even compressed and the server rebuilds it every 30 s
-   during a crawl, so a crawl-long refresh is capped at once a minute. */
+   during a crawl, so a crawl-long refresh is capped at once a minute. A
+   filtered page (/api/prospects/query) is a few KB and usually a 304, so it
+   may refresh more often. */
 const LIST_EVERY_MS = 60000;
+const QUERY_EVERY_MS = 15000;
+let lastQuery = 0;
+
+/* Pages showing a server-side query register a refresher here (they are
+   only called while mounted — the same "refresh only what is on screen"
+   rule as the full list). */
+const listWatchers = new Set();
+export function onListRefresh(fn) {
+  listWatchers.add(fn);
+  return () => listWatchers.delete(fn);
+}
 
 function refreshList(force = false) {
-  if (!app.loaded) return;
   const now = Date.now();
+  if (listWatchers.size && (force || now - lastQuery >= QUERY_EVERY_MS)) {
+    lastQuery = now;
+    for (const fn of listWatchers) fn();
+  }
+  if (!app.loaded) return;
   if (!force && now - lastList < LIST_EVERY_MS) return;
   lastList = now;
   if (viewers > 0) loadProspects();
   else stale = true;
+}
+
+/* After an action that changed rows (erf confirm …): whatever is showing. */
+export function refreshRows() {
+  refreshList(true);
 }
 let wasActive = false;
 
@@ -272,7 +310,7 @@ export const actions = {
   reevaluate: (key) => guard(() => api.reevaluate(key), 'Re-evaluating — live refetch, re-score, erf match'),
   erfConfirm: async (key, erf) => {
     const ok = await guard(() => api.erfConfirm(key, erf), 'Erf confirmed');
-    if (ok) { loadProspects(); loadStats(); }
+    if (ok) { refreshRows(); loadStats(); }
     return ok;
   },
   copyRow: async (ident) => {

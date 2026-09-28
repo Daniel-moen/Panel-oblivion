@@ -32,7 +32,7 @@
   }
 
   function pick(p) {
-    value = { group_id: p.group_id, label: p.label, suburb: p.suburb };
+    value = { group_id: p.group_id, label: p.label, suburb: p.suburb, listing_key: p.listing_key || null };
     q = '';
     results = [];
     open = false;

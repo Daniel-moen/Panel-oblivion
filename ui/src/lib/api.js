@@ -187,8 +187,10 @@ export const api = {
   /* ---- team: per-person tasks and presence (team.py). `user` is only
      honoured for admins — a member asking for somebody else's list gets a
      403 from the server, so the UI never draws the switcher for them. */
-  myTasks: (user) => get('/api/team/tasks' + (user ? '?user=' + user : '')),
-  taskBoard: () => get('/api/team/tasks/board'),
+  myTasks: (user, done) => get('/api/team/tasks' + (user || done ? '?' : '') + [user ? 'user=' + user : '', done ? 'done=' + done : ''].filter(Boolean).join('&')),
+  taskBoard: (detail = false) => get('/api/team/tasks/board' + (detail ? '?detail=1' : '')),
+  taskInbox: () => get('/api/team/tasks/inbox'),
+  tasksSeen: () => post('/api/team/tasks/seen'),
   createTask: (body) => post('/api/team/tasks', body),
   updateTask: (id, body) => patch('/api/team/tasks/' + id, body),
   startTask: (id) => post(`/api/team/tasks/${id}/start`),
@@ -199,4 +201,40 @@ export const api = {
   presence: (pagePath) => post('/api/presence', { page: pagePath }),
   online: () => get('/api/online'),
   revokeAnySession: (sid) => post(`/api/team/sessions/${encodeURIComponent(sid)}/revoke`)
+};
+
+/* ======================================================================
+   Stream B — the property page (/property/<listing_key>).
+   Kept in its own block so the other streams can append theirs without
+   touching it. `propertyPath` spells a listing key for a URL path: the
+   colon in 'seeff:3086141' is legal there and reads better unescaped.
+   ====================================================================== */
+export const propertyPath = (key) =>
+  '/property/' + encodeURIComponent(String(key)).replace(/%3A/gi, ':');
+
+const pk = (key) => encodeURIComponent(String(key)).replace(/%3A/gi, ':');
+
+export const propertyApi = {
+  /* member listings (agent, dates, lifecycle), price history, contacts,
+     activity — everything the prospect row does not carry (property_view.py) */
+  extra: (key) => get(`/api/property/${pk(key)}/extra`),
+  /* the gallery; live=true lets the server fetch ONE listing page when none
+     is cached */
+  photos: (key, live = false) => get(`/api/property/${pk(key)}/photos${live ? '?live=1' : ''}`),
+  /* the resolved erf's outline as [[lat, lng], …] rings, or rings: null */
+  parcel: (key) => get(`/api/property/${pk(key)}/parcel`),
+  /* {listing_key} to open for a group id (null when the group is gone) */
+  byGroup: (gid) => get('/api/property/by-group/' + encodeURIComponent(gid)),
+  deedStatus: () => get('/api/deed/status'),
+  /* {agents: bool, loom: bool}: whether stream C's agent API is registered
+     and a LOOM token is on file — asked once instead of probing for 404s */
+  capabilities: () => get('/api/property/capabilities'),
+
+  /* Stream C's agent tasks (docs/AGENTS-PLAN.md contract). A 404 from any of
+     these means the agents blueprint is not deployed yet. */
+  agentTasks: (gid, limit = 5) =>
+    get('/api/agent/tasks?group_id=' + encodeURIComponent(gid) + '&limit=' + limit),
+  agentTask: (id) => get('/api/agent/tasks/' + encodeURIComponent(id)),
+  startAgentTask: (body) => post('/api/agent/tasks', body),
+  cancelAgentTask: (id) => post('/api/agent/tasks/' + encodeURIComponent(id) + '/cancel')
 };

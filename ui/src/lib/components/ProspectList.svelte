@@ -1,7 +1,10 @@
 <script>
   import Photo from './Photo.svelte';
   import Signals from './Signals.svelte';
+  import { goto } from '$app/navigation';
   import { app } from '$lib/state.svelte.js';
+  import { propertyPath } from '$lib/api.js';
+  import { recent } from './property/recent.svelte.js';
   import { addrOf, furnishedTxt, priceShort } from '$lib/format.js';
   import { staggerIn } from '$lib/motion.js';
 
@@ -10,7 +13,10 @@
   /* The rent book carries none of the scored columns, so the last three
      become what a letting states: when it is free, and how it comes. */
   const rent = $derived(app.dealType === 'rent');
-  const pick = (r) => (app.selectedKey = r.listing_key);
+  /* A row opens the property page (/property/<listing_key>). */
+  const pick = (r, e) => (e?.metaKey || e?.ctrlKey
+    ? window.open(propertyPath(r.listing_key), '_blank', 'noopener')
+    : goto(propertyPath(r.listing_key)));
 </script>
 
 <div class="mg-panel wrap">
@@ -33,9 +39,9 @@
     </thead>
     <tbody>
       {#each rows as r, i (r.listing_key)}
-        <tr class="item" class:sel={r.listing_key === app.selectedKey} data-prospect={r.listing_key}
+        <tr class="item" class:sel={r.listing_key === recent.key} data-prospect={r.listing_key}
             in:staggerIn|global={{ i }}
-            onclick={() => pick(r)} onkeydown={(e) => e.key === 'Enter' && pick(r)} role="button" tabindex="0">
+            onclick={(e) => pick(r, e)} onkeydown={(e) => e.key === 'Enter' && pick(r, e)} role="button" tabindex="0">
           <td class="td-ph"><div class="thumb"><Photo {r} w={80} /></div></td>
           <td class="main">
             <span class="title">{r.title || r.source_id}</span>

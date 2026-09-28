@@ -60,7 +60,8 @@ class Progress:
 
 def _crawl_source(name: str, suburbs: list[str], pages: int, conn, write_lock,
                   log, progress: Progress, stop: threading.Event,
-                  listing_types: tuple[str, ...] = ("sale",)) -> dict:
+                  listing_types: tuple[str, ...] = ("sale",),
+                  skip_suburbs: frozenset = frozenset()) -> dict:
     """Crawl one portal across all requested suburbs, for each book asked for.
 
     Both books go through ONE Source instance on purpose. The Fetcher — and so
@@ -87,6 +88,10 @@ def _crawl_source(name: str, suburbs: list[str], pages: int, conn, write_lock,
         for slug in suburbs:
             if stop.is_set() or src.fetcher.circuit_open:
                 break
+            # The auto-crawl sweep leaves out suburbs whose page 1 on this
+            # portal has turned up nothing new lately (webapp idle skipping).
+            if slug in skip_suburbs:
+                continue
             info = config.SUBURBS[slug]
             label = info["name"] + (" [rent]" if rent else "")
             # A whole-town area holds many suburbs' worth of stock, so it gets
@@ -243,7 +248,8 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
         progress: Progress | None = None,
         stop: threading.Event | None = None,
         do_score: bool = True, only_stale: bool = False,
-        listing_types: tuple[str, ...] = ("sale",)) -> dict:
+        listing_types: tuple[str, ...] = ("sale",),
+        skip_pairs=None) -> dict:
     """Scrape the selected portals, group duplicates, then score.
 
     listing_types defaults to ("sale",) — the crawl this engine has always
@@ -280,6 +286,13 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
         f"across {len(source_names)} portal(s): "
         f"{', '.join(config.SOURCES[s]['label'] for s in source_names)}")
 
+    # skip_pairs: [(source, suburb_slug)] to leave out of this run (the
+    # scheduler's idle skipping); every other pair is crawled as usual.
+    skips: dict[str, set] = {}
+    for pair in skip_pairs or ():
+        if len(pair) == 2:
+            skips.setdefault(pair[0], set()).add(pair[1])
+
     write_lock = threading.Lock()
     results = []
     with db.connect() as conn:
@@ -287,7 +300,8 @@ def run(suburbs: list[str], source_names: list[str] | None = None,
             futures = {
                 pool.submit(_crawl_source, name, suburbs, pages, conn,
                             write_lock, log, progress, stop,
-                            listing_types): name
+                            listing_types,
+                            frozenset(skips.get(name, ()))): name
                 for name in source_names
             }
             for fut in as_completed(futures):

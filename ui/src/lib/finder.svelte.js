@@ -88,7 +88,10 @@ export function clearFinder() {
 export function pickedRows() {
   const res = finder.result;
   if (!res) return [];
-  const byKey = new Map(app.prospects.map((r) => [r.listing_key, r]));
+  /* /prospects no longer holds the whole book: it fetches the picks by key
+     into app.extraRows, and its current page may hold some of them too. */
+  const byKey = new Map([...Object.values(app.extraRows || {}), ...app.list.rows, ...app.prospects]
+    .map((r) => [r.listing_key, r]));
   return res.picks
     .map((p) => ({ pick: p, r: byKey.get(p.listing_key) }))
     .filter((x) => x.r);

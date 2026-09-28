@@ -19,7 +19,14 @@ group so the row can open the lead. The privilege rules are the whole design:
     for admins as a courtesy, and a member who forges ``?user=`` gets 403.
 
 ``created_by`` records who wrote the task, so an assignee can see "from
-Daniel" on something that landed in their list.
+Daniel" on something that landed in their list. ``seen_at`` is when the
+assignee first looked at it: NULL on a task somebody else assigned (or moved
+to them) until they open their list, so the Tasks dock entry can carry a
+count of "new from others" and the next page load can say so. A task you
+write for yourself is seen the moment it exists.
+
+"Log something I did" is a create with ``status: "done"``: the row is born
+finished (``done_at`` = now) and lands straight in the Done history.
 
 Presence (``presence``)
 -----------------------
@@ -38,7 +45,7 @@ from __future__ import annotations
 
 import re
 import threading
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from flask import Blueprint, jsonify, request
 
@@ -99,6 +106,7 @@ _TASK_COLUMNS: tuple[tuple[str, str], ...] = (
     ("priority", "INTEGER NOT NULL DEFAULT 2"),
     ("done_at", "TEXT"),
     ("created_by", "INTEGER"),
+    ("seen_at", "TEXT"),                       # NULL = assigned by someone else, not yet seen
 )
 
 _schema_lock = threading.Lock()
@@ -117,6 +125,9 @@ def ensure_schema(conn) -> None:
         for col, ddl in _TASK_COLUMNS:
             if col not in have:
                 conn.execute(f"ALTER TABLE user_tasks ADD COLUMN {col} {ddl}")
+                if col == "seen_at":
+                    # Rows from before the badge existed are old news, not new.
+                    conn.execute("UPDATE user_tasks SET seen_at=created_at")
         conn.commit()
         _schema_done = True
 
@@ -210,7 +221,7 @@ def _property_labels(conn, gids: list) -> dict:
     try:
         rows = conn.execute(
             f"""SELECT CAST(g.group_id AS TEXT) AS gid, l.street_address_raw,
-                       l.title, l.suburb, l.price_zar
+                       l.title, l.suburb, l.price_zar, l.listing_key
                   FROM property_groups g JOIN listings l ON l.listing_key = g.listing_key
                  WHERE CAST(g.group_id AS TEXT) IN ({q})
                  ORDER BY l.street_address_raw IS NULL, l.last_seen DESC""", gids).fetchall()
@@ -223,6 +234,7 @@ def _property_labels(conn, gids: list) -> dict:
             "label": r["street_address_raw"] or r["title"] or f"Property {r['gid']}",
             "suburb": r["suburb"],
             "price_zar": r["price_zar"],
+            "listing_key": r["listing_key"],
         }
     return out
 
@@ -236,6 +248,8 @@ def _task_public(row, labels: dict, names: dict, today: str) -> dict:
     d["overdue"] = bool(d["due_date"] and d["status"] != "done" and d["due_date"] < today)
     d["created_by_name"] = names.get(d.get("created_by"))
     d["user_name"] = names.get(d.get("user_id"))
+    d["assigned"] = bool(d.get("created_by") and d["created_by"] != d["user_id"])
+    d["new"] = bool(d["assigned"] and not d.get("seen_at") and d["status"] != "done")
     return d
 
 
@@ -287,7 +301,13 @@ def _respond_task(conn, row):
                                 _names(conn), today))
 
 
-def _list_payload(conn, uid: int, include_done: bool = True) -> dict:
+def _unseen_where() -> str:
+    """Live tasks somebody else put on the list that its owner has not seen."""
+    return ("status<>'done' AND seen_at IS NULL"
+            " AND created_by IS NOT NULL AND created_by<>user_id")
+
+
+def _list_payload(conn, uid: int, include_done: bool = True, done_limit: int = 50) -> dict:
     today = date.today().isoformat()
     rows = conn.execute(
         """SELECT * FROM user_tasks WHERE user_id=?
@@ -304,23 +324,29 @@ def _list_payload(conn, uid: int, include_done: bool = True) -> dict:
         "in_progress": sum(1 for t in live if t["status"] == "in_progress"),
         "overdue": sum(1 for t in live if t["overdue"]),
         "done": len(done),
+        "new": sum(1 for t in live if t["new"]),
     }
     return {"user": _user_public(conn, uid), "counts": counts,
-            "tasks": live + (done[:50] if include_done else [])}
+            "tasks": live + (done[:done_limit] if include_done else [])}
 
 
 @bp.get("/api/team/tasks")
 def tasks_list():
-    """My tasks — or, for an admin, ?user=<id>'s."""
+    """My tasks — or, for an admin, ?user=<id>'s. ``?done=`` caps the Done
+    history (default 50, at most 300)."""
     acct, is_admin = _actor()
     if not acct:
         return _unauth()
+    try:
+        done_limit = max(0, min(300, int(request.args.get("done") or 50)))
+    except ValueError:
+        done_limit = 50
     with _conn() as conn:
         ensure_schema(conn)
         uid, err = _target_user(conn, acct, is_admin, request.args.get("user"))
         if err:
             return err
-        out = _list_payload(conn, uid)
+        out = _list_payload(conn, uid, done_limit=done_limit)
     out["is_admin"] = is_admin
     out["me"] = acct["id"]
     return jsonify(out)
@@ -329,7 +355,13 @@ def tasks_list():
 @bp.get("/api/team/tasks/board")
 @auth.require_priv("admin")
 def tasks_board():
-    """Every account with its live counts — the admin's user switcher."""
+    """Every account with its live counts — the admin's user switcher.
+
+    ``?detail=1`` adds each person's live tasks and what they finished in
+    the last 14 days: the Team board's columns (the client splits "this
+    week" from the rest in its own time zone).
+    """
+    detail = request.args.get("detail") in ("1", "true", "yes")
     with _conn() as conn:
         ensure_schema(conn)
         users = conn.execute(
@@ -345,12 +377,32 @@ def tasks_board():
                 c["in_progress"] += 1
             if r["due_date"] and r["due_date"] < today:
                 c["overdue"] += 1
-    return jsonify({"users": [{
-        "id": u["id"], "username": u["username"],
-        "display_name": u["display_name"] or u["username"], "role": u["role"],
-        "disabled": bool(u["disabled"]),
-        "counts": counts.get(u["id"], {"open": 0, "in_progress": 0, "overdue": 0}),
-    } for u in users]})
+        by_user: dict = {}
+        if detail:
+            since = (datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            rows = conn.execute(
+                """SELECT * FROM user_tasks
+                    WHERE status<>'done' OR done_at >= ?
+                    ORDER BY CASE status WHEN 'in_progress' THEN 0 WHEN 'open' THEN 1 ELSE 2 END,
+                             CASE WHEN status='done' THEN done_at END DESC,
+                             due_date IS NULL, due_date, priority, created_at""",
+                (since,)).fetchall()
+            names = _names(conn)
+            labels = _property_labels(conn, [r["property_group_id"] for r in rows])
+            for r in rows:
+                by_user.setdefault(r["user_id"], []).append(_task_public(r, labels, names, today))
+    out = []
+    for u in users:
+        row = {
+            "id": u["id"], "username": u["username"],
+            "display_name": u["display_name"] or u["username"], "role": u["role"],
+            "disabled": bool(u["disabled"]),
+            "counts": counts.get(u["id"], {"open": 0, "in_progress": 0, "overdue": 0}),
+        }
+        if detail:
+            row["tasks"] = by_user.get(u["id"], [])
+        out.append(row)
+    return jsonify({"users": out})
 
 
 @bp.post("/api/team/tasks")
@@ -370,13 +422,17 @@ def task_create():
             return err
         now = _now()
         status = fields.get("status", "open")
+        # Your own task (or one logged as already done) is seen at birth;
+        # one an admin puts on somebody else's list waits to be noticed.
+        seen = now if (uid == acct["id"] or status == "done") else None
         cur = conn.execute(
             "INSERT INTO user_tasks (user_id, created_by, title, notes, status,"
-            " due_date, property_group_id, priority, created_at, updated_at, done_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            " due_date, property_group_id, priority, created_at, updated_at, done_at,"
+            " seen_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (uid, acct["id"], fields["title"], fields.get("notes"), status,
              fields.get("due_date"), fields.get("property_group_id"),
-             fields.get("priority", 2), now, now, now if status == "done" else None))
+             fields.get("priority", 2), now, now, now if status == "done" else None,
+             seen))
         conn.commit()
         row = _load(conn, cur.lastrowid)
         return _respond_task(conn, row), 201
@@ -411,7 +467,10 @@ def task_patch(task_id: int):
             uid, err = _target_user(conn, acct, is_admin, body.get("user_id"))
             if err:
                 return err
-            fields["user_id"] = uid
+            if uid != row["user_id"]:
+                fields["user_id"] = uid
+                # Moved onto somebody else's list: new to them until they look.
+                fields["seen_at"] = _now() if uid == acct["id"] else None
         if not fields:
             return jsonify({"error": "nothing_to_update"}), 400
         now = _now()
@@ -435,6 +494,43 @@ def _transition(task_id: int, status: str):
         if not _may_touch(acct, is_admin, row):
             return jsonify({"error": "not_found"}), 404
         return _respond_task(conn, _set_status(conn, row, status))
+
+
+@bp.get("/api/team/tasks/inbox")
+def tasks_inbox():
+    """What others put on MY list that I have not seen: the Tasks dock badge
+    and the "Daniel gave you 2 tasks" toast. Cheap — one indexed count and
+    at most five titles."""
+    acct, _ = _actor()
+    if not acct:
+        return _unauth()
+    with _conn() as conn:
+        ensure_schema(conn)
+        rows = conn.execute(
+            f"SELECT * FROM user_tasks WHERE user_id=? AND {_unseen_where()}"
+            " ORDER BY created_at DESC, id DESC", (acct["id"],)).fetchall()
+        names = _names(conn)
+    return jsonify({"unseen": len(rows), "tasks": [{
+        "id": r["id"], "title": r["title"], "created_by": r["created_by"],
+        "created_by_name": names.get(r["created_by"]), "created_at": r["created_at"],
+        "due_date": r["due_date"],
+    } for r in rows[:5]]})
+
+
+@bp.post("/api/team/tasks/seen")
+def tasks_seen():
+    """I have looked at my list: everything on it is no longer new. Only
+    ever the caller's own tasks — an admin looking at someone else's list
+    must not clear that person's badge."""
+    acct, _ = _actor()
+    if not acct:
+        return _unauth()
+    with _conn() as conn:
+        ensure_schema(conn)
+        cur = conn.execute("UPDATE user_tasks SET seen_at=? WHERE user_id=? AND seen_at IS NULL",
+                           (_now(), acct["id"]))
+        conn.commit()
+    return jsonify({"ok": True, "marked": cur.rowcount, "unseen": 0})
 
 
 @bp.post("/api/team/tasks/<int:task_id>/start")
@@ -486,6 +582,7 @@ def property_search():
             rows = conn.execute(
                 """SELECT CAST(g.group_id AS TEXT) AS gid, l.street_address_raw,
                           l.title, l.suburb, l.price_zar, t.group_id AS tracked,
+                          l.listing_key,
                           MAX(l.last_seen) AS seen
                      FROM property_groups g
                      JOIN listings l ON l.listing_key = g.listing_key
@@ -503,6 +600,7 @@ def property_search():
         "label": r["street_address_raw"] or r["title"] or f"Property {r['gid']}",
         "suburb": r["suburb"], "price_zar": r["price_zar"],
         "tracked": bool(r["tracked"]),
+        "listing_key": r["listing_key"],
     } for r in rows]})
 
 
@@ -570,7 +668,7 @@ def _page_title(path: str | None) -> str:
     bits = [b for b in path.split("?")[0].split("/") if b]
     names = {"prospects": "Prospects", "agent": "Agent Z", "leads": "Leads",
              "map": "Map", "media": "Media", "account": "Account",
-             "online": "Online", "cma": "CMA"}
+             "online": "Online", "tasks": "Tasks", "cma": "CMA"}
     head = names.get(bits[0], bits[0].capitalize())
     if len(bits) > 1 and not bits[1].isdigit():
         return f"{head} · {bits[1].replace('-', ' ')}"

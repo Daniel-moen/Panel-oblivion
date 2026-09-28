@@ -8,7 +8,8 @@ do not share the web process's GIL with dashboard requests. The contract
 with the parent is deliberately small:
 
 - spec.json: {"suburbs", "sources", "pages", "use_ai", "listing_types",
-  "only_stale", "progress_path"}.
+  "only_stale", "progress_path", "skip_pairs"}. skip_pairs is optional:
+  [[source, suburb_slug]] the scheduler's idle skipping leaves out.
 - stdout: one bare log line per message (the parent timestamps each line,
   appends it to job["log"] and prints it, so `railway logs` still shows it).
 - progress_path: a JSON snapshot rewritten atomically every 0.5 s,
@@ -103,7 +104,9 @@ def main(spec_path: str) -> int:
                      use_ai=bool(spec.get("use_ai", True)),
                      log=_log, progress=progress, stop=stop,
                      only_stale=bool(spec.get("only_stale", True)),
-                     listing_types=listing_types)
+                     listing_types=listing_types,
+                     skip_pairs=[tuple(p) for p in
+                                 spec.get("skip_pairs") or []])
         if signalled.is_set():
             state["phase"], rc = "stopped", 2
         else:

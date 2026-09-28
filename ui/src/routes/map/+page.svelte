@@ -19,7 +19,7 @@
   import { onMount, onDestroy } from 'svelte';
   import L from 'leaflet';
   import 'leaflet/dist/leaflet.css';
-  import { api } from '$lib/api.js';
+  import { api, propertyPath } from '$lib/api.js';
   import { fmtR, fmtM, fmtInt, mvLabel, satUrl } from '$lib/format.js';
   import { play, fadeIn } from '$lib/motion.js';
   import Icon from '$lib/components/glass/Icon.svelte';
@@ -243,7 +243,8 @@
             ? '<div class="pop-approx">Approximate — suburb level</div>'
             : ''}
           <div class="pop-links">
-            <a class="mg-btn sm primary" href="/leads/properties/${encodeURIComponent(p.gid)}">Open lead</a>
+            <a class="mg-btn sm primary" href="${esc(propertyPath(p.key))}">Open property</a>
+            <a class="mg-btn sm secondary" href="/leads/properties/${encodeURIComponent(p.gid)}">Open lead</a>
             ${p.cma ? `<a class="mg-btn sm secondary" href="/cma/${encodeURIComponent(p.gid)}">CMA report</a>` : ''}
             <a class="mg-btn sm ghost" href="${esc(p.url)}" target="_blank" rel="noopener">Listing ↗</a>
             <a class="mg-btn sm ghost" href="${esc(satUrl(p.lat, p.lng))}" target="_blank" rel="noopener">Satellite ↗</a>

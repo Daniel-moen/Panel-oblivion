@@ -7,7 +7,7 @@
      contact and recording a mandate outcome open a Sheet. */
   import { tick, untrack } from 'svelte';
   import { page } from '$app/state';
-  import { api } from '$lib/api.js';
+  import { api, propertyPath } from '$lib/api.js';
   import { toast, app } from '$lib/state.svelte.js';
   import { loadToday, waNumber, addrOf } from '$lib/leads.svelte.js';
   import QuickLog from '$lib/components/QuickLog.svelte';
@@ -206,7 +206,7 @@
         <button type="button" class="mg-btn secondary sm" onclick={openBrief} title="What to say when you phone the owner"><Icon name="list" size={14} /> Call brief</button>
         <button type="button" class="mg-btn secondary sm" data-testid="discuss-property" onclick={() => openChannelForProperty(gid, { label: addrOf(d), suburb: d.suburb, price_zar: d.price_zar, tier: d.tier, photo_url: photoSrc(d) })} title="Talk about this property in team chat"><Icon name="chat" size={14} /> Discuss</button>
         {#if d.cma_url}<a class="mg-btn secondary sm" href={d.cma_url}><Icon name="ruler" size={14} /> CMA report</a>{/if}
-        <a class="mg-btn secondary sm" href="/prospects?open={encodeURIComponent(d.listing_key)}" title="Open in the prospect engine: score, signals, erf tools"><Icon name="bolt" size={14} /> Engine view</a>
+        <a class="mg-btn secondary sm" href={propertyPath(d.listing_key)} title="The full property page: photos, score, signals, erf, owner & deed"><Icon name="bolt" size={14} /> Property page</a>
         <a class="mg-btn secondary sm" href="/map?focus={encodeURIComponent(gid)}"><Icon name="mapPin" size={14} /> Map</a>
         {#if d.url}<a class="mg-btn ghost sm" href={d.url} target="_blank" rel="noopener">Listing <Icon name="external" size={13} /></a>{/if}
       </div>

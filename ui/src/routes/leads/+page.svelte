@@ -6,7 +6,7 @@
      worth knowing (mandates expiring, hot prospects not tracked yet, recent
      wins, what the engine noticed). One column until there is room for two. */
   import { onMount } from 'svelte';
-  import { api } from '$lib/api.js';
+  import { api, propertyPath } from '$lib/api.js';
   import { app, toast } from '$lib/state.svelte.js';
   import { leads, loadToday } from '$lib/leads.svelte.js';
   import LeadRow from '$lib/components/LeadRow.svelte';
@@ -164,7 +164,7 @@
           <div class="mg-list">
             {#each t.hot_untracked as h (h.group_id)}
               <div class="mg-listrow">
-                <a class="t" href="/prospects?open={encodeURIComponent(h.listing_key || h.group_id)}">
+                <a class="t" href={propertyPath(h.listing_key || h.group_id)}>
                   <b>{h.street_address_raw || h.title}</b>
                   <span>{h.suburb} · {h.price_zar ? fmtM(h.price_zar) : 'POA'} · score {h.prospect_score}</span>
                 </a>

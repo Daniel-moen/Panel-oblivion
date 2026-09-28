@@ -10,6 +10,11 @@ the /login form, and drives headless Chromium (Playwright):
 Viewports: phone 390x844 (mobile, touch), iPad 1024x768 and 1180x820 (touch),
 desktop 1440x900. Routes: / /prospects /leads /map /media /online /account.
 
+The property page, per viewport: a /prospects card click lands on
+/property/<listing_key> with [data-property] and [data-owner-section]
+visible and no horizontal scroll; [data-property-back] returns to
+/prospects; /prospects?open=<key> redirects to the property page.
+
 On Home (`/`) it checks the photo-first scene's contract:
   - greeting h1[data-home-greeting] and sentence [data-home-line] get text,
     and neither box moves between first paint and 2 s after data lands (≤1px)
@@ -85,7 +90,7 @@ VIEWPORTS = {
     "ipad-l": dict(viewport={"width": 1180, "height": 820}, has_touch=True),
     "desktop": dict(viewport={"width": 1440, "height": 900}),
 }
-ROUTES = ["/", "/prospects", "/leads", "/map", "/media", "/online", "/account"]
+ROUTES = ["/", "/prospects", "/leads", "/map", "/media", "/online", "/tasks", "/account"]
 VIEWS = ["needs", "mandates", "crawl", "pipeline"]
 T = 6000  # ms, default wait for a contract selector
 # zerko/ is vendored untracked; a worktree without it answers /api/media/* 503.
@@ -477,7 +482,7 @@ PRIMARY = '[data-testid="dock-primary"]'
 CMA = '[data-testid="dock-cma"]'
 ACCOUNT = '[data-testid="account-btn"]'
 CRAWL_SHEET = '[role="dialog"][aria-label="New crawl"]'
-DOCK_TABS = ["/", "/prospects", "/agent", "/leads", "/map", "/media", "/online"]
+DOCK_TABS = ["/", "/prospects", "/agent", "/leads", "/map", "/media", "/tasks"]
 
 # Old rail leftovers + the page column's horizontal centring, in one pass.
 RAIL_PROBE = """() => {
@@ -638,11 +643,11 @@ def check_dock(page, base: str, vp: str, shot) -> None:
         centred = abs(nav["x"] - (d["vw"] - nav["x"] - nav["w"]))
         check(f"{tag}: centred horizontally (≤4px)", centred <= 4, f"off by {centred:.1f}")
         hrefs = [t["href"] for t in d["tabs"]]
-        want = [h for h in DOCK_TABS if h != "/online"]
+        want = [h for h in DOCK_TABS if h != "/tasks"]
         missing = [h for h in want if h not in hrefs]
         check(f"{tag}: tabs Home/Prospects/Agent Z/Leads/Map/Media present", not missing,
               f"missing {missing}, have {hrefs}")
-        check(f"{tag}: Online is a tab or folds into [dock-more]", "/online" in hrefs or d["more"], hrefs)
+        check(f"{tag}: Tasks is a tab or folds into [dock-more]", "/tasks" in hrefs or d["more"], hrefs)
         check(f"{tag}: has the raised primary", bool(d["primary"] and d["primary"]["vis"]), d["primary"])
         tops = [t["rect"]["top"] for t in d["tabs"]] + ([d["primary"]["rect"]["top"]] if d["primary"] else [])
         spread = max(tops) - min(tops) if tops else 0
@@ -808,6 +813,49 @@ LAUNCHER_PROBE = """(sel) => {
 }"""
 
 
+def check_property(page, base: str, vp: str, shot) -> None:
+    """The property page (/property/<listing_key>): a prospect card opens it,
+    it paints the dossier with its Owner & deed section, Back returns to the
+    list, and the old /prospects?open=<key> deep link lands on it."""
+    tag = f"{vp} /property"
+    page.goto(base + "/prospects", wait_until="domcontentloaded")
+    try:
+        page.wait_for_selector("[data-prospect]", state="visible", timeout=20000)
+    except Exception:                                   # noqa: BLE001
+        check(f"{tag}: /prospects shows a prospect to open", False, "no [data-prospect]")
+        return
+    key = page.get_attribute("[data-prospect]", "data-prospect")
+    page.click("[data-prospect]")
+    try:
+        page.wait_for_url("**/property/**", timeout=T)
+        page.wait_for_selector("[data-property]", state="visible", timeout=20000)
+        ok = True
+    except Exception as e:                              # noqa: BLE001
+        ok = False
+        check(f"{tag}: clicking a prospect opens /property/<key>", False, f"{page.url} ({e})")
+    if ok:
+        check(f"{tag}: clicking a prospect opens /property/<key>", True)
+        step(f"{tag}: Owner & deed section present",
+             lambda: page.wait_for_selector("[data-owner-section]", state="visible", timeout=T))
+        page.wait_for_timeout(1200)
+        shot(vp, "/property")
+        over = page.evaluate("() => document.documentElement.scrollWidth - innerWidth")
+        check(f"{tag}: no horizontal scroll", over <= 1, f"{over}px")
+        page.click("[data-property-back]")
+        try:
+            page.wait_for_url(lambda u: urlparse(u).path == "/prospects", timeout=T)
+            check(f"{tag}: Back returns to /prospects", True)
+        except Exception:                               # noqa: BLE001
+            check(f"{tag}: Back returns to /prospects", False, page.url)
+    if key:
+        page.goto(base + "/prospects?open=" + key, wait_until="domcontentloaded")
+        try:
+            page.wait_for_url("**/property/**", timeout=T)
+            check(f"{tag}: /prospects?open=<key> redirects to the property page", True)
+        except Exception:                               # noqa: BLE001
+            check(f"{tag}: /prospects?open=<key> redirects to the property page", False, page.url)
+
+
 def sweep_routes(page, base: str) -> tuple[list[str], list[str]]:
     """Every route the chat launcher must sit on: the fixed ones, plus each
     /leads and /media sub-page found under ui/src/routes. A [param] route
@@ -823,6 +871,15 @@ def sweep_routes(page, base: str) -> tuple[list[str], list[str]]:
         except Exception:                               # noqa: BLE001
             return None
 
+    try:
+        rows = page.context.request.get(base + "/api/prospects").json()
+        key = rows[0]["listing_key"] if isinstance(rows, list) and rows else None
+    except Exception:                                   # noqa: BLE001
+        key = None
+    if key:
+        routes.append("/property/" + key)
+    else:
+        notes.append("/property/<key>: no prospect in the scratch DB, skipped")
     for top in ("leads", "media"):
         root = os.path.join(REPO, "ui", "src", "routes", top)
         found = []
@@ -933,10 +990,14 @@ def main() -> int:
                         args.shots, f"{args.label}-{vp_}-{route_name(path)}{suffix}.png"))
 
             for path in routes:
+                if path == "/property":
+                    continue                        # check_property() below
                 if path == "/":
                     check_home(page, base, vp, shot)
                 else:
                     check_route(page, base, vp, path, shot)
+            if not args.routes or "/property" in routes:
+                check_property(page, base, vp, shot)
             if not args.no_dock:
                 check_dock(page, base, vp, shot)
             if not args.no_chat_sweep:

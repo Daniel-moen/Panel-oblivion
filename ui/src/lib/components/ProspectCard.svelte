@@ -2,7 +2,10 @@
   import Photo from './Photo.svelte';
   import Signals from './Signals.svelte';
   import Icon from './glass/Icon.svelte';
+  import { goto } from '$app/navigation';
   import { app, gidOf, trackProspect } from '$lib/state.svelte.js';
+  import { propertyPath } from '$lib/api.js';
+  import { recent } from './property/recent.svelte.js';
   import { isRent, priceTxt, rentChips } from '$lib/format.js';
   import { staggerIn, pressable } from '$lib/motion.js';
 
@@ -23,14 +26,18 @@
     return bits.join(' · ');
   });
 
-  const open = () => (app.selectedKey = r.listing_key);
+  /* The whole card opens the property page (/property/<listing_key>);
+     ⌘/Ctrl-click opens it in a new tab, as a link would. */
+  const open = (e) => (e?.metaKey || e?.ctrlKey
+    ? window.open(propertyPath(r.listing_key), '_blank', 'noopener')
+    : goto(propertyPath(r.listing_key)));
   const stage = $derived(app.tracked[gidOf(r)]);
   function track(e) { e.stopPropagation(); trackProspect(r); }
 </script>
 
-<article class="card" class:sel={r.listing_key === app.selectedKey}
+<article class="card" class:sel={r.listing_key === recent.key}
          in:staggerIn|global={{ i }} use:pressable={'lift'}
-         onclick={open} onkeydown={(e) => e.key === 'Enter' && open()}
+         onclick={open} onkeydown={(e) => e.key === 'Enter' && open(e)}
          role="button" tabindex="0" data-prospect={r.listing_key}>
   <div class="ph">
     <Photo {r} w={320} alt={r.title || ''} />

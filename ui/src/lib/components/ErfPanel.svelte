@@ -4,7 +4,9 @@
   import { fmtInt, fmtArea, satUrl } from '$lib/format.js';
   import Icon from './glass/Icon.svelte';
 
-  let { r } = $props();
+  /* deed={false}: the host shows the owner & deed itself (the property
+     page's Owner & deed section), so this panel keeps to the erf. */
+  let { r, deed: withDeed = true } = $props();
 
   const resolved = $derived(['ok', 'confirmed', 'check'].includes(r.erf_status));
   const erfLabel = $derived(`${r.erf_number}${r.erf_portion ? '/' + r.erf_portion : ''}`);
@@ -25,7 +27,7 @@
     if (gid === deedGid) return;
     deedGid = gid;
     deed = null; deedErr = null;
-    if (gid != null) loadStored(gid);
+    if (gid != null && withDeed) loadStored(gid);
   });
 
   async function loadStored(gid) {
@@ -98,15 +100,15 @@
         <a class="mg-btn sm secondary" href={satUrl(r.erf_lat, r.erf_lng)} target="_blank" rel="noopener"><Icon name="mapPin" size={14} /> Satellite</a>
       {/if}
       <button type="button" class="mg-btn sm secondary" onclick={copyCma}><Icon name="copy" size={14} /> Copy for CMA</button>
-      {#if r.group_id != null}
+      {#if withDeed && r.group_id != null}
         <button type="button" class="mg-btn sm secondary" disabled={deedBusy} onclick={fetchDeed}>
           {#if deedBusy}<span class="mg-spin"></span> Fetching deed…{:else}<Icon name="key" size={14} /> {deed ? 'Refresh deed' : 'Get deed info'}{/if}
         </button>
       {/if}
     </div>
 
-    {#if deedErr}<div class="mg-strip crit"><span class="ic"><Icon name="alert" size={14} /></span><span>{deedErr}</span></div>{/if}
-    {#if deed}
+    {#if withDeed && deedErr}<div class="mg-strip crit"><span class="ic"><Icon name="alert" size={14} /></span><span>{deedErr}</span></div>{/if}
+    {#if withDeed && deed}
       {#if deedRows.length}
         <div class="deed">
           <span class="hud">Title deed</span>

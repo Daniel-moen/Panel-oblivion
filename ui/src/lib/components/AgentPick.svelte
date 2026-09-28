@@ -10,6 +10,7 @@
   import Photo from './Photo.svelte';
   import Icon from './glass/Icon.svelte';
   import { isRent, priceTxt, furnishedTxt } from '$lib/format.js';
+  import { propertyPath } from '$lib/api.js';
 
   let { pick } = $props();
 
@@ -57,8 +58,8 @@
     <div class="foot">
       {#if pick.why}<p class="why">{pick.why}</p>{/if}
       {#if !rent && r.listing_key}
-        <a class="engine" href="/prospects?open={encodeURIComponent(r.listing_key)}">
-          Open in the engine <Icon name="arrowRight" size={12} />
+        <a class="engine" href={propertyPath(r.listing_key)}>
+          Open the property <Icon name="arrowRight" size={12} />
         </a>
       {/if}
     </div>

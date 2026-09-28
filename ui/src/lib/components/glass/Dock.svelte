@@ -24,9 +24,10 @@
      appear or a font lands late. Reduced motion: it jumps.
 
      Badges are amber — something waiting on you — and pop in on
-     spring.snappy. Only Leads carries one: follow-ups overdue + due today,
-     read from the Today payload the Leads section and Home already fetch
-     ($lib/leads.svelte.js). No chat badge (the header's chat button has its
+     spring.snappy. Leads carries follow-ups overdue + due today, read from
+     the Today payload the Leads section and Home already fetch
+     ($lib/leads.svelte.js); an addNav() item may bring its own `badge()`
+     (Tasks: new tasks from others, $lib/tasks.svelte.js). No chat badge (the header's chat button has its
      own), and nothing fetched here.
 
      Z-order: 60 — above the page, the strip and the map, so nothing's
@@ -38,7 +39,7 @@
      motion keeps it put.
 
      No props: it reads the route and the nav registry (SECTIONS + whatever
-     `addNav()` added — the team feature's Online), minus what the account
+     `addNav()` added — the team feature's Tasks), minus what the account
      may not open. */
   import { onMount, untrack } from 'svelte';
   import { page } from '$app/state';
@@ -56,7 +57,9 @@
   /* Follow-ups that need you today: overdue + due today. null until one of
      the sections that fetch Today has done so. */
   const due = $derived(leads.today ? (leads.today.overdue?.length || 0) + (leads.today.due_today?.length || 0) : 0);
-  const badgeOf = (href) => (href === '/leads' ? due : 0);
+  /* An addNav() item may carry its own count: `badge()` (read reactively)
+     and `badgeLabel` for the screen reader ("3 new"). */
+  const badgeOf = (it) => (it.href === '/leads' ? due : typeof it.badge === 'function' ? it.badge() || 0 : 0);
 
   const ENTER = { initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 }, transition: spring.smooth };
   const POP = { initial: { scale: 0.6, opacity: 0 }, animate: { scale: 1, opacity: 1 }, transition: spring.snappy };
@@ -121,10 +124,10 @@
 
       {#each ITEMS as it (it.href)}
         {@const on = it.href === active}
-        {@const n = badgeOf(it.href)}
+        {@const n = badgeOf(it)}
         <a href={it.href} class="item" class:on bind:this={els[it.href]} use:pressable
            data-dock-item={it.href} aria-current={on ? 'page' : undefined} title={it.label}
-           aria-label={n ? `${it.label}, ${n} due` : it.label}>
+           aria-label={n ? `${it.label}, ${n} ${it.badgeLabel || 'due'}` : it.label}>
           <span class="ic">
             <Icon name={it.icon} size={18} />
             {#if n > 0}

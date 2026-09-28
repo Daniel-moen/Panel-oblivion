@@ -116,6 +116,38 @@ strip (`JobStrip`) is one row — state dot, phase, pages, a thin progress bar,
 Activity log and Stop — plus one sideways-scrolling row of per-portal chips, so
 its height never depends on how many portals are crawling.
 
+### Prospect list: server-side filters, views, export
+
+`/prospects` no longer downloads the whole book (12k rows, ~2.4 MB gzipped)
+to filter it in the browser. It sends its filters to
+`GET /api/prospects/query` and gets back `{rows, total, offset, limit,
+facets, summary}`: one page of slim rows (60 by default, `limit` ≤ 500,
+`offset`), the match count, facet counts for suburb, source (portal),
+property_type, tier, mandate, region and beds — each facet ignores its own
+filter, so picking a suburb still shows every other suburb's count — and
+the book's tile numbers. A page is ~20 KB on the wire and ETag'd (an
+unchanged poll is a 304). The query filters the same in-memory cache entry
+`/api/prospects` serves; nothing is rebuilt per request
+(`prospect_query.py`, whose docstring lists every parameter: tier, suburb,
+region, source, agency, ptype, mandate incl. sole/probably_sole, expiry,
+erf, price / beds / baths / floor / erf-size / R/m² / asking-vs-GV / score
+ranges, cut, reduced, days on market, relisted + days off market,
+under_offer, agencies_min, portals_min, dev, photo, life (active /
+delisted / relisted), lead (untracked / tracked / a stage), furnished,
+available=now, keys, and `sort`). `/api/prospects` itself is unchanged for
+every other caller (map, chat attachments, finder, Agent Z).
+
+The same query string is the page URL (bookmark or paste a view), the CSV
+export (`GET /api/prospects/export.csv?…` — every matching row, UTF-8 with
+a BOM so Excel reads it) and a **saved view**: `GET /api/prospects/views`
+(your views plus built-in presets such as *Hot open mandates*, *Price-cut
+10%+*, *Stale 90+ days*, *Multi-agency, no sole*, *Relisted*),
+`POST {name, params}`, `DELETE /api/prospects/views/<id>` — per user, in
+`app_state` (`prospect_views:<username>`). In the UI the filters live in a
+grouped sheet (Deal, Property, Mandate & competition, Market signals,
+Location, Lead status) with live counts, and every active filter is a chip
+with a one-tap ✕.
+
 ### Find me… (AI brief)
 
 `/prospects` carries a **Find me…** field that takes a plain-English brief —
@@ -388,6 +420,7 @@ DATA_DIR=$(mktemp -d) .venv/bin/python tests/team_check.py            # tasks + 
 DATA_DIR=$(mktemp -d) .venv/bin/python tests/media_mount_check.py     # /zerko mount
 DATA_DIR=$(mktemp -d) .venv/bin/python tests/dashboard_latency_check.py  # dashboard p95 during a crawl
 .venv/bin/python -m pytest tests/test_chat.py -q                      # team chat (own temp DATA_DIR)
+.venv/bin/python -m pytest tests/test_prospect_query.py -q            # prospect query, CSV, views, crawl schedule (own temp DATA_DIR; run on its own)
 (cd ui && npm run build) && .venv/bin/python tests/chat_e2e.py   # chat end-to-end: Playwright, phone + iPad, two users
 ```
 
@@ -607,10 +640,32 @@ Set `AUTO_CRAWL=1` and the dashboard process schedules itself:
 
 - **Nightly full pass** at `AUTO_CRAWL_HOUR` (default 01:00 local): every
   suburb, every enabled portal — Property24 included, riding its overnight
-  pacing.
-- **Freshness sweep** every `AUTO_SWEEP_HOURS` (default 6, `0` disables):
-  page 1 of the fast portals only. Keeps `last_seen` current, which is what
-  the proof-freshness gate, the delisting sweep and price history feed on.
+  pacing. If a sweep kept it from starting in its hour it catches up for
+  `AUTO_FULL_CATCHUP_HOURS` (4) after it.
+- **Freshness sweep** every `AUTO_SWEEP_HOURS` (default **12**, was 6; `0`
+  disables): page 1 of the fast portals only. Keeps `last_seen` current,
+  which is what the proof-freshness gate, the delisting sweep and price
+  history feed on. The interval is counted from when the last sweep or full
+  pass **started**, so a slow sweep can't push the next one later and the
+  crawl never drifts into running most of the day. `AUTO_SWEEP_FROM` /
+  `AUTO_SWEEP_TO` (local hours, equal = any time) restrict when a sweep may
+  start — e.g. 18 / 7 keeps office hours crawl-free. No sweep starts within
+  90 minutes of the nightly pass.
+- **Idle skipping**: a suburb × portal pair whose page 1 turned up nothing
+  new or changed in the last `AUTO_SWEEP_SKIP_IDLE` (3) sweeps is left out of
+  sweeps, and re-probed every `AUTO_SWEEP_REPROBE`-th (4th) one; the nightly
+  pass always covers everything. Whole-town areas are never skipped. The
+  table lives in `app_state` (`auto_sweep_idle`); skipping a whole pair
+  cannot fake a delisting, since lifecycle compares a listing only with a
+  fresher crawl of its own cohort.
+
+The env vars are only **defaults**: the owner or an admin can change every
+one of them from **/prospects → Auto-crawl** (the chip top-right), which reads
+and writes `GET/PATCH /api/crawl/schedule` (PATCH needs the `admin`
+privilege; `{"reset": true}` drops the overrides). Overrides are stored in
+`app_state.auto_crawl_settings`, so they survive restarts and redeploys. The
+GET also reports the last full pass / sweep (start, finish, duration), the
+next of each and how many pairs the next sweep will skip.
 
 Scheduled runs use the same single-job guard as the Scrape button, so the
 loop and a human can never collide; on a Mac that sleeps overnight the pass
@@ -621,11 +676,13 @@ The loop's stamps are **persisted in the database** (`app_state`:
 `auto_last_sweep`), so a deploy does not start a crawl: the nightly pass
 needs its last *start* to be at least `AUTO_FULL_MIN_HOURS` (default 20) old
 — a redeploy during `AUTO_CRAWL_HOUR` no longer re-runs it — and a sweep needs
-the newer of the last *finished* sweep and full pass to be `AUTO_SWEEP_HOURS`
+the newer of the last sweep / full-pass *start* to be `AUTO_SWEEP_HOURS`
 old. On the first boot with no sweep stamp, the newest for-sale `last_seen`
 is taken as the last sweep (once, persisted), so deploying this does not
-sweep either; an empty database still sweeps. A sweep that started but never finished is retried no sooner than 30
-minutes after it started. Each boot logs `auto-crawl: last full pass finished
+sweep either; an empty database still sweeps. A sweep the process died under
+(started, never ended) is retried no sooner than 30 minutes after it started;
+one that was stopped or failed (`auto_last_sweep_ended`) waits out the normal
+interval. Each boot logs `auto-crawl: last full pass finished
 …, last sweep …`, and `/api/status` reports both plus `auto_full_min_hours`.
 Crawls run in a separate `crawler.py` process by default (see Deployment);
 `CRAWL_IN_PROCESS=1` restores the in-process thread. A **yield canary** protects the comps feed: a source whose

@@ -1,0 +1,1 @@
+import{M as c,O as o,Q as i,U as d,V as m}from"./DECYn_vZ.js";function k(e,n,f){c(()=>{var r=o(()=>n(e,f==null?void 0:f())||{});if(f&&(r!=null&&r.update)){var a=!1,t={};i(()=>{var s=f();d(s),a&&m(t,s)&&(t=s,r.update(s))}),a=!0}if(r!=null&&r.destroy)return()=>r.destroy()})}export{k as a};

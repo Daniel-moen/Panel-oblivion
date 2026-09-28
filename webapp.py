@@ -28,6 +28,7 @@ from flask import Flask, Response, jsonify, redirect, request, send_from_directo
 import agent_z
 import auth
 import config
+import crawl_schedule
 import db
 import dedupe
 import erf
@@ -158,6 +159,10 @@ job = {
     # "manual" (the Scrape button), "full" / "sweep" (the auto-crawl loop),
     # or "rescore". A finished "full"/"sweep" writes its auto-crawl stamp.
     "kind": "manual",
+    # What a scheduled job was asked to crawl (suburbs, sources, the
+    # suburb x portal pairs it skipped, its UTC start) — read back when it
+    # finishes to update the idle-pair table (crawl_schedule.record).
+    "plan": None,
 }
 job_lock = threading.Lock()
 _stop = threading.Event()
@@ -179,30 +184,63 @@ def _crawl_phase(listing_types) -> str:
 def _job_finished(phase: str) -> None:
     """Called once when a crawl job ends, in both crawler modes: a scheduled
     job that finished cleanly stamps its auto-crawl finish time."""
-    key = {"full": _AUTO_LAST_FULL, "sweep": _AUTO_LAST_SWEEP}.get(
-        job.get("kind"))
-    if phase != "done" or key is None:
+    kind = job.get("kind")
+    key = {"full": _AUTO_LAST_FULL, "sweep": _AUTO_LAST_SWEEP}.get(kind)
+    if key is None:
         return
     try:
         with db.connect() as conn:
+            # Any ending, clean or not: a sweep that was stopped or failed
+            # is not retried early (only one the process died under is).
+            db.set_state(conn, f"auto_last_{kind}_ended",
+                         f"{datetime.now().isoformat()}")
+            if phase != "done":
+                return
             db.set_state(conn, key, datetime.now().isoformat())
+            _record_idle_pairs(conn, kind, job.get("plan"))
     except Exception as e:                              # noqa: BLE001
         log(f"auto-crawl: could not record {key}: {type(e).__name__}: {e}")
 
 
-def _run(suburbs, source_names, pages, use_ai, listing_types=("sale",)):
+def _record_idle_pairs(conn, kind: str, plan) -> None:
+    """After a scheduled job: which suburb x portal pairs turned up anything
+    new or changed (sale book) since it started — feeds idle skipping."""
+    if not plan or "sale" not in (plan.get("types") or ["sale"]):
+        return
+    skipped = {tuple(p) for p in plan.get("skip") or []}
+    pairs = crawl_schedule.skippable(plan["suburbs"], plan["sources"])
+    crawled = [p for p in pairs if p not in skipped]
+    news = {(r[0], r[1]): r[2] for r in conn.execute(
+        "SELECT source, suburb_slug, COUNT(*) FROM listings"
+        " WHERE listing_type = 'sale'"
+        " AND (first_seen >= ? OR content_changed >= ?)"
+        " GROUP BY source, suburb_slug",
+        (plan["started_utc"], plan["started_utc"]))}
+    idle = crawl_schedule.record(crawl_schedule.load_idle(conn), crawled,
+                                 sorted(skipped), news, kind)
+    db.set_state(conn, crawl_schedule.IDLE_KEY, json.dumps(idle))
+    quiet = sum(1 for p in crawled if not news.get(p))
+    log(f"auto-crawl: {len(crawled) - quiet} of {len(crawled)} suburb x "
+        f"portal pairs had something new; {len(skipped)} skipped as idle")
+
+
+def _run(suburbs, source_names, pages, use_ai, listing_types=("sale",),
+         skip=None):
     # only_stale: after a crawl, score what actually changed. A reasoning
     # model spends real time per property, so re-judging the whole database
     # to absorb a handful of new listings turned a 1-minute crawl into a
     # 15-minute job. The "Re-score existing data" button still does a full
     # pass when you want one (e.g. after editing the prompt).
     if config.CRAWL_IN_PROCESS:
-        _run_in_thread(suburbs, source_names, pages, use_ai, listing_types)
+        _run_in_thread(suburbs, source_names, pages, use_ai, listing_types,
+                       skip)
     else:
-        _run_in_process(suburbs, source_names, pages, use_ai, listing_types)
+        _run_in_process(suburbs, source_names, pages, use_ai, listing_types,
+                        skip)
 
 
-def _run_in_thread(suburbs, source_names, pages, use_ai, listing_types):
+def _run_in_thread(suburbs, source_names, pages, use_ai, listing_types,
+                   skip=None):
     """CRAWL_IN_PROCESS=1: the old mode, the pipeline on this thread."""
     progress = pipeline.Progress()
 
@@ -219,7 +257,7 @@ def _run_in_thread(suburbs, source_names, pages, use_ai, listing_types):
         job["phase"] = _crawl_phase(listing_types)
         pipeline.run(suburbs, source_names, pages=pages, use_ai=use_ai,
                      log=log, progress=progress, stop=_stop, only_stale=True,
-                     listing_types=listing_types)
+                     listing_types=listing_types, skip_pairs=skip)
         job["phase"] = "stopped" if _stop.is_set() else "done"
     except Exception as e:
         job["phase"] = "error"
@@ -245,7 +283,8 @@ def _read_progress(path: str) -> dict | None:
         return None
 
 
-def _run_in_process(suburbs, source_names, pages, use_ai, listing_types):
+def _run_in_process(suburbs, source_names, pages, use_ai, listing_types,
+                    skip=None):
     """Run the crawl as crawler.py in its own process (see crawler.py).
 
     The child's stdout is piped into log() line by line; its progress file is
@@ -264,6 +303,7 @@ def _run_in_process(suburbs, source_names, pages, use_ai, listing_types):
             json.dump({"suburbs": list(suburbs), "sources": list(source_names),
                        "pages": pages, "use_ai": use_ai,
                        "listing_types": list(listing_types),
+                       "skip_pairs": [list(p) for p in skip or []],
                        "only_stale": True, "progress_path": progress_path},
                       f)
         job["phase"] = _crawl_phase(listing_types)
@@ -326,7 +366,8 @@ def _run_in_process(suburbs, source_names, pages, use_ai, listing_types):
 
 
 def _start_job(suburbs, srcs, pages, use_ai=True,
-               listing_types=("sale",), kind: str = "manual") -> bool:
+               listing_types=("sale",), kind: str = "manual",
+               skip=None) -> bool:
     """Claim the single job slot and launch a crawl; False if already busy.
 
     Check-and-set under job_lock so the dashboard button and the auto-crawl
@@ -341,10 +382,15 @@ def _start_job(suburbs, srcs, pages, use_ai=True,
             return False
         job.update(running=True, phase="starting", log=[], done=0, total=0,
                    per_source={}, started=datetime.now().isoformat(),
-                   listing_types=list(listing_types), kind=kind)
+                   listing_types=list(listing_types), kind=kind,
+                   plan={"suburbs": list(suburbs), "sources": list(srcs),
+                         "types": list(listing_types),
+                         "skip": [list(p) for p in skip or []],
+                         "started_utc": datetime.now(timezone.utc)
+                         .strftime("%Y-%m-%d %H:%M:%S")})
     _stop.clear()
     threading.Thread(target=_run,
-                     args=(suburbs, srcs, pages, use_ai, listing_types),
+                     args=(suburbs, srcs, pages, use_ai, listing_types, skip),
                      daemon=True).start()
     return True
 
@@ -405,9 +451,11 @@ _AUTO_LAST_FULL_STARTED = "auto_last_full_started"
 _AUTO_LAST_FULL = "auto_last_full"            # finished
 _AUTO_LAST_SWEEP_STARTED = "auto_last_sweep_started"
 _AUTO_LAST_SWEEP = "auto_last_sweep"          # finished
-# A sweep that started but never finished (a deploy killed it, or it failed)
-# is retried, but no sooner than this after it started — otherwise a sweep
-# that fails every time would be relaunched every minute.
+_AUTO_SWEEP_ENDED = "auto_last_sweep_ended"    # any ending, clean or not
+_AUTO_FULL_ENDED = "auto_last_full_ended"
+# A sweep the process died under (a deploy killed it) is retried, but no
+# sooner than this after it started. One that was stopped or failed is not
+# retried early at all — it waits out the normal interval.
 _AUTO_SWEEP_RETRY_S = 30 * 60
 
 
@@ -446,36 +494,45 @@ def _bootstrap_sweep_stamp(conn) -> None:
           flush=True)
 
 
+_STAMP_KEYS = (_AUTO_LAST_FULL_STARTED, _AUTO_LAST_FULL, _AUTO_FULL_ENDED,
+               _AUTO_LAST_SWEEP_STARTED, _AUTO_LAST_SWEEP, _AUTO_SWEEP_ENDED)
+
+
 def _auto_stamps() -> dict:
-    """The four auto-crawl stamps as datetimes (None when never)."""
+    """The auto-crawl stamps as datetimes (None when never)."""
     with db.connect() as conn:
         _bootstrap_sweep_stamp(conn)
-        return {k: _parse_stamp(db.get_state(conn, k)) for k in (
-            _AUTO_LAST_FULL_STARTED, _AUTO_LAST_FULL,
-            _AUTO_LAST_SWEEP_STARTED, _AUTO_LAST_SWEEP)}
+        return {k: _parse_stamp(db.get_state(conn, k)) for k in _STAMP_KEYS}
 
 
-def _full_due(now: datetime, last_started) -> bool:
-    """The nightly pass is due: it is AUTO_CRAWL_HOUR and the last one
-    started at least AUTO_FULL_MIN_HOURS ago (or never)."""
-    if now.hour != config.AUTO_CRAWL_HOUR:
-        return False
-    return last_started is None or (
-        (now - last_started).total_seconds()
-        >= config.AUTO_FULL_MIN_HOURS * 3600)
+def _auto_settings() -> dict:
+    """Effective schedule: env defaults overlaid by the owner's saved ones."""
+    try:
+        with db.connect() as conn:
+            return crawl_schedule.load(conn)
+    except sqlite3.Error:
+        return crawl_schedule.defaults()
 
 
-def _sweep_due(now: datetime, last_sweep, last_full) -> bool:
-    """A freshness sweep is due: sweeps are on and the newer of the last
-    finished sweep / finished full pass (a full pass refreshes everything a
-    sweep would) is at least AUTO_SWEEP_HOURS old, or neither ever finished."""
-    if config.AUTO_SWEEP_HOURS <= 0:
-        return False
+def _auto_enabled() -> bool:
+    return bool(_auto_settings()["enabled"])
+
+
+def _full_due(now: datetime, last_started, s: dict | None = None) -> bool:
+    """The nightly pass is due: it is its hour (or within the catch-up window
+    after it) and the last one started at least AUTO_FULL_MIN_HOURS ago."""
+    return crawl_schedule.full_due(now, last_started,
+                                   s or crawl_schedule.defaults())
+
+
+def _sweep_due(now: datetime, last_sweep, last_full,
+               s: dict | None = None) -> bool:
+    """A freshness sweep is due: sweeps are on, the sweep window is open and
+    the newer of the two stamps given (the loop passes the last sweep START
+    and full-pass START) is at least the sweep interval old."""
     stamps = [t for t in (last_sweep, last_full) if t is not None]
-    if not stamps:
-        return True
-    return ((now - max(stamps)).total_seconds()
-            >= config.AUTO_SWEEP_HOURS * 3600)
+    return crawl_schedule.sweep_due(now, max(stamps) if stamps else None,
+                                    s or crawl_schedule.defaults())
 
 
 def _auto_sources(include_p24: bool) -> list[str]:
@@ -501,59 +558,155 @@ def _log_auto_stamps() -> None:
           f"last sweep {fmt(st[_AUTO_LAST_SWEEP])}", flush=True)
 
 
+def _auto_tick(now: datetime) -> str | None:
+    """One scheduler decision; returns the kind started (or None). Split out
+    of the loop so a test can drive it with a fixed clock."""
+    if job["running"]:
+        return None
+    s = _auto_settings()
+    if not s["enabled"]:
+        return None
+    suburbs = list(config.SUBURBS)
+    st = _auto_stamps()
+    if _full_due(now, st[_AUTO_LAST_FULL_STARTED], s):
+        # Nightly full pass — Property24 included: overnight is the right
+        # time for its 12-18s pacing. Both books too (unless switched off):
+        # the rental crawl is the same fetches against each portal's to-rent
+        # pages, it costs nothing at the scorer (rentals are never scored),
+        # and the night is where that extra crawl time belongs.
+        types = ("sale", "rent") if s["rentals"] else ("sale",)
+        if _start_job(suburbs, _auto_sources(include_p24=True),
+                      pages=config.MAX_PAGES_PER_SUBURB,
+                      listing_types=types, kind="full"):
+            _set_stamp(_AUTO_LAST_FULL_STARTED, now)
+            log(f"auto-crawl: nightly full pass started ({'+'.join(types)})")
+            return "full"
+        return None
+    base = crawl_schedule.sweep_base(st)
+    due = crawl_schedule.sweep_due(now, base, s) or (
+        s["sweep_hours"] > 0
+        and crawl_schedule.in_window(now.hour, s["sweep_from"], s["sweep_to"])
+        and crawl_schedule.sweep_interrupted(now, st, _AUTO_SWEEP_RETRY_S))
+    if not due or crawl_schedule.full_soon(now, st, s):
+        return None
+    # Freshness sweep: page 1 of the fast portals only. Keeps last_seen
+    # current, which is what the proof-freshness gate, the delisting sweep
+    # and price history all feed on.
+    #
+    # Sale-only, deliberately: every consumer of a sweep is for-sale
+    # machinery (delisting -> sold proxy, proof freshness, price history),
+    # and nothing in the engine reads a rental's last_seen. Rentals get their
+    # refresh on the nightly pass instead.
+    #
+    # Suburb x portal pairs whose page 1 has turned up nothing new for a few
+    # sweeps running are left out (re-probed every few sweeps); skipping a
+    # whole pair never fakes a delisting — lifecycle compares a listing only
+    # against a fresher crawl of its own (source, suburb) cohort.
+    srcs = _auto_sources(include_p24=False)
+    with db.connect() as conn:
+        skip = crawl_schedule.plan_skips(crawl_schedule.load_idle(conn),
+                                         suburbs, srcs, s)
+    if _start_job(suburbs, srcs, pages=1, kind="sweep", skip=skip):
+        _set_stamp(_AUTO_LAST_SWEEP_STARTED, now)
+        total = len(suburbs) * len(srcs)
+        log("auto-crawl: freshness sweep started (fast portals, page 1"
+            + (f"; {len(skip)} of {total} idle suburb x portal pairs skipped"
+               if skip else "") + ")")
+        return "sweep"
+    return None
+
+
 def _auto_crawl_loop():
-    if config.AUTO_CRAWL:
+    if _auto_enabled():
         # One line per boot, so a deploy log shows why nothing started.
         _log_auto_stamps()
     while True:
         time.sleep(60)
         try:
-            if not config.AUTO_CRAWL or job["running"]:
-                continue
-            now = datetime.now()
-            suburbs = list(config.SUBURBS)
-            st = _auto_stamps()
-            sweep_started = st[_AUTO_LAST_SWEEP_STARTED]
-            sweep_retry_ok = sweep_started is None or (
-                (now - sweep_started).total_seconds() >= _AUTO_SWEEP_RETRY_S
-                or (st[_AUTO_LAST_SWEEP] or datetime.min) >= sweep_started)
-            if _full_due(now, st[_AUTO_LAST_FULL_STARTED]):
-                # Nightly full pass — Property24 included: overnight is the
-                # right time for its 12-18s pacing. Both books too: the rental
-                # crawl is the same fetches against each portal's to-rent
-                # pages, it costs nothing at the scorer (rentals are never
-                # scored), and the night is where that extra crawl time
-                # belongs.
-                types = ("sale", "rent") if config.AUTO_CRAWL_RENTALS \
-                    else ("sale",)
-                if _start_job(suburbs, _auto_sources(include_p24=True),
-                              pages=config.MAX_PAGES_PER_SUBURB,
-                              listing_types=types, kind="full"):
-                    _set_stamp(_AUTO_LAST_FULL_STARTED, now)
-                    log("auto-crawl: nightly full pass started "
-                        f"({'+'.join(types)})")
-            elif sweep_retry_ok and _sweep_due(now, st[_AUTO_LAST_SWEEP],
-                                               st[_AUTO_LAST_FULL]):
-                # Freshness sweep: page 1 of the fast portals only. Keeps
-                # last_seen current, which is what the proof-freshness gate,
-                # the delisting sweep and price history all feed on.
-                #
-                # Sale-only, deliberately: every consumer of a sweep is
-                # for-sale machinery (delisting -> sold proxy, proof
-                # freshness, price history), and nothing in the engine reads
-                # a rental's last_seen. Adding rent here would roughly double
-                # the sweep's request count against every portal — the same
-                # budget that has to stay small enough to run every few hours
-                # — to refresh a timestamp nobody queries. Rentals get their
-                # refresh on the nightly pass instead.
-                if _start_job(suburbs, _auto_sources(include_p24=False),
-                              pages=1, kind="sweep"):
-                    _set_stamp(_AUTO_LAST_SWEEP_STARTED, now)
-                    log("auto-crawl: freshness sweep started (fast portals, "
-                        "page 1)")
+            _auto_tick(datetime.now())
         except Exception as e:                          # noqa: BLE001
             print(f"auto-crawl scheduler error: {type(e).__name__}: {e}",
                   flush=True)
+
+
+def _z(t) -> str | None:
+    """A naive local datetime as UTC ISO with a Z (what the UI parses)."""
+    if t is None:
+        return None
+    return t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _schedule_status() -> dict:
+    now = datetime.now()
+    with db.connect() as conn:
+        s = crawl_schedule.load(conn)
+        saved = crawl_schedule.overrides(conn)
+        idle = crawl_schedule.load_idle(conn)
+    st = _auto_stamps()
+
+    def run(started, finished, ended):
+        dur = None
+        if started and finished and finished >= started:
+            dur = round((finished - started).total_seconds())
+        return {"started": _z(started), "finished": _z(finished),
+                "ended": _z(ended), "duration_s": dur,
+                "ok": bool(started and finished and finished >= started)}
+
+    nf = crawl_schedule.next_full(now, st[_AUTO_LAST_FULL_STARTED], s)
+    ns = crawl_schedule.next_sweep(now, st, s, _AUTO_SWEEP_RETRY_S)
+    with job_lock:
+        running = ({"kind": job.get("kind"), "phase": job.get("phase"),
+                    "started": job.get("started")} if job["running"]
+                   else None)
+    srcs = _auto_sources(include_p24=False)
+    skip = crawl_schedule.plan_skips(idle, list(config.SUBURBS), srcs, s)
+    nexts = [t for t in (nf, ns) if t is not None]
+    return {
+        "settings": s,
+        "defaults": crawl_schedule.defaults(),
+        "customised": sorted(saved),
+        "can_edit": auth.has_priv("admin"),
+        "running": running,
+        "last_full": run(st[_AUTO_LAST_FULL_STARTED], st[_AUTO_LAST_FULL],
+                         st[_AUTO_FULL_ENDED]),
+        "last_sweep": run(st[_AUTO_LAST_SWEEP_STARTED], st[_AUTO_LAST_SWEEP],
+                          st[_AUTO_SWEEP_ENDED]),
+        "next_full": _z(nf) if s["enabled"] else None,
+        "next_sweep": _z(ns) if s["enabled"] else None,
+        "next_run": _z(min(nexts)) if s["enabled"] and nexts else None,
+        "sweep_pairs": len(config.SUBURBS) * len(srcs),
+        "skipping_next": len(skip),
+        "idle_pairs": sum(1 for v in idle.values()
+                          if v and v[0] >= max(1, s["skip_idle_after"])),
+    }
+
+
+@app.get("/api/crawl/schedule")
+def api_crawl_schedule():
+    """The auto-crawl schedule: effective settings, last/next runs."""
+    return jsonify(_schedule_status())
+
+
+@app.patch("/api/crawl/schedule")
+@auth.require_priv("admin")
+def api_crawl_schedule_patch():
+    """Owner/admin: change schedule settings (persisted in app_state; the
+    env vars stay the defaults). {"reset": true} drops every override."""
+    body = request.get_json(silent=True) or {}
+    if body.pop("reset", False):
+        with db.connect() as conn:
+            db.set_state(conn, crawl_schedule.SETTINGS_KEY, "{}")
+    patch, errs = crawl_schedule.clean(body)
+    if errs:
+        return jsonify({"error": "; ".join(errs)}), 400
+    if patch:
+        with db.connect() as conn:
+            crawl_schedule.save(conn, patch)
+        log("auto-crawl: schedule changed — " + ", ".join(
+            f"{k}={v}" for k, v in sorted(patch.items())))
+    with _home_lock:
+        _home_cache.clear()      # its next-crawl line
+    return jsonify(_schedule_status())
 
 
 threading.Thread(target=_auto_crawl_loop, daemon=True).start()
@@ -609,7 +762,7 @@ def api_rescore():
     # Re-score is for-sale work only, so the status strip should not still be
     # advertising the last crawl's book.
     job.update(running=True, phase="starting", log=[], done=0, total=0,
-               listing_types=["sale"], kind="rescore")
+               listing_types=["sale"], kind="rescore", plan=None)
     threading.Thread(target=rescore, daemon=True).start()
     return jsonify({"ok": True})
 
@@ -627,8 +780,8 @@ def api_status():
     out["ai_ok"] = ok
     out["ai_reason"] = reason
     out["crawler"] = "thread" if config.CRAWL_IN_PROCESS else "process"
-    out["auto_crawl"] = config.AUTO_CRAWL
-    if config.AUTO_CRAWL:
+    out["auto_crawl"] = _auto_enabled()
+    if out["auto_crawl"]:
         # Finished stamps, persisted (see the auto-crawl section).
         try:
             with db.connect() as conn:
@@ -900,10 +1053,182 @@ def api_prospects():
 def api_prospect(listing_key):
     """One full row (every field the list response leaves out), for the
     detail drawer. Same ?sole / ?type meaning and same cache as the list."""
-    row = _prospects_entry(*_book_args())["by_key"].get(listing_key)
+    sole, listing_type = _book_args()
+    row = _prospects_entry(sole, listing_type)["by_key"].get(listing_key)
+    if row is None and not sole:
+        # A sole-mandate row reached through a filtered view (mandate=sole
+        # implies the sole-inclusive book): look there too, if it is built.
+        with _prospects_lock:
+            other = _prospects_cache.get((True, listing_type))
+        row = other["by_key"].get(listing_key) if other else None
     if row is None:
         return jsonify({"error": "not_found"}), 404
     return jsonify(row)
+
+
+# ------------------------------------------------- prospects: server query
+#
+# /prospects no longer downloads the whole book: it sends its filters here
+# and gets one page of slim rows, the total and facet counts back (well under
+# 100 KB). The rows come from the same in-memory cache entry /api/prospects
+# serves — nothing is rebuilt per request — and the filtering itself lives in
+# prospect_query.py (its docstring lists every parameter).
+import prospect_query  # noqa: E402
+
+_query_results = prospect_query.ResultCache()
+_tracked_cache: tuple[float, int, dict] | None = None
+_tracked_lock = threading.Lock()
+
+
+def _tracked_map() -> dict:
+    """group_id -> lead stage for every live tracked property, cached ~5 s
+    (the lead filter and the CSV read it; a tracked change is a DB write,
+    which also bumps data_version)."""
+    global _tracked_cache
+    now = time.monotonic()
+    version = _db_version()
+    with _tracked_lock:
+        hit = _tracked_cache
+        if hit and hit[1] == version and now - hit[0] < 5.0:
+            return hit[2]
+    try:
+        with db.connect() as conn:
+            out = {str(r[0]): r[1] for r in conn.execute(
+                "SELECT group_id, stage FROM tracked_property"
+                " WHERE archived_at IS NULL")}
+    except sqlite3.Error:
+        out = {}
+    with _tracked_lock:
+        _tracked_cache = (now, version, out)
+    return out
+
+
+def _run_query(query: dict):
+    """(entry, result) for a parsed query, through the small result LRU."""
+    entry = _prospects_entry(query["sole"], query["type"])
+    needs_tracked = "lead" in query["filters"]
+    tracked = _tracked_map() if needs_tracked else {}
+    key = (id(entry), entry["built_at"], prospect_query.cache_key(query),
+           id(tracked) if needs_tracked else None)
+    res = _query_results.get(key)
+    if res is None:
+        res = prospect_query.run(entry, query, tracked)
+        _query_results.put(key, res)
+    return entry, res
+
+
+def _slim_row(r: dict) -> dict:
+    return {k: v for k, v in r.items()
+            if v is not None and k not in _DETAIL_ONLY}
+
+
+@app.get("/api/prospects/query")
+def api_prospects_query():
+    """{rows, total, offset, limit, facets, summary} for one filtered page.
+    ETag'd like the list, so an unchanged poll is a bodiless 304."""
+    query = prospect_query.parse(request.args)
+    entry, res = _run_query(query)
+    lo, hi = query["offset"], query["offset"] + query["limit"]
+    rows = entry["rows"]
+    page = [_slim_row(rows[i]) for i in res["idx"][lo:hi]]
+    out = {"rows": page, "total": res["total"], "offset": lo,
+           "limit": query["limit"], "sort": query["sort"],
+           "type": query["type"], "sole": query["sole"],
+           "facets": (res["facets"] if request.args.get("facets") != "0"
+                      else None),
+           "summary": prospect_query.summary_for(entry)}
+    body = json.dumps(out, separators=(",", ":"), ensure_ascii=False,
+                      default=str).encode("utf-8")
+    return _etag_response(body, hashlib.md5(body).hexdigest())
+
+
+@app.get("/api/prospects/export.csv")
+def api_prospects_export():
+    """Every row matching the same parameters as /api/prospects/query, as
+    CSV (limit/offset ignored)."""
+    query = prospect_query.parse(request.args)
+    entry, res = _run_query(query)
+    tracked = _tracked_map()
+    ix = prospect_query.index_for(entry)
+    name = ("rentals" if query["type"] == "rent" else "prospects")
+    fname = f"oblivion-{name}-{datetime.now():%Y%m%d-%H%M}.csv"
+    rv = Response(prospect_query.csv_lines(entry["rows"], ix, res["idx"],
+                                           tracked),
+                  mimetype="text/csv")
+    rv.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+    rv.headers["Cache-Control"] = "no-store"
+    return rv
+
+
+# Saved views: a name + the query string above, per user, in app_state
+# (JSON list under prospect_views:<username>). Built-in presets ride along
+# on the GET so every client shows the same starting set.
+_VIEWS_MAX = 50
+
+
+def _views_key() -> str | None:
+    acct = auth.account()
+    return f"prospect_views:{acct['username']}" if acct else None
+
+
+def _load_views(conn, key: str) -> list:
+    try:
+        v = json.loads(db.get_state(conn, key) or "[]")
+        return v if isinstance(v, list) else []
+    except ValueError:
+        return []
+
+
+def _clean_view_params(raw) -> str:
+    from urllib.parse import parse_qsl, urlencode
+    s = str(raw or "").lstrip("?")[:2000]
+    drop = {"limit", "offset", "open", "facets"}
+    return urlencode([(k, v) for k, v in parse_qsl(s) if k not in drop and v])
+
+
+@app.get("/api/prospects/views")
+def api_prospect_views():
+    key = _views_key()
+    with db.connect() as conn:
+        views = _load_views(conn, key) if key else []
+    return jsonify({"views": views, "presets": prospect_query.PRESETS})
+
+
+@app.post("/api/prospects/views")
+def api_prospect_view_save():
+    key = _views_key()
+    if not key:
+        return jsonify({"error": "auth_required"}), 401
+    body = request.get_json(silent=True) or {}
+    name = str(body.get("name") or "").strip()[:60]
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    params = _clean_view_params(body.get("params"))
+    with db.connect() as conn:
+        views = _load_views(conn, key)
+        # Same name replaces: saving "My Atlantic" twice updates it.
+        views = [v for v in views if v.get("name", "").lower() != name.lower()]
+        view = {"id": hashlib.md5(f"{name}|{time.time()}".encode())
+                .hexdigest()[:10], "name": name, "params": params,
+                "created_at": datetime.now().isoformat(timespec="seconds")}
+        views.append(view)
+        views = views[-_VIEWS_MAX:]
+        db.set_state(conn, key, json.dumps(views, ensure_ascii=False))
+    return jsonify(view), 201
+
+
+@app.delete("/api/prospects/views/<vid>")
+def api_prospect_view_delete(vid):
+    key = _views_key()
+    if not key:
+        return jsonify({"error": "auth_required"}), 401
+    with db.connect() as conn:
+        views = _load_views(conn, key)
+        keep = [v for v in views if v.get("id") != vid]
+        if len(keep) == len(views):
+            return jsonify({"error": "not_found"}), 404
+        db.set_state(conn, key, json.dumps(keep, ensure_ascii=False))
+    return jsonify({"ok": True})
 
 
 # Price-cut history is a whole-DB aggregate (~0.5s); lifecycle is one scan.
@@ -1030,6 +1355,12 @@ def _build_prospects(show_sole: bool, listing_type: str = "sale") -> list:
         d["price_changes"] = moves or None
         lc = [cycle.get(k) for k in keys]
         d["relisted"] = any(c and c["status"] == "relisted" for c in lc)
+        # One lifecycle word for the group (filterable): relisted beats
+        # active beats delisted — delisted only once EVERY member is gone.
+        states = {c["status"] for c in lc if c}
+        d["lifecycle"] = ("relisted" if "relisted" in states
+                          else "delisted" if states == {"delisted"}
+                          else "active")
         off = []
         for c in lc:
             if not c or c["status"] != "relisted":
@@ -1995,44 +2326,24 @@ def _home_tracked(conn) -> tuple[int, int]:
             sum(r[1] for r in rows if r[0] in panel.ACTIVE_STAGES))
 
 
-def _next_auto_crawl(stamps: dict, now=None):
+def _next_auto_crawl(stamps: dict, now=None, s: dict | None = None):
     """When the auto-crawl loop will next start something, as UTC ISO Z, or
-    None when AUTO_CRAWL is off. `stamps` is _auto_stamps() (naive local
-    datetimes, like `now`). Mirrors _auto_crawl_loop: the nightly pass is due
-    in AUTO_CRAWL_HOUR once AUTO_FULL_MIN_HOURS have passed since the last one
-    started; a sweep AUTO_SWEEP_HOURS after the newer finished sweep / pass,
-    but a sweep that started and never finished is retried no sooner than
-    _AUTO_SWEEP_RETRY_S after it started. The loop checks once a minute, so
-    anything already due — and every answer — is rounded UP to the minute."""
-    if not config.AUTO_CRAWL:
+    None when auto-crawl is off. `stamps` is _auto_stamps() (naive local
+    datetimes, like `now`); `s` the effective schedule (read when omitted).
+    Mirrors _auto_tick via crawl_schedule.next_full / next_sweep. The loop
+    checks once a minute, so every answer is rounded UP to the minute."""
+    s = s or _auto_settings()
+    if not s["enabled"]:
         return None
     now = now or datetime.now()
     soon = now + timedelta(minutes=1)
-    # The nightly pass: this hour if still due, else the next such hour that
-    # clears the minimum gap.
-    full_started = stamps.get(_AUTO_LAST_FULL_STARTED)
-    gap = timedelta(hours=config.AUTO_FULL_MIN_HOURS)
-    full = now.replace(hour=config.AUTO_CRAWL_HOUR, minute=0, second=0,
-                       microsecond=0)
-    if _full_due(now, full_started):
-        full = soon
-    else:
-        if full <= now:
-            full += timedelta(days=1)
-        while full_started is not None and full - full_started < gap:
-            full += timedelta(days=1)
-    cands = [full]
-    if config.AUTO_SWEEP_HOURS > 0:
-        done = [t for t in (stamps.get(_AUTO_LAST_SWEEP),
-                            stamps.get(_AUTO_LAST_FULL)) if t is not None]
-        sweep = (max(done) + timedelta(hours=config.AUTO_SWEEP_HOURS)
-                 if done else now)
-        started = stamps.get(_AUTO_LAST_SWEEP_STARTED)
-        if started is not None and (stamps.get(_AUTO_LAST_SWEEP)
-                                    or datetime.min) < started:
-            sweep = max(sweep, started + timedelta(seconds=_AUTO_SWEEP_RETRY_S))
-        cands.append(max(sweep, soon))
-    nxt = min(cands)
+    cands = [t for t in (
+        crawl_schedule.next_full(now, stamps.get(_AUTO_LAST_FULL_STARTED), s),
+        crawl_schedule.next_sweep(now, stamps, s, _AUTO_SWEEP_RETRY_S))
+        if t is not None]
+    if not cands:
+        return None
+    nxt = max(min(cands), soon)
     if nxt.second or nxt.microsecond:
         nxt = nxt.replace(second=0, microsecond=0) + timedelta(minutes=1)
     return nxt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -2048,10 +2359,10 @@ def _build_home() -> dict:
         except sqlite3.Error:
             last_full = last_sweep = None
         try:
+            sched = crawl_schedule.load(conn)
             next_crawl = (_next_auto_crawl({k: _parse_stamp(db.get_state(conn, k))
-                                            for k in (_AUTO_LAST_FULL_STARTED, _AUTO_LAST_FULL,
-                                                      _AUTO_LAST_SWEEP_STARTED, _AUTO_LAST_SWEEP)})
-                          if config.AUTO_CRAWL else None)
+                                            for k in _STAMP_KEYS}, s=sched)
+                          if sched["enabled"] else None)
         except sqlite3.Error:
             next_crawl = None
         return {
@@ -2167,6 +2478,12 @@ def account_page():
 def online_page():
     """Who is signed in and what they are busy with. Prerendered like /prospects."""
     return send_from_directory(_UI_BUILD, "online.html")
+
+
+@app.get("/tasks")
+def tasks_page():
+    """Everyone's to-do lists (team.py). Prerendered like /prospects."""
+    return send_from_directory(_UI_BUILD, "tasks.html")
 
 
 @app.get("/leads")
@@ -2311,6 +2628,8 @@ app.register_blueprint(caller.bp)
 app.register_blueprint(share_page.bp)
 app.register_blueprint(team.bp)
 app.register_blueprint(chat.bp)
+import property_view  # noqa: E402  (stream B: /property/<key> dossier page + its data)
+app.register_blueprint(property_view.bp)
 caller.start_autopilot()   # no-op unless CALLER_AUTOPILOT=1
 
 # The call-brief cache, created once at boot rather than per request: unlike

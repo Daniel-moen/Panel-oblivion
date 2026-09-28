@@ -3,13 +3,13 @@
      a property card, a media thumbnail card, or a link card. Soft glass —
      no blur of its own; the sheet is the one blurred surface.
 
-     Property tap: the prospect drawer when that property is in the loaded
-     book (its listing_key found through gidOf), else its lead page.
+     Property tap: its property page (/property/<listing_key>), else — for a
+     tracked group no longer in the book — its lead page.
      Media tap: the library with that item open (/media/browse?open=<id>). */
   import { goto } from '$app/navigation';
   import Icon from '$lib/components/glass/Icon.svelte';
-  import { page } from '$app/state';
-  import { app, gidOf, ensureProspects, loadTracked, toast } from '$lib/state.svelte.js';
+  import { app, loadTracked, toast } from '$lib/state.svelte.js';
+  import { propertyApi, propertyPath } from '$lib/api.js';
   import { closeChat } from '$lib/chat.svelte.js';
   import { fmtR } from '$lib/format.js';
   import { murl, ensureToken } from '$lib/media.js';
@@ -28,26 +28,18 @@
   const thumb = $derived(a?.type === 'media' && a.thumb && tokenOk ? murl(a.thumb) : null);
   const narrow = () => typeof matchMedia !== 'undefined' && !matchMedia('(min-width: 720px)').matches;
 
-  /* The drawer lives on /prospects: there, open it in place (the chat steps
-     aside while it is up and comes back after); elsewhere deep-link to it
-     (/prospects?open=<listing_key>). The gid → listing_key map is the loaded
-     book, fetched on demand. Only a TRACKED property that is not in the book
-     goes to its lead page (that page 404s for anything untracked). */
+  /* The property page (/property/<listing_key>). The group id the
+     attachment carries is turned into the listing key the page opens by
+     /api/property/by-group — one small call, no book download. A group that
+     is gone from the book still opens its lead page when it is TRACKED
+     (that page 404s for anything untracked). */
   async function openProperty() {
     const gid = String(a.gid);
-    const find = () => app.prospects.find((r) => gidOf(r) === gid);
-    let row = find();
-    if (!row) {
-      try { await ensureProspects(); } catch { /* handled below */ }
-      row = find();
-    }
-    if (row) {
-      if (page.url.pathname.startsWith('/prospects')) {
-        app.selectedKey = row.listing_key;
-        return;
-      }
+    let key = null;
+    try { key = (await propertyApi.byGroup(gid))?.listing_key || null; } catch { /* handled below */ }
+    if (key) {
       if (narrow()) closeChat();
-      goto('/prospects?open=' + encodeURIComponent(row.listing_key));
+      goto(propertyPath(key));
       return;
     }
     if (!(gid in (app.tracked || {}))) {

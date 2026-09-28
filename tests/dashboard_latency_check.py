@@ -111,10 +111,14 @@ import webapp  # noqa: E402  (after seeding: the boot warm-up builds this book)
 
 H = config.AUTO_CRAWL_HOUR
 now = datetime(2026, 9, 25, H, 10)
-off_hour = now.replace(hour=(H + 1) % 24)
+# Outside the hour AND its catch-up window (a pass a sweep kept from its hour
+# still starts up to AUTO_FULL_CATCHUP_HOURS late).
+off_hour = now.replace(hour=(H + int(config.AUTO_FULL_CATCHUP_HOURS) + 1) % 24)
+catch_up = now.replace(hour=(H + 1) % 24)
 MIN_H = config.AUTO_FULL_MIN_HOURS
 check("full due: never ran, in the hour", webapp._full_due(now, None) is True)
 check("full not due: outside the hour", webapp._full_due(off_hour, None) is False)
+check("full due: catch-up an hour after its slot", webapp._full_due(catch_up, None) is True)
 check("full not due: started 1h ago (redeploy in the hour)",
       webapp._full_due(now, now - timedelta(hours=1)) is False)
 check("full due: boundary, exactly AUTO_FULL_MIN_HOURS ago",
@@ -252,7 +256,10 @@ def check_home(label, client):
           home.get("hot"))
     stats = client.get("/api/stats", headers=BASIC).get_json()
     check(f"/api/home {label}: stats has the /api/stats keys",
-          isinstance(home.get("stats"), dict) and set(home["stats"]) == set(stats))
+          isinstance(home.get("stats"), dict)
+          # /api/stats also carries `hot` for the status strip (261ff8d);
+          # Home has it at the top level instead.
+          and set(home["stats"]) == set(stats) - {"hot"})
     series = home.get("series") or {}
     check(f"/api/home {label}: series.days has 14 days", len(series.get("days") or []) == 14)
     check(f"/api/home {label}: every series has 14 points",

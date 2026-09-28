@@ -59,13 +59,15 @@ with db.connect() as conn:
     team.ensure_schema(conn)
     cols = {r[1] for r in conn.execute("PRAGMA table_info(user_tasks)")}
     check("migration adds the missing task columns",
-          {"notes", "due_date", "property_group_id", "priority", "done_at", "created_by"} <= cols,
+          {"notes", "due_date", "property_group_id", "priority", "done_at", "created_by", "seen_at"} <= cols,
           sorted(cols))
     pcols = {r[1] for r in conn.execute("PRAGMA table_info(presence)")}
     check("migration creates the presence table",
           {"session_id", "user_id", "page", "user_agent", "last_seen_at"} <= pcols)
     legacy = conn.execute("SELECT priority FROM user_tasks WHERE title='legacy row'").fetchone()
     check("legacy row survives with the default priority", legacy and legacy[0] == 2)
+    seen = conn.execute("SELECT seen_at FROM user_tasks WHERE title='legacy row'").fetchone()
+    check("legacy rows are backfilled as seen (no badge storm on upgrade)", seen and seen[0] == "x")
     team.ensure_schema(conn)
     check("ensure_schema is idempotent",
           cols == {r[1] for r in conn.execute("PRAGMA table_info(user_tasks)")})
@@ -179,6 +181,75 @@ r = client.delete(f"/api/team/tasks/{t_sam['id']}", headers=BASIC)
 check("owner deletes a member's task", r.status_code == 200)
 r = sam.delete(f"/api/team/tasks/{t_owner['id']}")
 check("member cannot delete an admin-owned task", r.status_code == 404, r.status_code)
+
+# --- "log something I did": a task born done ---------------------------------
+r = sam.post("/api/team/tasks", json={"title": "Showed 12 Beach Rd", "status": "done",
+                                       "notes": "buyers keen, second viewing Sat"})
+logged = r.get_json()
+check("member logs a completed item", r.status_code == 201 and logged["status"] == "done"
+      and logged["done_at"] and logged["notes"] == "buyers keen, second viewing Sat", logged)
+check("a logged item is not 'new'", logged["new"] is False and logged["assigned"] is False)
+lst = sam.get("/api/team/tasks").get_json()
+check("the logged item is in the Done history",
+      any(t["id"] == logged["id"] and t["status"] == "done" for t in lst["tasks"])
+      and lst["counts"]["done"] >= 1, lst["counts"])
+r = sam.post("/api/team/tasks", json={"title": "logged for alex", "status": "done",
+                                       "user_id": ids["alex"]})
+check("member cannot log a done item on someone else's list", r.status_code == 403, r.status_code)
+r = boss.post("/api/team/tasks", json={"title": "Alex closed the Clifton deal", "status": "done",
+                                        "user_id": ids["alex"]})
+check("admin logs a done item for a member", r.status_code == 201
+      and r.get_json()["user_id"] == ids["alex"] and r.get_json()["done_at"])
+r = sam.post("/api/team/tasks", json={"title": "x", "status": "finished"})
+check("an unknown status is 400", r.status_code == 400, r.status_code)
+r = alex.get("/api/team/tasks?done=1")
+check("?done= caps the Done history",
+      sum(1 for t in r.get_json()["tasks"] if t["status"] == "done") <= 1, r.get_json()["counts"])
+
+# --- assignment notices: seen_at, the inbox and the badge ------------------------
+r = alex.get("/api/team/tasks/inbox")
+base_alex = r.get_json()["unseen"]
+check("inbox answers for a member", r.status_code == 200 and isinstance(base_alex, int))
+r = boss.post("/api/team/tasks", json={"title": "Call the Rondebosch seller", "user_id": ids["alex"],
+                                        "due_date": "2030-01-01"})
+t_new = r.get_json()
+check("a task assigned by someone else is new", t_new["new"] is True and t_new["seen_at"] is None
+      and t_new["assigned"] is True, t_new)
+ib = alex.get("/api/team/tasks/inbox").get_json()
+check("the assignee's inbox counts it", ib["unseen"] == base_alex + 1
+      and ib["tasks"][0]["id"] == t_new["id"] and ib["tasks"][0]["created_by_name"] == "Boss", ib)
+check("the list counts it as new", alex.get("/api/team/tasks").get_json()["counts"]["new"] == base_alex + 1)
+check("nobody else's inbox moves", sam.get("/api/team/tasks/inbox").get_json()["unseen"] == 0)
+r = alex.post("/api/team/tasks", json={"title": "my own note"})
+check("your own task is never new", r.get_json()["new"] is False and r.get_json()["seen_at"])
+check("…and not in your inbox", alex.get("/api/team/tasks/inbox").get_json()["unseen"] == base_alex + 1)
+boss.get(f"/api/team/tasks?user={ids['alex']}")
+boss.post("/api/team/tasks/seen")
+check("an admin looking at the list does not clear the assignee's badge",
+      alex.get("/api/team/tasks/inbox").get_json()["unseen"] == base_alex + 1)
+r = alex.post("/api/team/tasks/seen")
+check("the assignee marks their list seen", r.status_code == 200
+      and alex.get("/api/team/tasks/inbox").get_json()["unseen"] == 0)
+r = boss.patch(f"/api/team/tasks/{t_new['id']}", json={"user_id": ids["sam"]})
+check("reassigning makes it new for the new assignee", r.get_json()["new"] is True
+      and sam.get("/api/team/tasks/inbox").get_json()["unseen"] == 1)
+r = boss.patch(f"/api/team/tasks/{t_new['id']}", json={"title": "Call the Rondebosch seller today"})
+check("an edit without a move keeps it unseen", r.get_json()["new"] is True)
+sam.post(f"/api/team/tasks/{t_new['id']}/complete")
+check("a finished task leaves the inbox", sam.get("/api/team/tasks/inbox").get_json()["unseen"] == 0)
+r = webapp.app.test_client().get("/api/team/tasks/inbox")
+check("anonymous inbox is 401", r.status_code == 401, r.status_code)
+
+# --- the Team board with detail ---------------------------------------------------
+r = sam.get("/api/team/tasks/board?detail=1")
+check("member cannot open the board detail", r.status_code == 403, r.status_code)
+r = boss.get("/api/team/tasks/board?detail=1")
+bd = {u["username"]: u for u in r.get_json()["users"]}
+check("board detail carries each person's tasks", r.status_code == 200
+      and all(isinstance(u.get("tasks"), list) for u in bd.values()))
+check("board detail includes recent done work",
+      any(t["id"] == logged["id"] for t in bd["sam"]["tasks"]), [t["title"] for t in bd["sam"]["tasks"]])
+check("board without detail stays lean", "tasks" not in boss.get("/api/team/tasks/board").get_json()["users"][0])
 
 # a disabled 'me' target and a bogus id
 r = boss.get("/api/team/tasks?user=999999")

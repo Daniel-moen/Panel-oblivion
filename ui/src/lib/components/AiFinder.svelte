@@ -106,7 +106,7 @@
   {/if}
 
   {#if finder.busy}
-    <p class="working">Reading the brief, shortlisting from {app.prospects.length}
+    <p class="working">Reading the brief, shortlisting from {app.list.summary?.total || app.prospects.length || 'all the'}
       {rent ? 'rentals' : 'properties'}, then ranking the closest fits…</p>
   {/if}
 
